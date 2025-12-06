@@ -128,6 +128,30 @@ export class PluginSettings extends Schema.Class<PluginSettings>(
 		exact: true,
 		default: () => false,
 	}),
+	/**
+	 * Include Obsidian tags generated from series, author, and library names.
+	 * @since 0.0.2
+	 */
+	includeTags: Schema.optionalWith(Schema.Boolean, {
+		exact: true,
+		default: () => true,
+	}),
+	/**
+	 * Prefix for generated tags (e.g., "kavita/" produces #kavita/series/...).
+	 * @since 0.0.2
+	 */
+	tagPrefix: Schema.optionalWith(Schema.String, {
+		exact: true,
+		default: () => "kavita/",
+	}),
+	/**
+	 * Include wikilinks for series and author names (e.g., [[Author Name]]).
+	 * @since 0.0.2
+	 */
+	includeWikilinks: Schema.optionalWith(Schema.Boolean, {
+		exact: true,
+		default: () => true,
+	}),
 }) {}
 
 /**
@@ -143,6 +167,9 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	matchThreshold: 0.7,
 	includeComments: true,
 	includeSpoilers: false,
+	includeTags: true,
+	tagPrefix: "kavita/",
+	includeWikilinks: true,
 };
 
 /**

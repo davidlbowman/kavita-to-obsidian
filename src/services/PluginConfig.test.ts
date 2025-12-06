@@ -20,6 +20,9 @@ describe("PluginConfig", () => {
 				expect(config.matchThreshold).toBe(0.7);
 				expect(config.includeComments).toBe(true);
 				expect(config.includeSpoilers).toBe(false);
+				expect(config.includeTags).toBe(true);
+				expect(config.tagPrefix).toBe("kavita/");
+				expect(config.includeWikilinks).toBe(true);
 			}).pipe(Effect.provide(PluginConfig.Default)),
 		);
 	});
@@ -35,6 +38,9 @@ describe("PluginConfig", () => {
 				expect(config.matchThreshold).toBe(0.8);
 				expect(config.includeComments).toBe(false);
 				expect(config.includeSpoilers).toBe(true);
+				expect(config.includeTags).toBe(false);
+				expect(config.tagPrefix).toBe("book/");
+				expect(config.includeWikilinks).toBe(false);
 			}).pipe(
 				Effect.provide(
 					PluginConfig.fromSettings({
@@ -44,6 +50,9 @@ describe("PluginConfig", () => {
 						matchThreshold: 0.8,
 						includeComments: false,
 						includeSpoilers: true,
+						includeTags: false,
+						tagPrefix: "book/",
+						includeWikilinks: false,
 					}),
 				),
 			),
@@ -61,6 +70,9 @@ describe("PluginConfig", () => {
 				expect(config.matchThreshold).toBe(0.9);
 				expect(config.includeComments).toBe(false);
 				expect(config.includeSpoilers).toBe(true);
+				expect(config.includeTags).toBe(false);
+				expect(config.tagPrefix).toBe("book/");
+				expect(config.includeWikilinks).toBe(false);
 			}).pipe(
 				Effect.provide(PluginConfig.fromEnv),
 				Effect.withConfigProvider(
@@ -72,6 +84,9 @@ describe("PluginConfig", () => {
 							["MATCH_THRESHOLD", "0.9"],
 							["INCLUDE_COMMENTS", "false"],
 							["INCLUDE_SPOILERS", "true"],
+							["INCLUDE_TAGS", "false"],
+							["TAG_PREFIX", "book/"],
+							["INCLUDE_WIKILINKS", "false"],
 						]),
 					),
 				),
@@ -88,6 +103,9 @@ describe("PluginConfig", () => {
 				expect(config.matchThreshold).toBe(0.7);
 				expect(config.includeComments).toBe(true);
 				expect(config.includeSpoilers).toBe(false);
+				expect(config.includeTags).toBe(true);
+				expect(config.tagPrefix).toBe("kavita/");
+				expect(config.includeWikilinks).toBe(true);
 			}).pipe(
 				Effect.provide(PluginConfig.fromEnv),
 				Effect.withConfigProvider(ConfigProvider.fromMap(new Map())),

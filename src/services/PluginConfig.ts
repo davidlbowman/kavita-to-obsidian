@@ -19,6 +19,12 @@ export interface PluginConfigShape {
 	readonly matchThreshold: number;
 	readonly includeComments: boolean;
 	readonly includeSpoilers: boolean;
+	/** @since 0.0.2 */
+	readonly includeTags: boolean;
+	/** @since 0.0.2 */
+	readonly tagPrefix: string;
+	/** @since 0.0.2 */
+	readonly includeWikilinks: boolean;
 }
 
 /**
@@ -47,6 +53,11 @@ const EnvConfig = Config.all({
 	includeSpoilers: Config.boolean("INCLUDE_SPOILERS").pipe(
 		Config.withDefault(false),
 	),
+	includeTags: Config.boolean("INCLUDE_TAGS").pipe(Config.withDefault(true)),
+	tagPrefix: Config.string("TAG_PREFIX").pipe(Config.withDefault("kavita/")),
+	includeWikilinks: Config.boolean("INCLUDE_WIKILINKS").pipe(
+		Config.withDefault(true),
+	),
 });
 
 /**
@@ -67,6 +78,9 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 			matchThreshold: 0.7,
 			includeComments: true,
 			includeSpoilers: false,
+			includeTags: true,
+			tagPrefix: "kavita/",
+			includeWikilinks: true,
 		}),
 	},
 ) {
@@ -86,6 +100,9 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 				matchThreshold: settings.matchThreshold,
 				includeComments: settings.includeComments,
 				includeSpoilers: settings.includeSpoilers,
+				includeTags: settings.includeTags,
+				tagPrefix: settings.tagPrefix,
+				includeWikilinks: settings.includeWikilinks,
 			}),
 		);
 	}

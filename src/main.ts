@@ -23,6 +23,9 @@ interface PluginSettingsData {
 	matchThreshold: number;
 	includeComments: boolean;
 	includeSpoilers: boolean;
+	includeTags: boolean;
+	tagPrefix: string;
+	includeWikilinks: boolean;
 }
 
 export default class KavitaToObsidianPlugin extends Plugin {
@@ -183,6 +186,51 @@ class KavitaSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.includeSpoilers ?? false)
 					.onChange(async (value) => {
 						this.plugin.settings.includeSpoilers = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		containerEl.createEl("h3", { text: "Formatting Options" });
+
+		new Setting(containerEl)
+			.setName("Include Tags")
+			.setDesc(
+				"Generate Obsidian tags from series, author, and library names (e.g., #kavita/series/the-great-gatsby)",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.includeTags ?? true)
+					.onChange(async (value) => {
+						this.plugin.settings.includeTags = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Tag Prefix")
+			.setDesc(
+				"Prefix for generated tags (e.g., 'kavita/' produces #kavita/series/...)",
+			)
+			.addText((text) =>
+				text
+					.setPlaceholder("kavita/")
+					.setValue(this.plugin.settings.tagPrefix ?? "kavita/")
+					.onChange(async (value) => {
+						this.plugin.settings.tagPrefix = value;
+						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Include Wikilinks")
+			.setDesc(
+				"Create [[wikilinks]] for series and author names to link to existing notes",
+			)
+			.addToggle((toggle) =>
+				toggle
+					.setValue(this.plugin.settings.includeWikilinks ?? true)
+					.onChange(async (value) => {
+						this.plugin.settings.includeWikilinks = value;
 						await this.plugin.saveSettings();
 					}),
 			);
