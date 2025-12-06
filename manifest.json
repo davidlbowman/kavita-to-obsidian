@@ -1,0 +1,10 @@
+{
+	"id": "kavita-to-obsidian",
+	"name": "Kavita to Obsidian",
+	"version": "0.0.1",
+	"minAppVersion": "0.15.0",
+	"description": "Sync annotations and highlights from Kavita to your Obsidian vault.",
+	"author": "David Bowman",
+	"authorUrl": "https://github.com/davidlbowman",
+	"isDesktopOnly": false
+}
