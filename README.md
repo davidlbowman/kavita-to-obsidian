@@ -18,27 +18,21 @@ An Obsidian plugin that syncs your annotations, highlights, and bookmarks from [
 
 ## Installation
 
-### From Release (Recommended)
+### From Community Plugins (Coming Soon)
 
-1. Download the latest release from the [Releases](https://github.com/davidlbowman/kavita-to-obsidian/releases) page
-2. Extract the files (`main.js`, `manifest.json`) to your vault's plugins folder:
+Once approved, install directly from Obsidian:
 
-   ```
-   <your-vault>/.obsidian/plugins/kavita-to-obsidian/
-   ```
+1. Open Settings → Community Plugins
+2. Click "Browse" and search for "Kavita to Obsidian"
+3. Click "Install" then "Enable"
 
-3. Enable the plugin in Obsidian Settings → Community Plugins
+### From GitHub Release
 
-### Manual Build
-
-```bash
-git clone https://github.com/davidlbowman/kavita-to-obsidian.git
-cd kavita-to-obsidian
-bun install
-bun run build
-```
-
-Copy `main.js` and `manifest.json` to your vault's plugins folder.
+1. Go to the [Releases](https://github.com/davidlbowman/kavita-to-obsidian/releases) page
+2. Download `main.js` and `manifest.json` from the latest release
+3. Create folder: `<your-vault>/.obsidian/plugins/kavita-to-obsidian/`
+4. Copy both files into that folder
+5. Restart Obsidian and enable the plugin in Settings → Community Plugins
 
 ## Configuration
 
