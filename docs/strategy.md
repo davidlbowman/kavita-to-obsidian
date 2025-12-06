@@ -93,20 +93,20 @@ This document outlines the strategy for syncing annotations/highlights from Kavi
 
 #### Phase 2: Documentation
 
-- [ ] Update README.md
-  - [ ] Clear installation instructions (how to copy files to vault)
-  - [ ] Configuration guide (settings tab descriptions)
-  - [ ] Usage guide (how to trigger sync)
-  - [ ] Development setup (bun install, bun run dev, etc.)
-  - [ ] Testing instructions (unit tests, integration tests)
-  - [ ] Contributing guidelines (or link to CONTRIBUTING.md)
-- [ ] Create CONTRIBUTING.md
-  - [ ] How to set up development environment
-  - [ ] How to run tests
-  - [ ] Code style and conventions (Effect-TS patterns, JSDoc only)
-  - [ ] PR process
-- [ ] Create CHANGELOG.md
-  - [ ] v0.0.1 release notes
+- [x] Update README.md
+  - [x] Clear installation instructions (how to copy files to vault)
+  - [x] Configuration guide (settings tab descriptions)
+  - [x] Usage guide (how to trigger sync)
+  - [x] Development setup (bun install, bun run dev, etc.)
+  - [x] Testing instructions (unit tests, integration tests)
+  - [x] Contributing guidelines (or link to CONTRIBUTING.md)
+- [x] Create CONTRIBUTING.md
+  - [x] How to set up development environment
+  - [x] How to run tests
+  - [x] Code style and conventions (Effect-TS patterns, JSDoc only)
+  - [x] PR process
+- [x] Create CHANGELOG.md
+  - [x] v0.0.1 release notes
 
 #### Phase 3: Final Verification
 
