@@ -196,6 +196,25 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 				Effect.scoped,
 			);
 
+			/**
+			 * Trigger a scan of a specific library.
+			 *
+			 * @since 0.0.1
+			 */
+			const scanLibrary = (libraryId: number, force = true) =>
+				Effect.gen(function* () {
+					const request = HttpClientRequest.post(
+						`/api/Library/scan?libraryId=${libraryId}&force=${force}`,
+					);
+					yield* client.execute(request);
+				}).pipe(
+					Effect.mapError(
+						(e) =>
+							new KavitaNetworkError({ url: "/api/Library/scan", cause: e }),
+					),
+					Effect.scoped,
+				);
+
 			// ================================================================
 			// Series Methods
 			// ================================================================
@@ -289,6 +308,7 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 				getLibraries,
 				createLibrary,
 				scanAllLibraries,
+				scanLibrary,
 				// Series
 				getAllSeries,
 				getVolumes,

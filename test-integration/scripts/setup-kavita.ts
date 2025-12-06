@@ -5,6 +5,8 @@
  *
  * @module
  */
+
+import { execSync } from "node:child_process";
 import { FetchHttpClient } from "@effect/platform";
 import { Effect, Layer, Redacted, Schedule } from "effect";
 import { LibraryType } from "../../src/schemas.js";
@@ -28,9 +30,9 @@ const waitForKavita = Effect.gen(function* () {
 
 	yield* client.healthCheck.pipe(
 		Effect.retry(
-			Schedule.recurs(30).pipe(
+			Schedule.recurs(10).pipe(
 				Schedule.addDelay(() => "2 seconds"),
-				Schedule.tapOutput((out) => Effect.log(`Attempt ${out + 1}/30...`)),
+				Schedule.tapOutput((out) => Effect.log(`Attempt ${out + 1}/10...`)),
 			),
 		),
 	);
@@ -84,26 +86,43 @@ const setupData = Effect.gen(function* () {
 			excludePatterns: [],
 		});
 
+		// Restart Kavita to ensure filesystem is properly detected (WSL2/Docker workaround)
+		yield* Effect.log("Restarting Kavita to refresh filesystem...");
+		yield* Effect.sync(() => {
+			execSync("docker restart kavita-test", { stdio: "inherit" });
+		});
+
+		// Wait for Kavita to come back up
+		yield* Effect.sleep("5 seconds");
+		yield* Effect.log("Waiting for Kavita to restart...");
+		const authClient = yield* KavitaAuthClient;
+		const authClientForUrl = authClient.forUrl(KAVITA_URL);
+		yield* authClientForUrl.healthCheck.pipe(
+			Effect.retry(
+				Schedule.recurs(10).pipe(Schedule.addDelay(() => "2 seconds")),
+			),
+		);
+
 		yield* Effect.log("Triggering library scan...");
-		yield* client.scanAllLibraries;
+		yield* client.scanLibrary(1);
 
 		yield* Effect.log("Waiting for scan to complete...");
 		yield* Effect.gen(function* () {
-			for (let i = 0; i < 30; i++) {
+			for (let i = 0; i < 10; i++) {
 				yield* Effect.sleep("2 seconds");
 				const series = yield* client.getAllSeries;
 				if (series.length > 0) {
 					yield* Effect.log(`Found ${series.length} series`);
 					return;
 				}
-				yield* Effect.log(`Waiting... (${i + 1}/30)`);
+				yield* Effect.log(`Waiting... (${i + 1}/10)`);
 			}
 		});
 	} else {
 		yield* Effect.log(`Found ${libraries.length} existing libraries`);
 	}
 
-	// Create sample annotations if we have series
+	// Verify series detection
 	const series = yield* client.getAllSeries;
 	const firstSeries = series[0];
 	if (firstSeries) {
@@ -111,60 +130,23 @@ const setupData = Effect.gen(function* () {
 
 		const volumes = yield* client.getVolumes(firstSeries.id);
 		const chapters = volumes.flatMap((v) => v.chapters);
-		const firstChapter = chapters[0];
+		yield* Effect.log(
+			`Series has ${volumes.length} volumes and ${chapters.length} chapters`,
+		);
 
-		if (firstChapter) {
-			const chapterId = firstChapter.id;
-			yield* Effect.log(
-				`Creating sample annotations on chapter ${chapterId}...`,
-			);
-
-			const sampleAnnotations: Array<{
-				chapterId: number;
-				content: string;
-				comment?: string;
-				spoiler?: boolean;
-			}> = [
-				{
-					chapterId,
-					content:
-						"This is a fascinating passage about the nature of existence.",
-					comment: "Deep philosophical insight here",
-				},
-				{
-					chapterId,
-					content: "The author's use of metaphor is remarkable.",
-					comment: "Note: compare with chapter 3",
-				},
-				{
-					chapterId,
-					content: "Plot twist! Everything changes from here.",
-					comment: "Major spoiler",
-					spoiler: true,
-				},
-				{
-					chapterId,
-					content: "Beautiful prose that deserves to be remembered.",
-				},
-			];
-
-			for (const annotation of sampleAnnotations) {
-				yield* client.createAnnotation({
-					chapterId: annotation.chapterId,
-					content: annotation.content,
-					comment: annotation.comment,
-					spoiler: annotation.spoiler ?? false,
-				});
-			}
-			yield* Effect.log(`Created ${sampleAnnotations.length} annotations`);
-		}
+		// Note: Annotation creation requires xPath, seriesId, volumeId, libraryId, ownerUserId
+		// which are only available when reading in the Kavita web reader.
+		// For now, we just verify the library/series setup is working.
+		yield* Effect.log(
+			"Skipping annotation creation (requires web reader context)",
+		);
 	} else {
 		yield* Effect.log(
 			"No series found - add an EPUB to test-integration/books/",
 		);
 	}
 
-	// Verify
+	// Check existing annotations
 	const annotations = yield* client.fetchAllAnnotations;
 	yield* Effect.log(`Total annotations: ${annotations.length}`);
 });

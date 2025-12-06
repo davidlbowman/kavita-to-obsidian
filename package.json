@@ -10,8 +10,9 @@
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
 		"test:watch": "vitest",
-		"integration:up": "docker compose -f test-integration/docker-compose.yml up -d",
+		"integration:up": "bun run test-integration/scripts/create-test-epub.ts && docker compose -f test-integration/docker-compose.yml up -d",
 		"integration:down": "docker compose -f test-integration/docker-compose.yml down",
+		"integration:clean": "docker compose -f test-integration/docker-compose.yml down -v && rm -rf test-integration/config test-integration/.env.test test-integration/books",
 		"integration:setup": "bun run test-integration/scripts/setup-kavita.ts",
 		"integration:logs": "docker compose -f test-integration/docker-compose.yml logs -f"
 	},
