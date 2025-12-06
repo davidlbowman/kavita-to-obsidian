@@ -122,31 +122,88 @@ const setupData = Effect.gen(function* () {
 		yield* Effect.log(`Found ${libraries.length} existing libraries`);
 	}
 
-	// Verify series detection
+	// Verify series detection and create test annotations
 	const series = yield* client.getAllSeries;
 	const firstSeries = series[0];
 	if (firstSeries) {
 		yield* Effect.log(`Found series: ${firstSeries.name}`);
 
 		const volumes = yield* client.getVolumes(firstSeries.id);
+		const firstVolume = volumes[0];
 		const chapters = volumes.flatMap((v) => v.chapters);
+		const firstChapter = chapters[0];
+
 		yield* Effect.log(
 			`Series has ${volumes.length} volumes and ${chapters.length} chapters`,
 		);
 
-		// Note: Annotation creation requires xPath, seriesId, volumeId, libraryId, ownerUserId
-		// which are only available when reading in the Kavita web reader.
-		// For now, we just verify the library/series setup is working.
-		yield* Effect.log(
-			"Skipping annotation creation (requires web reader context)",
-		);
+		if (firstVolume && firstChapter) {
+			// Check if annotations already exist
+			const existingAnnotations = yield* client.fetchAllAnnotations;
+			if (existingAnnotations.length === 0) {
+				yield* Effect.log("Creating test annotations...");
+
+				// Sample annotations matching content from our test EPUB
+				const sampleAnnotations = [
+					{
+						xPath: "/html/body/p[1]",
+						selectedText:
+							"This is the first paragraph of the test book. It contains some text that can be highlighted and annotated.",
+						comment: "Opening paragraph - sets the stage",
+						containsSpoiler: false,
+					},
+					{
+						xPath: "/html/body/p[3]",
+						selectedText:
+							"The journey of a thousand miles begins with a single step.",
+						comment: "Famous quote worth remembering",
+						containsSpoiler: false,
+					},
+					{
+						xPath: "/html/body/p[2]",
+						selectedText:
+							"The second paragraph provides more content for testing annotations.",
+						comment: "This contains a spoiler!",
+						containsSpoiler: true,
+					},
+					{
+						xPath: "/html/body/h1",
+						selectedText: "Chapter 1: The Beginning",
+						comment: undefined, // No comment on this one
+						containsSpoiler: false,
+					},
+				];
+
+				for (const annotation of sampleAnnotations) {
+					yield* client.createAnnotation({
+						chapterId: firstChapter.id,
+						volumeId: firstVolume.id,
+						seriesId: firstSeries.id,
+						libraryId: firstSeries.libraryId ?? 1,
+						ownerUserId: 1, // Admin user
+						xPath: annotation.xPath,
+						selectedText: annotation.selectedText,
+						highlightCount: annotation.selectedText.length,
+						pageNumber: 1,
+						selectedSlotIndex: 0,
+						containsSpoiler: annotation.containsSpoiler,
+						comment: annotation.comment,
+					});
+				}
+				yield* Effect.log(`Created ${sampleAnnotations.length} annotations`);
+			} else {
+				yield* Effect.log(
+					`Found ${existingAnnotations.length} existing annotations`,
+				);
+			}
+		}
 	} else {
 		yield* Effect.log(
 			"No series found - add an EPUB to test-integration/books/",
 		);
 	}
 
-	// Check existing annotations
+	// Verify annotations
 	const annotations = yield* client.fetchAllAnnotations;
 	yield* Effect.log(`Total annotations: ${annotations.length}`);
 });

@@ -8,22 +8,62 @@ import { Schema } from "effect";
 /**
  * Kavita annotation data transfer object.
  *
+ * Represents an annotation/highlight on a book in Kavita.
+ *
  * @since 0.0.1
  * @category Kavita Schemas
  */
 export class AnnotationDto extends Schema.Class<AnnotationDto>("AnnotationDto")(
 	{
 		id: Schema.Number,
+		/** Starting XPath selector for the highlight */
+		xPath: Schema.NullOr(Schema.String),
+		/** Ending XPath selector (can be same as xPath for single element) */
+		endingXPath: Schema.NullOr(Schema.String),
+		/** The highlighted text */
+		selectedText: Schema.NullOr(Schema.String),
+		/** User's comment on the annotation (rich text) */
+		comment: Schema.NullOr(Schema.String),
+		/** HTML version of comment */
+		commentHtml: Schema.NullOr(Schema.String),
+		/** Plain text version of comment */
+		commentPlainText: Schema.NullOr(Schema.String),
+		/** Title of the TOC chapter within EPUB */
+		chapterTitle: Schema.NullOr(Schema.String),
+		/** Surrounding text context */
+		context: Schema.NullOr(Schema.String),
+		/** Number of characters selected */
+		highlightCount: Schema.Number,
+		/** Whether this annotation contains spoilers */
+		containsSpoiler: Schema.Boolean,
+		/** Page number in the book */
+		pageNumber: Schema.Number,
+		/** Highlight color slot index (0-4) */
+		selectedSlotIndex: Schema.Number,
+		/** User IDs who liked this annotation */
+		likes: Schema.NullOr(Schema.Array(Schema.Number)),
+		/** Name of the series */
+		seriesName: Schema.NullOr(Schema.String),
+		/** Name of the library */
+		libraryName: Schema.NullOr(Schema.String),
+		/** Chapter ID */
 		chapterId: Schema.Number,
-		seriesId: Schema.optionalWith(Schema.Number, { exact: true }),
-		content: Schema.String,
-		comment: Schema.optionalWith(Schema.String, { exact: true }),
-		spoiler: Schema.Boolean,
-		highlightSlot: Schema.Number,
-		page: Schema.optionalWith(Schema.Number, { exact: true }),
-		position: Schema.optionalWith(Schema.Number, { exact: true }),
-		createdAt: Schema.optionalWith(Schema.DateTimeUtc, { exact: true }),
-		updatedAt: Schema.optionalWith(Schema.DateTimeUtc, { exact: true }),
+		/** Volume ID */
+		volumeId: Schema.Number,
+		/** Series ID */
+		seriesId: Schema.Number,
+		/** Library ID */
+		libraryId: Schema.Number,
+		/** Owner user ID */
+		ownerUserId: Schema.Number,
+		/** Owner username */
+		ownerUsername: Schema.NullOr(Schema.String),
+		/** Age rating of the series */
+		ageRating: Schema.Number,
+		/** Creation timestamp */
+		createdUtc: Schema.String,
+		/** Last modified timestamp */
+		lastModifiedUtc: Schema.String,
 	},
 ) {}
 
@@ -225,18 +265,32 @@ export class SeriesPagedResponse extends Schema.Class<SeriesPagedResponse>(
 export class CreateAnnotationDto extends Schema.Class<CreateAnnotationDto>(
 	"CreateAnnotationDto",
 )({
+	/** Chapter ID (required) */
 	chapterId: Schema.Number,
-	content: Schema.String,
+	/** Volume ID (required) */
+	volumeId: Schema.Number,
+	/** Series ID (required) */
+	seriesId: Schema.Number,
+	/** Library ID (required) */
+	libraryId: Schema.Number,
+	/** Owner user ID (required) */
+	ownerUserId: Schema.Number,
+	/** Starting XPath selector for the highlight (required) */
+	xPath: Schema.String,
+	/** The highlighted text (required) */
+	selectedText: Schema.String,
+	/** Number of characters selected (required) */
+	highlightCount: Schema.Number,
+	/** Page number in the book (required) */
+	pageNumber: Schema.Number,
+	/** Highlight color slot index 0-4 (required) */
+	selectedSlotIndex: Schema.Number,
+	/** Whether this annotation contains spoilers (required) */
+	containsSpoiler: Schema.Boolean,
+	/** Ending XPath selector (optional, defaults to xPath) */
+	endingXPath: Schema.optionalWith(Schema.String, { exact: true }),
+	/** User's comment on the annotation (optional) */
 	comment: Schema.optionalWith(Schema.String, { exact: true }),
-	spoiler: Schema.optionalWith(Schema.Boolean, {
-		exact: true,
-		default: () => false,
-	}),
-	highlightSlot: Schema.optionalWith(Schema.Number, {
-		exact: true,
-		default: () => 0,
-	}),
-	page: Schema.optionalWith(Schema.Number, { exact: true }),
 }) {}
 
 // ============================================================================

@@ -17,16 +17,39 @@ const createAnnotation = (
 	overrides: Partial<typeof AnnotationDto.Type> = {},
 ): typeof AnnotationDto.Type => ({
 	id: 1,
+	xPath: "/html/body/p[1]",
+	endingXPath: null,
+	selectedText: "Test highlight",
+	comment: null,
+	commentHtml: null,
+	commentPlainText: null,
+	chapterTitle: null,
+	context: null,
+	highlightCount: 14,
+	containsSpoiler: false,
+	pageNumber: 1,
+	selectedSlotIndex: 0,
+	likes: [],
+	seriesName: null,
+	libraryName: null,
 	chapterId: 1,
-	content: "Test highlight",
-	spoiler: false,
-	highlightSlot: 0,
+	volumeId: 1,
+	seriesId: 1,
+	libraryId: 1,
+	ownerUserId: 1,
+	ownerUsername: null,
+	ageRating: 0,
+	createdUtc: "2025-01-01T00:00:00Z",
+	lastModifiedUtc: "2025-01-01T00:00:00Z",
 	...overrides,
 });
 
 describe("formatAnnotation", () => {
 	it("formats basic annotation", () => {
-		const annotation = createAnnotation({ content: "Hello world" });
+		const annotation = createAnnotation({
+			selectedText: "Hello world",
+			pageNumber: 0,
+		});
 		const result = formatAnnotation(annotation, {
 			includeComments: true,
 			includeSpoilers: false,
@@ -40,7 +63,7 @@ describe("formatAnnotation", () => {
 
 	it("includes comment when enabled", () => {
 		const annotation = createAnnotation({
-			content: "Highlight",
+			selectedText: "Highlight",
 			comment: "My note",
 		});
 		const result = formatAnnotation(annotation, {
@@ -56,7 +79,7 @@ describe("formatAnnotation", () => {
 
 	it("excludes comment when disabled", () => {
 		const annotation = createAnnotation({
-			content: "Highlight",
+			selectedText: "Highlight",
 			comment: "My note",
 		});
 		const result = formatAnnotation(annotation, {
@@ -71,7 +94,10 @@ describe("formatAnnotation", () => {
 	});
 
 	it("includes page number when present", () => {
-		const annotation = createAnnotation({ content: "Highlight", page: 42 });
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			pageNumber: 42,
+		});
 		const result = formatAnnotation(annotation, {
 			includeComments: true,
 			includeSpoilers: false,
@@ -84,7 +110,10 @@ describe("formatAnnotation", () => {
 	});
 
 	it("filters spoilers when disabled", () => {
-		const annotation = createAnnotation({ content: "Spoiler", spoiler: true });
+		const annotation = createAnnotation({
+			selectedText: "Spoiler",
+			containsSpoiler: true,
+		});
 		const result = formatAnnotation(annotation, {
 			includeComments: true,
 			includeSpoilers: false,
@@ -94,7 +123,10 @@ describe("formatAnnotation", () => {
 	});
 
 	it("includes spoilers when enabled", () => {
-		const annotation = createAnnotation({ content: "Spoiler", spoiler: true });
+		const annotation = createAnnotation({
+			selectedText: "Spoiler",
+			containsSpoiler: true,
+		});
 		const result = formatAnnotation(annotation, {
 			includeComments: true,
 			includeSpoilers: true,
@@ -117,19 +149,6 @@ describe("groupBySeriesId", () => {
 		expect(groups.size).toBe(2);
 		expect(groups.get(1)?.length).toBe(2);
 		expect(groups.get(2)?.length).toBe(1);
-	});
-
-	it("handles undefined seriesId", () => {
-		const annotations = [
-			createAnnotation({ id: 1, seriesId: undefined }),
-			createAnnotation({ id: 2, seriesId: 1 }),
-		];
-
-		const groups = groupBySeriesId(annotations);
-
-		expect(groups.size).toBe(2);
-		expect(groups.get(undefined)?.length).toBe(1);
-		expect(groups.get(1)?.length).toBe(1);
 	});
 });
 
@@ -162,9 +181,24 @@ describe("toMarkdown", () => {
 
 	it("generates markdown with series and chapter grouping", () => {
 		const annotations = [
-			createAnnotation({ id: 1, seriesId: 1, chapterId: 1, content: "First" }),
-			createAnnotation({ id: 2, seriesId: 1, chapterId: 2, content: "Second" }),
-			createAnnotation({ id: 3, seriesId: 2, chapterId: 1, content: "Third" }),
+			createAnnotation({
+				id: 1,
+				seriesId: 1,
+				chapterId: 1,
+				selectedText: "First",
+			}),
+			createAnnotation({
+				id: 2,
+				seriesId: 1,
+				chapterId: 2,
+				selectedText: "Second",
+			}),
+			createAnnotation({
+				id: 3,
+				seriesId: 2,
+				chapterId: 1,
+				selectedText: "Third",
+			}),
 		];
 
 		const result = toMarkdown(annotations, {
@@ -184,8 +218,16 @@ describe("toMarkdown", () => {
 
 	it("filters spoilers based on options", () => {
 		const annotations = [
-			createAnnotation({ id: 1, content: "Normal", spoiler: false }),
-			createAnnotation({ id: 2, content: "Secret", spoiler: true }),
+			createAnnotation({
+				id: 1,
+				selectedText: "Normal",
+				containsSpoiler: false,
+			}),
+			createAnnotation({
+				id: 2,
+				selectedText: "Secret",
+				containsSpoiler: true,
+			}),
 		];
 
 		const result = toMarkdown(annotations, {
