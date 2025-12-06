@@ -78,6 +78,9 @@ const MockPluginConfig = Layer.succeed(
 		matchThreshold: 0.7,
 		includeComments: true,
 		includeSpoilers: false,
+		includeTags: true,
+		tagPrefix: "kavita/",
+		includeWikilinks: true,
 	}),
 );
 
