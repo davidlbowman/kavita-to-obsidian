@@ -14,11 +14,13 @@ import {
 	generateFrontmatter,
 	generateSeriesHeader,
 	getAuthorNames,
+	getBookSortOrder,
 	getBookTitle,
 	getChapterTitle,
 	getGenreNames,
 	getLibraryName,
 	getSeriesName,
+	getSortedBookGroups,
 	groupByBookTitle,
 	groupByChapterId,
 	groupBySeriesId,
@@ -655,8 +657,8 @@ describe("toMarkdown", () => {
 		];
 
 		const chapterInfoMap: ChapterInfoMap = new Map([
-			[1, { chapterId: 1, bookTitle: "Horus Rising" }],
-			[2, { chapterId: 2, bookTitle: "False Gods" }],
+			[1, { chapterId: 1, bookTitle: "Horus Rising", sortOrder: 1 }],
+			[2, { chapterId: 2, bookTitle: "False Gods", sortOrder: 5 }],
 		]);
 
 		const result = toMarkdown(
@@ -693,7 +695,7 @@ describe("getBookTitle", () => {
 	it("returns book title from chapterInfoMap", () => {
 		const annotation = createAnnotation({ chapterId: 1, seriesName: "Series" });
 		const chapterInfoMap: ChapterInfoMap = new Map([
-			[1, { chapterId: 1, bookTitle: "The Book Title" }],
+			[1, { chapterId: 1, bookTitle: "The Book Title", sortOrder: 1 }],
 		]);
 
 		expect(getBookTitle(annotation, chapterInfoMap)).toBe("The Book Title");
@@ -725,8 +727,8 @@ describe("groupByBookTitle", () => {
 		];
 
 		const chapterInfoMap: ChapterInfoMap = new Map([
-			[1, { chapterId: 1, bookTitle: "Book A" }],
-			[2, { chapterId: 2, bookTitle: "Book B" }],
+			[1, { chapterId: 1, bookTitle: "Book A", sortOrder: 1 }],
+			[2, { chapterId: 2, bookTitle: "Book B", sortOrder: 2 }],
 		]);
 
 		const groups = groupByBookTitle(annotations, chapterInfoMap);
@@ -734,6 +736,61 @@ describe("groupByBookTitle", () => {
 		expect(Object.keys(groups)).toHaveLength(2);
 		expect(groups["Book A"]).toHaveLength(2);
 		expect(groups["Book B"]).toHaveLength(1);
+	});
+});
+
+describe("getSortedBookGroups", () => {
+	it("sorts book groups by sortOrder", () => {
+		const annotations = [
+			createAnnotation({ id: 1, chapterId: 5 }),
+			createAnnotation({ id: 2, chapterId: 1 }),
+			createAnnotation({ id: 3, chapterId: 3 }),
+		];
+
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[5, { chapterId: 5, bookTitle: "Fulgrim", sortOrder: 5 }],
+			[1, { chapterId: 1, bookTitle: "Horus Rising", sortOrder: 1 }],
+			[3, { chapterId: 3, bookTitle: "Galaxy in Flames", sortOrder: 3 }],
+		]);
+
+		const sorted = getSortedBookGroups(annotations, chapterInfoMap);
+
+		expect(sorted[0]?.[0]).toBe("Horus Rising");
+		expect(sorted[1]?.[0]).toBe("Galaxy in Flames");
+		expect(sorted[2]?.[0]).toBe("Fulgrim");
+	});
+
+	it("handles missing chapterInfoMap gracefully", () => {
+		const annotations = [createAnnotation({ id: 1, seriesName: "Test" })];
+
+		const sorted = getSortedBookGroups(annotations, undefined);
+
+		expect(sorted).toHaveLength(1);
+		expect(sorted[0]?.[0]).toBe("Test");
+	});
+});
+
+describe("getBookSortOrder", () => {
+	it("returns sortOrder from chapterInfoMap", () => {
+		const annotations = [createAnnotation({ chapterId: 1 })];
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[1, { chapterId: 1, bookTitle: "Book", sortOrder: 42 }],
+		]);
+
+		expect(getBookSortOrder("Book", annotations, chapterInfoMap)).toBe(42);
+	});
+
+	it("returns 0 when chapterInfoMap is undefined", () => {
+		const annotations = [createAnnotation({ chapterId: 1 })];
+
+		expect(getBookSortOrder("Book", annotations, undefined)).toBe(0);
+	});
+
+	it("returns 0 when chapter not in map", () => {
+		const annotations = [createAnnotation({ chapterId: 99 })];
+		const chapterInfoMap: ChapterInfoMap = new Map();
+
+		expect(getBookSortOrder("Book", annotations, chapterInfoMap)).toBe(0);
 	});
 });
 

@@ -89,7 +89,10 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 			> =>
 				Effect.gen(function* () {
 					const chapterEntries: Array<
-						[number, { chapterId: number; bookTitle: string }]
+						[
+							number,
+							{ chapterId: number; bookTitle: string; sortOrder: number },
+						]
 					> = [];
 
 					for (const seriesId of seriesIds) {
@@ -103,9 +106,10 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 										chapter.titleName ??
 										volume.name ??
 										`Volume ${volume.number}`;
+									const sortOrder = volume.number;
 									chapterEntries.push([
 										chapter.id,
-										{ chapterId: chapter.id, bookTitle },
+										{ chapterId: chapter.id, bookTitle, sortOrder },
 									]);
 								}
 							}

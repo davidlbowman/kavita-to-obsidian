@@ -3,7 +3,14 @@
  *
  * @module
  */
-import { Array, Option, pipe, Record } from "effect";
+import {
+	Array,
+	Number as EffectNumber,
+	Option,
+	Order,
+	pipe,
+	Record,
+} from "effect";
 import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
 
 /**
@@ -26,6 +33,7 @@ export type SeriesMetadataMap = ReadonlyMap<
 export interface ChapterInfo {
 	readonly chapterId: number;
 	readonly bookTitle: string;
+	readonly sortOrder: number;
 }
 
 /**
@@ -196,6 +204,42 @@ export const groupByBookTitle = (
 	Array.groupBy(annotations, (a) => getBookTitle(a, chapterInfoMap));
 
 /**
+ * Get the sort order for a book title from the chapter info map.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getBookSortOrder = (
+	_bookTitle: string,
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): number => {
+	const firstAnnotation = annotations[0];
+	if (!firstAnnotation || !chapterInfoMap) return 0;
+	const chapterInfo = chapterInfoMap.get(firstAnnotation.chapterId);
+	return chapterInfo?.sortOrder ?? 0;
+};
+
+/**
+ * Get book groups sorted by series order.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getSortedBookGroups = (
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): globalThis.Array<[string, globalThis.Array<typeof AnnotationDto.Type>]> => {
+	const groups = groupByBookTitle(annotations, chapterInfoMap);
+	const bookOrder = Order.mapInput(
+		EffectNumber.Order,
+		(entry: [string, globalThis.Array<typeof AnnotationDto.Type>]) =>
+			getBookSortOrder(entry[0], entry[1], chapterInfoMap),
+	);
+	return pipe(Record.toEntries(groups), Array.sort(bookOrder));
+};
+
+/**
  * Generate book header with title and tags.
  *
  * @since 0.0.2
@@ -346,13 +390,16 @@ export const toMarkdown = (
 			if (!firstAnnotation) return [];
 
 			const metadata = metadataMap?.get(Number(seriesId));
-			const bookGroups = groupByBookTitle(seriesAnnotations, chapterInfoMap);
+			const sortedBookGroups = getSortedBookGroups(
+				seriesAnnotations,
+				chapterInfoMap,
+			);
 
 			return [
 				...generateSeriesHeader(firstAnnotation, options, metadata),
 				"",
 				...pipe(
-					Record.toEntries(bookGroups),
+					sortedBookGroups,
 					Array.flatMap(([bookTitle, bookAnnotations]) => {
 						const chapterGroups = groupByChapterId(bookAnnotations);
 

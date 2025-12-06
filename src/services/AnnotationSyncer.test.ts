@@ -82,6 +82,7 @@ const createMockKavitaClient = (
 							title: "Chapter 1",
 							pages: 10,
 							titleName: "Test Book",
+							sortOrder: 1,
 						},
 					],
 				},
