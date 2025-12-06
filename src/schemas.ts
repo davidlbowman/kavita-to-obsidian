@@ -116,7 +116,7 @@ export class PluginSettings extends Schema.Class<PluginSettings>(
 		exact: true,
 		default: () => "kavita-annotations.md",
 	}),
-	matchThreshold: Schema.optionalWith(Schema.Number, {
+	matchThreshold: Schema.optionalWith(Schema.Number.pipe(Schema.clamp(0, 1)), {
 		exact: true,
 		default: () => 0.7,
 	}),
@@ -144,10 +144,6 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	includeComments: true,
 	includeSpoilers: false,
 };
-
-// ============================================================================
-// Kavita Library/Series/Chapter Schemas
-// ============================================================================
 
 /**
  * Kavita library types.
@@ -292,10 +288,6 @@ export class CreateAnnotationDto extends Schema.Class<CreateAnnotationDto>(
 	/** User's comment on the annotation (optional) */
 	comment: Schema.optionalWith(Schema.String, { exact: true }),
 }) {}
-
-// ============================================================================
-// Kavita Auth Schemas
-// ============================================================================
 
 /**
  * Request to register a new user.

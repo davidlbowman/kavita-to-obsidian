@@ -25,11 +25,8 @@ export const ObsidianHttpClient = Layer.succeed(
 	HttpClient.make((request) =>
 		Effect.tryPromise({
 			try: async () => {
-				// Build the full URL
 				const url = request.url;
 
-				// Effect Headers is a Record<string, string> with a symbol
-				// Filter out the symbol key for Obsidian's requestUrl
 				const headers: Record<string, string> = {};
 				for (const [key, value] of Object.entries(request.headers)) {
 					if (typeof key === "string" && typeof value === "string") {
@@ -37,7 +34,6 @@ export const ObsidianHttpClient = Layer.succeed(
 					}
 				}
 
-				// Get request body if present
 				let body: string | ArrayBuffer | undefined;
 				const bodyTag = request.body._tag;
 
@@ -55,14 +51,9 @@ export const ObsidianHttpClient = Layer.succeed(
 						body = rawBody;
 					}
 				}
-				// For Empty body, leave undefined
 
-				// Use Obsidian's requestUrl which bypasses CORS
-				// contentType must be set explicitly for Obsidian
 				const contentType = headers["content-type"] ?? headers["Content-Type"];
 
-				// Remove content-type and content-length from headers
-				// Obsidian's requestUrl handles these automatically
 				const filteredHeaders: Record<string, string> = {};
 				for (const [key, value] of Object.entries(headers)) {
 					const lowerKey = key.toLowerCase();
@@ -71,15 +62,13 @@ export const ObsidianHttpClient = Layer.succeed(
 					}
 				}
 
-				// Build request options - only include body if defined
 				const requestOptions: Parameters<typeof requestUrl>[0] = {
 					url,
 					method: request.method,
 					headers: filteredHeaders,
-					throw: false, // Don't throw on non-2xx status
+					throw: false,
 				};
 
-				// Only add body and contentType if we have a body
 				if (body !== undefined) {
 					requestOptions.body = body;
 					if (contentType) {
@@ -89,7 +78,6 @@ export const ObsidianHttpClient = Layer.succeed(
 
 				const response = await requestUrl(requestOptions);
 
-				// Get response body - try text first, fallback to empty
 				let responseBody: string;
 				try {
 					responseBody = response.text;
@@ -97,7 +85,6 @@ export const ObsidianHttpClient = Layer.succeed(
 					responseBody = "";
 				}
 
-				// Convert to a Web Response that @effect/platform expects
 				return HttpClientResponse.fromWeb(
 					request,
 					new Response(responseBody, {

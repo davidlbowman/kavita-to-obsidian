@@ -9,9 +9,14 @@ Kavita-to-Obsidian is an Obsidian plugin that syncs annotations, highlights, and
 ## Build Commands
 
 ```bash
-bun install          # Install dependencies
-bun run dev          # Development build with watch mode
-bun run build        # Production build
+bun install              # Install dependencies
+bun run dev              # Development build
+bun run build            # Production build (minified)
+bun run lint             # Check linting
+bun run lint:fix         # Auto-fix linting issues
+bun run typecheck        # TypeScript type checking
+bun run test             # Run unit tests
+bun run integration      # Run integration tests (requires Docker)
 ```
 
 ## Architecture
@@ -20,40 +25,108 @@ Obsidian plugin using TypeScript with Effect-TS for functional error handling an
 
 ```
 src/
-  main.ts              # Plugin entry point, registers commands and settings
+  main.ts                    # Plugin entry point, registers commands and settings
+  schemas.ts                 # Effect Schema definitions (AnnotationDto, etc.)
+  errors.ts                  # Tagged error types (KavitaError, ObsidianError)
+  index.ts                   # Public module exports
   services/
-    KavitaClient.ts    # Effect Service - HTTP client for Kavita API
-    ObsidianAdapter.ts # Effect Service - Vault file operations
-    FileMatcher.ts     # Effect Service - Fuzzy matching (v0.1.0)
+    PluginConfig.ts          # Configuration service (from settings or env)
+    KavitaClient.ts          # Effect Service - HTTP client for Kavita API
+    KavitaAuthClient.ts      # Effect Service - Auth/bootstrap operations
+    ObsidianAdapter.ts       # Effect Service - Vault file operations
+    ObsidianApp.ts           # Context tag for Obsidian App instance
+    ObsidianHttpClient.ts    # HTTP client using Obsidian's requestUrl (CORS bypass)
+    AnnotationSyncer.ts      # Effect Service - Orchestrates sync workflow
   formatters/
-    markdown.ts        # Pure functions to format annotations as markdown
-  errors.ts            # Tagged error types (KavitaError, ObsidianError)
-  config.ts            # Plugin settings schema
-manifest.json          # Obsidian plugin manifest
+    markdown.ts              # Pure functions to format annotations as markdown
+test-integration/
+  scripts/                   # Docker setup and test data scripts
+  docker-compose.yml         # Kavita test container
+manifest.json                # Obsidian plugin manifest
 ```
 
-## Effect Patterns
+## Effect-TS Patterns
 
-Use Effect services with Layer composition. Errors are tagged unions:
+### Services
+
+All services use `Effect.Service` with `accessors: true`:
+
 ```typescript
-type KavitaError =
-  | { _tag: "NetworkError"; cause: unknown }
-  | { _tag: "AuthError"; message: string }
-  | { _tag: "ParseError"; cause: unknown }
+export class MyService extends Effect.Service<MyService>()("MyService", {
+  accessors: true,
+  effect: Effect.gen(function* () {
+    const dep = yield* SomeDependency;
+    return { method: () => Effect.succeed("result") };
+  }),
+  dependencies: [SomeDependency.Default],
+}) {}
 ```
+
+### Error Types
+
+Tagged errors using `Schema.TaggedError`:
+
+```typescript
+export class KavitaNetworkError extends Schema.TaggedError<KavitaNetworkError>()(
+  "KavitaNetworkError",
+  { url: Schema.String, cause: Schema.optionalWith(Schema.Defect, { as: "Option" }) }
+) {
+  get message(): string { return `Network error for ${this.url}`; }
+}
+```
+
+### Layer Composition
+
+Services are composed via Layers for dependency injection:
+
+```typescript
+const SyncerLayer = AnnotationSyncer.Default.pipe(
+  Layer.provide(KavitaClientLayer),
+  Layer.provide(ObsidianAdapterLayer),
+  Layer.provide(ConfigLayer),
+);
+```
+
+## Code Style
+
+- **JSDoc only**: No inline comments (`//`) or block comments (`/* */`)
+- **Biome**: Linting and formatting
+- **Effect patterns**: Use `Effect.gen`, tagged errors, Layer composition
+- **Immutability**: Prefer `readonly` and `const`
 
 ## Kavita API
 
 API documentation: https://www.kavitareader.com/docs/api/#/
 
-Key annotation endpoints:
-- `POST /api/Annotation/all-filtered` - List with filtering/pagination
-- `GET /api/Annotation/all?chapterId=` - List by chapter
-- `POST /api/Annotation/export` - Export specific annotation IDs
+Key endpoints:
+- `POST /api/Annotation/all-filtered` - Fetch annotations with filtering
+- `GET /api/Annotation/all?chapterId=` - Fetch by chapter
+- `GET /api/Annotation/all-for-series?seriesId=` - Fetch by series
 
-Auth: API key or JWT token.
+Auth: API key via `x-api-key` header or JWT token.
 
-## Versioning Roadmap
+## Testing
 
-- **v0.0.1**: Export all annotations to a single markdown file
-- **v0.1.0**: Fuzzy match annotations to existing vault files, append to matched files
+### Unit Tests
+
+```bash
+bun run test
+```
+
+Uses `@effect/vitest` for Effect-aware testing with mock Layers.
+
+### Integration Tests
+
+```bash
+bun run integration      # Full setup: Docker + test data + verification
+bun run integration:up   # Start Kavita container
+bun run integration:down # Stop container
+bun run integration:clean # Remove all test data
+```
+
+## Version Roadmap
+
+- **v0.0.1** (current): Export all annotations to single markdown file
+- **v0.1.0** (planned): Fuzzy match annotations to existing vault files
+
+See `docs/strategy.md` for detailed implementation plan.

@@ -9,7 +9,11 @@ import {
 	HttpClientResponse,
 } from "@effect/platform";
 import { Effect, Redacted, Schema } from "effect";
-import { KavitaNetworkError } from "../errors.js";
+import {
+	KavitaAuthError,
+	KavitaNetworkError,
+	KavitaParseError,
+} from "../errors.js";
 import {
 	AnnotationDto,
 	AnnotationsResponse,
@@ -34,11 +38,11 @@ import { PluginConfig } from "./PluginConfig.js";
 export class KavitaClient extends Effect.Service<KavitaClient>()(
 	"KavitaClient",
 	{
+		accessors: true,
 		effect: Effect.gen(function* () {
 			const httpClient = yield* HttpClient.HttpClient;
 			const config = yield* PluginConfig;
 
-			// First authenticate via Plugin endpoint to get JWT token
 			const baseClient = httpClient.pipe(
 				HttpClient.mapRequest(
 					HttpClientRequest.prependUrl(config.kavitaUrl.href),
@@ -53,13 +57,18 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 				.pipe(HttpClient.filterStatusOk)
 				.execute(authRequest)
 				.pipe(
-					Effect.mapError(
-						(e) =>
-							new KavitaNetworkError({
-								url: "/api/Plugin/authenticate",
-								cause: e,
-							}),
-					),
+					Effect.mapError((e) => {
+						if (
+							e._tag === "ResponseError" &&
+							(e.response.status === 401 || e.response.status === 403)
+						) {
+							return new KavitaAuthError({ reason: "Invalid API key" });
+						}
+						return new KavitaNetworkError({
+							url: "/api/Plugin/authenticate",
+							cause: e,
+						});
+					}),
 					Effect.scoped,
 				);
 
@@ -68,15 +77,13 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 			)(authResponse).pipe(
 				Effect.map((r) => r.token),
 				Effect.mapError(
-					(e) =>
-						new KavitaNetworkError({
-							url: "/api/Plugin/authenticate",
-							cause: e,
+					() =>
+						new KavitaParseError({
+							expected: "{ token: string }",
 						}),
 				),
 			);
 
-			// Create authenticated client with JWT token
 			const client = httpClient.pipe(
 				HttpClient.filterStatusOk,
 				HttpClient.mapRequest(
@@ -137,10 +144,6 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 					),
 					Effect.scoped,
 				);
-
-			// ================================================================
-			// Library Methods
-			// ================================================================
 
 			/**
 			 * Get all libraries.
@@ -215,12 +218,10 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 					Effect.scoped,
 				);
 
-			// ================================================================
-			// Series Methods
-			// ================================================================
-
 			/**
 			 * Get all series (paginated).
+			 *
+			 * Handles both array and paged response formats from the API.
 			 *
 			 * @since 0.0.1
 			 */
@@ -229,11 +230,9 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 					HttpClientRequest.bodyUnsafeJson({}),
 				);
 				const response = yield* client.execute(request);
-				// API returns [] when no series, or {result: [...]} when there are series
 				const data = yield* HttpClientResponse.schemaBodyJson(
 					Schema.Union(Schema.Array(SeriesDto), SeriesPagedResponse),
 				)(response);
-				// Handle both array and paged response formats
 				if ("result" in data) {
 					return data.result;
 				}
@@ -268,10 +267,6 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 					Effect.scoped,
 				);
 
-			// ================================================================
-			// Annotation Methods
-			// ================================================================
-
 			/**
 			 * Create a new annotation.
 			 *
@@ -300,16 +295,13 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 				);
 
 			return {
-				// Annotations
 				fetchAllAnnotations,
 				fetchAnnotationsFiltered,
 				createAnnotation,
-				// Libraries
 				getLibraries,
 				createLibrary,
 				scanAllLibraries,
 				scanLibrary,
-				// Series
 				getAllSeries,
 				getVolumes,
 			};
@@ -317,11 +309,3 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 		dependencies: [PluginConfig.Default],
 	},
 ) {}
-
-/**
- * Live layer for KavitaClient with HTTP client.
- *
- * @since 0.0.1
- * @category Layers
- */
-export const KavitaClientLive = KavitaClient.Default;

@@ -4,7 +4,12 @@
  * @module
  */
 import { Effect } from "effect";
-import type { KavitaNetworkError, ObsidianWriteError } from "../errors.js";
+import type {
+	KavitaAuthError,
+	KavitaNetworkError,
+	KavitaParseError,
+	ObsidianWriteError,
+} from "../errors.js";
 import { toMarkdown } from "../formatters/markdown.js";
 import { KavitaClient } from "./KavitaClient.js";
 import { ObsidianAdapter } from "./ObsidianAdapter.js";
@@ -32,6 +37,7 @@ export interface SyncResult {
 export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 	"AnnotationSyncer",
 	{
+		accessors: true,
 		effect: Effect.gen(function* () {
 			const kavita = yield* KavitaClient;
 			const obsidian = yield* ObsidianAdapter;
@@ -44,7 +50,10 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 			 */
 			const syncToFile: Effect.Effect<
 				SyncResult,
-				KavitaNetworkError | ObsidianWriteError
+				| KavitaAuthError
+				| KavitaNetworkError
+				| KavitaParseError
+				| ObsidianWriteError
 			> = Effect.gen(function* () {
 				const annotations = yield* kavita.fetchAllAnnotations;
 

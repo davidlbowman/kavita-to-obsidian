@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { Option } from "effect";
+import { Array, Option, pipe, Record } from "effect";
 import type { AnnotationDto } from "../schemas.js";
 
 /**
@@ -33,7 +33,6 @@ export const formatAnnotation = (
 
 	const lines: string[] = [];
 
-	// Use selectedText as the main content (the highlighted text)
 	const content = annotation.selectedText ?? "";
 	lines.push(`> ${content}`);
 
@@ -58,21 +57,8 @@ export const formatAnnotation = (
  */
 export const groupBySeriesId = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-): Map<number | undefined, Array<typeof AnnotationDto.Type>> => {
-	const groups = new Map<
-		number | undefined,
-		Array<typeof AnnotationDto.Type>
-	>();
-
-	for (const annotation of annotations) {
-		const key = annotation.seriesId;
-		const existing = groups.get(key) ?? [];
-		existing.push(annotation);
-		groups.set(key, existing);
-	}
-
-	return groups;
-};
+): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
+	Array.groupBy(annotations, (a) => String(a.seriesId));
 
 /**
  * Group annotations by chapterId.
@@ -82,18 +68,8 @@ export const groupBySeriesId = (
  */
 export const groupByChapterId = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-): Map<number, Array<typeof AnnotationDto.Type>> => {
-	const groups = new Map<number, Array<typeof AnnotationDto.Type>>();
-
-	for (const annotation of annotations) {
-		const key = annotation.chapterId;
-		const existing = groups.get(key) ?? [];
-		existing.push(annotation);
-		groups.set(key, existing);
-	}
-
-	return groups;
-};
+): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
+	Array.groupBy(annotations, (a) => String(a.chapterId));
 
 /**
  * Convert annotations to a markdown document.
@@ -109,28 +85,33 @@ export const toMarkdown = (
 		return "# Kavita Annotations\n\n*No annotations found.*\n";
 	}
 
-	const lines: string[] = ["# Kavita Annotations", ""];
-
 	const seriesGroups = groupBySeriesId(annotations);
 
-	for (const [seriesId, seriesAnnotations] of seriesGroups) {
-		const seriesTitle =
-			seriesId !== undefined ? `Series ${seriesId}` : "Ungrouped";
-		lines.push(`## ${seriesTitle}`, "");
+	const content = pipe(
+		Record.toEntries(seriesGroups),
+		Array.flatMap(([seriesId, seriesAnnotations]) => {
+			const seriesTitle =
+				seriesId !== "undefined" ? `Series ${seriesId}` : "Ungrouped";
+			const chapterGroups = groupByChapterId(seriesAnnotations);
 
-		const chapterGroups = groupByChapterId(seriesAnnotations);
+			return [
+				`## ${seriesTitle}`,
+				"",
+				...pipe(
+					Record.toEntries(chapterGroups),
+					Array.flatMap(([chapterId, chapterAnnotations]) => [
+						`### Chapter ${chapterId}`,
+						"",
+						...pipe(
+							chapterAnnotations,
+							Array.filterMap((a) => formatAnnotation(a, options)),
+							Array.flatMap((formatted) => [formatted, "", "---", ""]),
+						),
+					]),
+				),
+			];
+		}),
+	);
 
-		for (const [chapterId, chapterAnnotations] of chapterGroups) {
-			lines.push(`### Chapter ${chapterId}`, "");
-
-			for (const annotation of chapterAnnotations) {
-				const formatted = formatAnnotation(annotation, options);
-				if (Option.isSome(formatted)) {
-					lines.push(formatted.value, "", "---", "");
-				}
-			}
-		}
-	}
-
-	return lines.join("\n");
+	return ["# Kavita Annotations", "", ...content].join("\n");
 };
