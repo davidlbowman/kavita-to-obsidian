@@ -73,9 +73,21 @@ This document outlines the strategy for syncing annotations/highlights from Kavi
 
 ### Branch 9: `release/v0.0.1`
 
+#### Phase 1: Code Quality Refactor
+
+- [ ] Run effect-agent to refactor all code to Effect-TS best practices
+- [ ] Standardize comments to JSDoc only
+  - [ ] Remove all inline comments (`// comment`)
+  - [ ] Remove all block comments (`/* comment */`)
+  - [ ] Convert necessary comments to JSDoc format (`/** @description */`)
+  - [ ] Ensure all public APIs have JSDoc with `@since`, `@category`, `@example` where appropriate
+- [ ] Verify all services follow consistent patterns
+
+#### Phase 2: Documentation
+
 - [ ] Update README.md
   - [ ] Clear installation instructions (how to copy files to vault)
-  - [ ] Configuration guide (settings tab screenshots/descriptions)
+  - [ ] Configuration guide (settings tab descriptions)
   - [ ] Usage guide (how to trigger sync)
   - [ ] Development setup (bun install, bun run dev, etc.)
   - [ ] Testing instructions (unit tests, integration tests)
@@ -83,10 +95,13 @@ This document outlines the strategy for syncing annotations/highlights from Kavi
 - [ ] Create CONTRIBUTING.md
   - [ ] How to set up development environment
   - [ ] How to run tests
-  - [ ] Code style and conventions (Effect-TS patterns)
+  - [ ] Code style and conventions (Effect-TS patterns, JSDoc only)
   - [ ] PR process
 - [ ] Create CHANGELOG.md
   - [ ] v0.0.1 release notes
+
+#### Phase 3: Final Verification
+
 - [ ] Update this strategy.md
   - [ ] Mark Branch 9 as complete
   - [ ] Add notes on what was learned

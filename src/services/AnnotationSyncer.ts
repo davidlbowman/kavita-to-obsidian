@@ -32,6 +32,7 @@ export interface SyncResult {
 export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 	"AnnotationSyncer",
 	{
+		accessors: true,
 		effect: Effect.gen(function* () {
 			const kavita = yield* KavitaClient;
 			const obsidian = yield* ObsidianAdapter;

@@ -34,6 +34,7 @@ import { PluginConfig } from "./PluginConfig.js";
 export class KavitaClient extends Effect.Service<KavitaClient>()(
 	"KavitaClient",
 	{
+		accessors: true,
 		effect: Effect.gen(function* () {
 			const httpClient = yield* HttpClient.HttpClient;
 			const config = yield* PluginConfig;
@@ -317,11 +318,3 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 		dependencies: [PluginConfig.Default],
 	},
 ) {}
-
-/**
- * Live layer for KavitaClient with HTTP client.
- *
- * @since 0.0.1
- * @category Layers
- */
-export const KavitaClientLive = KavitaClient.Default;

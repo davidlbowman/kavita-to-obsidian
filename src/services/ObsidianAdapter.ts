@@ -19,6 +19,7 @@ import { ObsidianApp } from "./ObsidianApp.js";
 export class ObsidianAdapter extends Effect.Service<ObsidianAdapter>()(
 	"ObsidianAdapter",
 	{
+		accessors: true,
 		effect: Effect.gen(function* () {
 			const app = yield* ObsidianApp;
 			const vault = app.vault;

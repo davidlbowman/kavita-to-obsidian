@@ -6,6 +6,7 @@
 import {
 	FetchHttpClient,
 	HttpClient,
+	type HttpClientError,
 	HttpClientRequest,
 	HttpClientResponse,
 } from "@effect/platform";
@@ -25,6 +26,7 @@ import { type LoginDto, type RegisterDto, UserDto } from "../schemas.js";
 export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 	"KavitaAuthClient",
 	{
+		accessors: true,
 		effect: Effect.gen(function* () {
 			const httpClient = yield* HttpClient.HttpClient;
 
@@ -66,6 +68,12 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 						).pipe(HttpClientRequest.bodyUnsafeJson(dto));
 						yield* client.execute(request);
 					}).pipe(
+						Effect.scoped,
+						Effect.catchIf(
+							(e): e is HttpClientError.ResponseError =>
+								e._tag === "ResponseError" && e.response.status === 409,
+							() => Effect.void,
+						),
 						Effect.mapError(
 							(e) =>
 								new KavitaNetworkError({
@@ -73,8 +81,6 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 									cause: e,
 								}),
 						),
-						Effect.scoped,
-						Effect.catchAll(() => Effect.void), // Ignore if user exists
 					);
 
 				/**
@@ -141,11 +147,3 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 		dependencies: [FetchHttpClient.layer],
 	},
 ) {}
-
-/**
- * Live layer for KavitaAuthClient with HTTP client.
- *
- * @since 0.0.1
- * @category Layers
- */
-export const KavitaAuthClientLive = KavitaAuthClient.Default;
