@@ -5,7 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.0.1] - 2025-01-XX
+## [0.0.2] - 2025-12-06
+
+### Added
+
+- **Enriched Markdown Output**
+  - YAML frontmatter with tags and update timestamp
+  - Real series, chapter, and library names from Kavita metadata
+  - Wikilinks for series and author names (`[[Author Name]]`)
+  - Hierarchical tags (`#kavita/series/...`, `#kavita/author/...`, `#kavita/library/...`)
+  - Annotations grouped by book within each series
+  - Author and genre metadata from series API
+- **New Settings**
+  - `includeTags` - Toggle Obsidian tag generation
+  - `tagPrefix` - Customize tag prefix (default: `kavita/`)
+  - `includeWikilinks` - Toggle wikilink generation for series/authors
+- **Testing**
+  - Unit tests for KavitaAuthClient, ObsidianApp, ObsidianHttpClient
+  - Expanded KavitaClient test coverage (all API methods)
+  - Coverage thresholds: 80% lines/statements, 70% functions, 60% branches
+  - 127 total tests
+- **CI Improvements**
+  - Manual workflow dispatch trigger for CI
+
+### Changed
+
+- Markdown formatter now produces Obsidian-native output with proper linking
+- Annotations display real names instead of numeric IDs
+
+## [0.0.1] - 2025-12-05
 
 ### Added
 
@@ -36,4 +64,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bun bundler for fast builds
 - TypeScript with strict mode enabled
 
+[0.0.2]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.2
 [0.0.1]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.1
