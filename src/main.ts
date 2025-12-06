@@ -3,7 +3,6 @@
  *
  * @module
  */
-import { FetchHttpClient } from "@effect/platform";
 import { Effect, Layer } from "effect";
 import { type App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { DEFAULT_SETTINGS } from "./schemas.js";
@@ -11,6 +10,7 @@ import { AnnotationSyncer } from "./services/AnnotationSyncer.js";
 import { KavitaClient } from "./services/KavitaClient.js";
 import { ObsidianAdapter } from "./services/ObsidianAdapter.js";
 import { ObsidianApp } from "./services/ObsidianApp.js";
+import { ObsidianHttpClient } from "./services/ObsidianHttpClient.js";
 import { PluginConfig } from "./services/PluginConfig.js";
 
 /**
@@ -89,7 +89,7 @@ export default class KavitaToObsidianPlugin extends Plugin {
 
 		const KavitaClientLayer = KavitaClient.DefaultWithoutDependencies.pipe(
 			Layer.provide(ConfigLayer),
-			Layer.provide(FetchHttpClient.layer),
+			Layer.provide(ObsidianHttpClient),
 		);
 
 		const SyncerLayer = AnnotationSyncer.Default.pipe(

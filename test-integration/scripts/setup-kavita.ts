@@ -251,6 +251,18 @@ const main = Effect.gen(function* () {
 
 	yield* Effect.log("Setup complete!");
 	yield* Effect.log(`Environment written to: test-integration/.env.test`);
+
+	// Print Obsidian plugin settings for easy copy/paste
+	yield* Effect.log("");
+	yield* Effect.log("=".repeat(60));
+	yield* Effect.log("OBSIDIAN PLUGIN SETTINGS");
+	yield* Effect.log("=".repeat(60));
+	yield* Effect.log(`Kavita URL:        ${KAVITA_URL}`);
+	yield* Effect.log(`API Key:           ${apiKey}`);
+	yield* Effect.log(`Output Path:       kavita-annotations.md`);
+	yield* Effect.log(`Include Comments:  true`);
+	yield* Effect.log(`Include Spoilers:  false`);
+	yield* Effect.log("=".repeat(60));
 });
 
 // Run with auth client layer (FetchHttpClient is included via dependencies)
