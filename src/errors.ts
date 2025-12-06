@@ -18,7 +18,13 @@ export class KavitaNetworkError extends Schema.TaggedError<KavitaNetworkError>()
 		statusCode: Schema.optionalWith(Schema.Number, { exact: true }),
 		cause: Schema.optionalWith(Schema.Defect, { exact: true }),
 	},
-) {}
+) {
+	override get message(): string {
+		const status =
+			this.statusCode !== undefined ? ` (status ${this.statusCode})` : "";
+		return `Network error calling ${this.url}${status}`;
+	}
+}
 
 /**
  * Authentication error when calling Kavita API.
@@ -31,7 +37,11 @@ export class KavitaAuthError extends Schema.TaggedError<KavitaAuthError>()(
 	{
 		reason: Schema.String,
 	},
-) {}
+) {
+	override get message(): string {
+		return `Authentication failed: ${this.reason}`;
+	}
+}
 
 /**
  * Parse error when decoding Kavita API response.
@@ -45,7 +55,11 @@ export class KavitaParseError extends Schema.TaggedError<KavitaParseError>()(
 		expected: Schema.String,
 		actual: Schema.optionalWith(Schema.Unknown, { exact: true }),
 	},
-) {}
+) {
+	override get message(): string {
+		return `Failed to parse response: expected ${this.expected}`;
+	}
+}
 
 /**
  * Union of all Kavita API errors.
@@ -69,7 +83,11 @@ export class ObsidianFileNotFoundError extends Schema.TaggedError<ObsidianFileNo
 	{
 		path: Schema.String,
 	},
-) {}
+) {
+	override get message(): string {
+		return `File not found: ${this.path}`;
+	}
+}
 
 /**
  * Error writing to Obsidian vault.
@@ -83,7 +101,11 @@ export class ObsidianWriteError extends Schema.TaggedError<ObsidianWriteError>()
 		path: Schema.String,
 		cause: Schema.optionalWith(Schema.Defect, { exact: true }),
 	},
-) {}
+) {
+	override get message(): string {
+		return `Failed to write file: ${this.path}`;
+	}
+}
 
 /**
  * Union of all Obsidian errors.

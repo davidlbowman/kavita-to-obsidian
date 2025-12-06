@@ -1,5 +1,6 @@
 {
 	"name": "kavita-to-obsidian",
+	"version": "0.0.1",
 	"module": "src/index.ts",
 	"type": "module",
 	"private": true,

@@ -6,6 +6,7 @@
 import {
 	FetchHttpClient,
 	HttpClient,
+	type HttpClientError,
 	HttpClientRequest,
 	HttpClientResponse,
 } from "@effect/platform";
@@ -25,6 +26,7 @@ import { type LoginDto, type RegisterDto, UserDto } from "../schemas.js";
 export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 	"KavitaAuthClient",
 	{
+		accessors: true,
 		effect: Effect.gen(function* () {
 			const httpClient = yield* HttpClient.HttpClient;
 
@@ -66,6 +68,12 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 						).pipe(HttpClientRequest.bodyUnsafeJson(dto));
 						yield* client.execute(request);
 					}).pipe(
+						Effect.scoped,
+						Effect.catchIf(
+							(e): e is HttpClientError.ResponseError =>
+								e._tag === "ResponseError" && e.response.status === 409,
+							() => Effect.void,
+						),
 						Effect.mapError(
 							(e) =>
 								new KavitaNetworkError({
@@ -73,8 +81,6 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 									cause: e,
 								}),
 						),
-						Effect.scoped,
-						Effect.catchAll(() => Effect.void), // Ignore if user exists
 					);
 
 				/**
@@ -102,6 +108,8 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 				/**
 				 * Reset API key (requires JWT token).
 				 *
+				 * The API returns the key wrapped in quotes which are stripped.
+				 *
 				 * @since 0.0.1
 				 */
 				const resetApiKey = (token: string) =>
@@ -115,7 +123,6 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 							.pipe(HttpClient.filterStatusOk)
 							.execute(request);
 						const text = yield* response.text;
-						// API returns the key with quotes, strip them
 						return text.replace(/"/g, "");
 					}).pipe(
 						Effect.mapError(
@@ -141,11 +148,3 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 		dependencies: [FetchHttpClient.layer],
 	},
 ) {}
-
-/**
- * Live layer for KavitaAuthClient with HTTP client.
- *
- * @since 0.0.1
- * @category Layers
- */
-export const KavitaAuthClientLive = KavitaAuthClient.Default;

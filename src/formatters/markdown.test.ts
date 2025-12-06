@@ -146,9 +146,9 @@ describe("groupBySeriesId", () => {
 
 		const groups = groupBySeriesId(annotations);
 
-		expect(groups.size).toBe(2);
-		expect(groups.get(1)?.length).toBe(2);
-		expect(groups.get(2)?.length).toBe(1);
+		expect(Object.keys(groups).length).toBe(2);
+		expect(groups["1"]?.length).toBe(2);
+		expect(groups["2"]?.length).toBe(1);
 	});
 });
 
@@ -162,9 +162,9 @@ describe("groupByChapterId", () => {
 
 		const groups = groupByChapterId(annotations);
 
-		expect(groups.size).toBe(2);
-		expect(groups.get(1)?.length).toBe(2);
-		expect(groups.get(2)?.length).toBe(1);
+		expect(Object.keys(groups).length).toBe(2);
+		expect(groups["1"]?.length).toBe(2);
+		expect(groups["2"]?.length).toBe(1);
 	});
 });
 
