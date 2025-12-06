@@ -45,20 +45,28 @@ const MockPluginConfig = Layer.succeed(
 	}),
 );
 
+const mockAuthResponse = { token: "mock-jwt-token" };
+
 const createMockHttpClient = (responseBody: unknown, status = 200) =>
 	Layer.succeed(
 		HttpClient.HttpClient,
-		HttpClient.make((request) =>
-			Effect.succeed(
+		HttpClient.make((request) => {
+			// Return auth response for Plugin/authenticate endpoint
+			const url = request.url;
+			const body = url.includes("/api/Plugin/authenticate")
+				? mockAuthResponse
+				: responseBody;
+
+			return Effect.succeed(
 				HttpClientResponse.fromWeb(
 					request,
-					new Response(JSON.stringify(responseBody), {
+					new Response(JSON.stringify(body), {
 						status,
 						headers: { "Content-Type": "application/json" },
 					}),
 				),
-			),
-		),
+			);
+		}),
 	);
 
 describe("KavitaClient", () => {
@@ -109,14 +117,27 @@ describe("KavitaClient", () => {
 				Effect.provide(
 					Layer.succeed(
 						HttpClient.HttpClient,
-						HttpClient.make(() =>
-							Effect.succeed(
+						HttpClient.make((request) => {
+							// Auth endpoint succeeds, annotation endpoint fails
+							const url = request.url;
+							if (url.includes("/api/Plugin/authenticate")) {
+								return Effect.succeed(
+									HttpClientResponse.fromWeb(
+										request,
+										new Response(JSON.stringify(mockAuthResponse), {
+											status: 200,
+											headers: { "Content-Type": "application/json" },
+										}),
+									),
+								);
+							}
+							return Effect.succeed(
 								HttpClientResponse.fromWeb(
-									{ url: "http://test" } as never,
+									request,
 									new Response("Unauthorized", { status: 401 }),
 								),
-							),
-						),
+							);
+						}),
 					),
 				),
 			),

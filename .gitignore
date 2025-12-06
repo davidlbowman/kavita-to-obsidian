@@ -24,3 +24,8 @@ Thumbs.db
 
 # Bun
 bun.lockb
+
+# Integration test runtime data
+test-integration/config/
+test-integration/books/
+test-integration/.env.test

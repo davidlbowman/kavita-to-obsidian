@@ -104,3 +104,176 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	includeComments: true,
 	includeSpoilers: false,
 };
+
+// ============================================================================
+// Kavita Library/Series/Chapter Schemas
+// ============================================================================
+
+/**
+ * Kavita library types.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export const LibraryType = {
+	Manga: 0,
+	Comic: 1,
+	Book: 2,
+	Images: 3,
+	LightNovel: 4,
+} as const;
+
+/**
+ * Kavita library data transfer object.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class LibraryDto extends Schema.Class<LibraryDto>("LibraryDto")({
+	id: Schema.Number,
+	name: Schema.String,
+	type: Schema.Number,
+	folders: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
+}) {}
+
+/**
+ * Request to create a library.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class CreateLibraryDto extends Schema.Class<CreateLibraryDto>(
+	"CreateLibraryDto",
+)({
+	name: Schema.String,
+	type: Schema.Number,
+	folders: Schema.Array(Schema.String),
+	fileGroupTypes: Schema.optionalWith(Schema.Array(Schema.Number), {
+		exact: true,
+		default: () => [],
+	}),
+	excludePatterns: Schema.optionalWith(Schema.Array(Schema.String), {
+		exact: true,
+		default: () => [],
+	}),
+}) {}
+
+/**
+ * Kavita chapter data transfer object.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class ChapterDto extends Schema.Class<ChapterDto>("ChapterDto")({
+	id: Schema.Number,
+	number: Schema.String,
+	title: Schema.optionalWith(Schema.String, { exact: true }),
+	pages: Schema.optionalWith(Schema.Number, { exact: true }),
+}) {}
+
+/**
+ * Kavita volume data transfer object.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class VolumeDto extends Schema.Class<VolumeDto>("VolumeDto")({
+	id: Schema.Number,
+	number: Schema.Number,
+	name: Schema.optionalWith(Schema.String, { exact: true }),
+	chapters: Schema.Array(ChapterDto),
+}) {}
+
+/**
+ * Kavita series data transfer object.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class SeriesDto extends Schema.Class<SeriesDto>("SeriesDto")({
+	id: Schema.Number,
+	name: Schema.String,
+	libraryId: Schema.optionalWith(Schema.Number, { exact: true }),
+}) {}
+
+/**
+ * Paginated series response.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class SeriesPagedResponse extends Schema.Class<SeriesPagedResponse>(
+	"SeriesPagedResponse",
+)({
+	result: Schema.Array(SeriesDto),
+	pagination: Schema.optionalWith(
+		Schema.Struct({
+			currentPage: Schema.Number,
+			totalPages: Schema.Number,
+			totalItems: Schema.Number,
+		}),
+		{ exact: true },
+	),
+}) {}
+
+/**
+ * Request to create an annotation.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class CreateAnnotationDto extends Schema.Class<CreateAnnotationDto>(
+	"CreateAnnotationDto",
+)({
+	chapterId: Schema.Number,
+	content: Schema.String,
+	comment: Schema.optionalWith(Schema.String, { exact: true }),
+	spoiler: Schema.optionalWith(Schema.Boolean, {
+		exact: true,
+		default: () => false,
+	}),
+	highlightSlot: Schema.optionalWith(Schema.Number, {
+		exact: true,
+		default: () => 0,
+	}),
+	page: Schema.optionalWith(Schema.Number, { exact: true }),
+}) {}
+
+// ============================================================================
+// Kavita Auth Schemas
+// ============================================================================
+
+/**
+ * Request to register a new user.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class RegisterDto extends Schema.Class<RegisterDto>("RegisterDto")({
+	username: Schema.String,
+	email: Schema.String,
+	password: Schema.String,
+}) {}
+
+/**
+ * Request to login.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class LoginDto extends Schema.Class<LoginDto>("LoginDto")({
+	username: Schema.String,
+	password: Schema.String,
+}) {}
+
+/**
+ * Response from login.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export class UserDto extends Schema.Class<UserDto>("UserDto")({
+	token: Schema.String,
+	apiKey: Schema.optionalWith(Schema.String, { exact: true }),
+	username: Schema.String,
+}) {}
