@@ -60,6 +60,9 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 				const markdown = toMarkdown(annotations, {
 					includeComments: config.includeComments,
 					includeSpoilers: config.includeSpoilers,
+					includeTags: config.includeTags,
+					tagPrefix: config.tagPrefix,
+					includeWikilinks: config.includeWikilinks,
 				});
 
 				yield* obsidian.writeFile(config.outputPath, markdown);
