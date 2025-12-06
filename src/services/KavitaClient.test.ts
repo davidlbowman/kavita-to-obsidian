@@ -501,5 +501,82 @@ describe("KavitaClient", () => {
 				),
 			),
 		);
+
+		it.effect("maps HTTP errors to KavitaNetworkError", () =>
+			Effect.gen(function* () {
+				const client = yield* KavitaClient;
+				const result = yield* client.getSeriesMetadata(999).pipe(Effect.either);
+
+				expect(result._tag).toBe("Left");
+				if (result._tag === "Left") {
+					expect(result.left).toBeInstanceOf(KavitaNetworkError);
+					expect(result.left.url).toContain("/api/Series/metadata");
+				}
+			}).pipe(
+				Effect.provide(KavitaClient.Default),
+				Effect.provide(MockPluginConfig),
+				Effect.provide(
+					createRoutedMockHttpClient({
+						"/api/Series/metadata": { body: "Server Error", status: 500 },
+					}),
+				),
+			),
+		);
+	});
+
+	describe("getVolumes error handling", () => {
+		it.effect("maps HTTP errors to KavitaNetworkError", () =>
+			Effect.gen(function* () {
+				const client = yield* KavitaClient;
+				const result = yield* client.getVolumes(999).pipe(Effect.either);
+
+				expect(result._tag).toBe("Left");
+				if (result._tag === "Left") {
+					expect(result.left).toBeInstanceOf(KavitaNetworkError);
+					expect(result.left.url).toBe("/api/Series/volumes");
+				}
+			}).pipe(
+				Effect.provide(KavitaClient.Default),
+				Effect.provide(MockPluginConfig),
+				Effect.provide(
+					createRoutedMockHttpClient({
+						"/api/Series/volumes": { body: "Not Found", status: 404 },
+					}),
+				),
+			),
+		);
+	});
+
+	describe("createAnnotation error handling", () => {
+		it.effect("maps HTTP errors to KavitaNetworkError", () =>
+			Effect.gen(function* () {
+				const client = yield* KavitaClient;
+				const result = yield* client
+					.createAnnotation({
+						chapterId: 10,
+						volumeId: 1,
+						seriesId: 1,
+						libraryId: 1,
+						selectedText: "Test",
+						xPath: "/html/body/p[1]",
+						pageNumber: 1,
+					})
+					.pipe(Effect.either);
+
+				expect(result._tag).toBe("Left");
+				if (result._tag === "Left") {
+					expect(result.left).toBeInstanceOf(KavitaNetworkError);
+					expect(result.left.url).toBe("/api/Annotation/create");
+				}
+			}).pipe(
+				Effect.provide(KavitaClient.Default),
+				Effect.provide(MockPluginConfig),
+				Effect.provide(
+					createRoutedMockHttpClient({
+						"/api/Annotation/create": { body: "Forbidden", status: 403 },
+					}),
+				),
+			),
+		);
 	});
 });
