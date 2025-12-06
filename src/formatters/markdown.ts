@@ -25,7 +25,7 @@ export type SeriesMetadataMap = ReadonlyMap<
 >;
 
 /**
- * Information about a chapter including its book title.
+ * Information about a chapter including its book title and metadata.
  *
  * @since 0.0.2
  * @category Formatters
@@ -34,6 +34,8 @@ export interface ChapterInfo {
 	readonly chapterId: number;
 	readonly bookTitle: string;
 	readonly sortOrder: number;
+	readonly authors: ReadonlyArray<string>;
+	readonly genres: ReadonlyArray<string>;
 }
 
 /**
@@ -170,6 +172,38 @@ export const getBookTitle = (
 };
 
 /**
+ * Get authors for a book from the first annotation's chapter info.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getBookAuthors = (
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): ReadonlyArray<string> => {
+	const firstAnnotation = annotations[0];
+	if (!firstAnnotation || !chapterInfoMap) return [];
+	const chapterInfo = chapterInfoMap.get(firstAnnotation.chapterId);
+	return chapterInfo?.authors ?? [];
+};
+
+/**
+ * Get genres for a book from the first annotation's chapter info.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getBookGenres = (
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): ReadonlyArray<string> => {
+	const firstAnnotation = annotations[0];
+	if (!firstAnnotation || !chapterInfoMap) return [];
+	const chapterInfo = chapterInfoMap.get(firstAnnotation.chapterId);
+	return chapterInfo?.genres ?? [];
+};
+
+/**
  * Group annotations by seriesId.
  *
  * @since 0.0.1
@@ -248,15 +282,37 @@ export const getSortedBookGroups = (
 export const generateBookHeader = (
 	bookTitle: string,
 	options: FormatOptions,
+	authors: ReadonlyArray<string> = [],
+	genres: ReadonlyArray<string> = [],
 ): string[] => {
 	const lines: string[] = [`### ${bookTitle}`];
+
+	if (authors.length > 0) {
+		if (options.includeWikilinks) {
+			const authorLinks = authors.map(makeWikilink).join(", ");
+			lines.push(`**Author:** ${authorLinks}`);
+		} else {
+			lines.push(`**Author:** ${authors.join(", ")}`);
+		}
+	}
 
 	if (options.includeWikilinks) {
 		lines.push(`**Book:** ${makeWikilink(bookTitle)}`);
 	}
 
+	if (genres.length > 0) {
+		lines.push(`**Genres:** ${genres.join(", ")}`);
+	}
+
 	if (options.includeTags) {
-		lines.push(`**Tags:** ${makeTag(options.tagPrefix, "book", bookTitle)}`);
+		const tags: string[] = [makeTag(options.tagPrefix, "book", bookTitle)];
+		for (const author of authors) {
+			tags.push(makeTag(options.tagPrefix, "author", author));
+		}
+		for (const genre of genres) {
+			tags.push(makeTag(options.tagPrefix, "genre", genre));
+		}
+		lines.push(`**Tags:** ${tags.join(" ")}`);
 	}
 
 	return lines;
@@ -318,23 +374,12 @@ export const getGenreNames = (
 export const generateSeriesHeader = (
 	firstAnnotation: typeof AnnotationDto.Type,
 	options: FormatOptions,
-	metadata?: typeof SeriesMetadataDto.Type,
+	_metadata?: typeof SeriesMetadataDto.Type,
 ): string[] => {
 	const seriesName = getSeriesName(firstAnnotation);
 	const libraryName = getLibraryName(firstAnnotation);
-	const authorNames = getAuthorNames(metadata);
-	const genreNames = getGenreNames(metadata);
 
 	const lines: string[] = [`## ${seriesName}`];
-
-	if (authorNames.length > 0) {
-		if (options.includeWikilinks) {
-			const authorLinks = authorNames.map(makeWikilink).join(", ");
-			lines.push(`**Author:** ${authorLinks}`);
-		} else {
-			lines.push(`**Author:** ${authorNames.join(", ")}`);
-		}
-	}
 
 	if (options.includeWikilinks) {
 		lines.push(`**Series:** ${makeWikilink(seriesName)}`);
@@ -342,21 +387,11 @@ export const generateSeriesHeader = (
 
 	lines.push(`**Library:** ${libraryName}`);
 
-	if (genreNames.length > 0) {
-		lines.push(`**Genres:** ${genreNames.join(", ")}`);
-	}
-
 	if (options.includeTags) {
 		const tags: string[] = [
 			makeTag(options.tagPrefix, "series", seriesName),
 			makeTag(options.tagPrefix, "library", libraryName),
 		];
-		for (const author of authorNames) {
-			tags.push(makeTag(options.tagPrefix, "author", author));
-		}
-		for (const genre of genreNames) {
-			tags.push(makeTag(options.tagPrefix, "genre", genre));
-		}
 		lines.push(`**Tags:** ${tags.join(" ")}`);
 	}
 
@@ -402,9 +437,16 @@ export const toMarkdown = (
 					sortedBookGroups,
 					Array.flatMap(([bookTitle, bookAnnotations]) => {
 						const chapterGroups = groupByChapterId(bookAnnotations);
+						const bookAuthors = getBookAuthors(bookAnnotations, chapterInfoMap);
+						const bookGenres = getBookGenres(bookAnnotations, chapterInfoMap);
 
 						return [
-							...generateBookHeader(bookTitle, options),
+							...generateBookHeader(
+								bookTitle,
+								options,
+								bookAuthors,
+								bookGenres,
+							),
 							"",
 							...pipe(
 								Record.toEntries(chapterGroups),

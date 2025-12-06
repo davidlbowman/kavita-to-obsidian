@@ -230,6 +230,40 @@ export class CreateLibraryDto extends Schema.Class<CreateLibraryDto>(
 }) {}
 
 /**
+ * Genre tag from Kavita metadata.
+ *
+ * @since 0.0.2
+ * @category Kavita Schemas
+ */
+export class GenreTagDto extends Schema.Class<GenreTagDto>("GenreTagDto")({
+	id: Schema.Number,
+	title: Schema.String,
+}) {}
+
+/**
+ * Tag from Kavita metadata.
+ *
+ * @since 0.0.2
+ * @category Kavita Schemas
+ */
+export class TagDto extends Schema.Class<TagDto>("TagDto")({
+	id: Schema.Number,
+	title: Schema.String,
+}) {}
+
+/**
+ * Person (author, artist, etc.) from Kavita metadata.
+ *
+ * @since 0.0.2
+ * @category Kavita Schemas
+ */
+export class PersonDto extends Schema.Class<PersonDto>("PersonDto")({
+	id: Schema.Number,
+	name: Schema.String,
+	description: Schema.NullOr(Schema.String),
+}) {}
+
+/**
  * Kavita chapter data transfer object.
  *
  * @since 0.0.1
@@ -245,6 +279,27 @@ export class ChapterDto extends Schema.Class<ChapterDto>("ChapterDto")({
 	 * @since 0.0.2
 	 */
 	titleName: Schema.optionalWith(Schema.String, { exact: true }),
+	/**
+	 * Sort order for the chapter within the series.
+	 * @since 0.0.2
+	 */
+	sortOrder: Schema.optionalWith(Schema.Number, { exact: true }),
+	/**
+	 * Writers/authors for this specific chapter/book.
+	 * @since 0.0.2
+	 */
+	writers: Schema.optionalWith(Schema.Array(PersonDto), {
+		exact: true,
+		default: () => [],
+	}),
+	/**
+	 * Genres for this specific chapter/book.
+	 * @since 0.0.2
+	 */
+	genres: Schema.optionalWith(Schema.Array(GenreTagDto), {
+		exact: true,
+		default: () => [],
+	}),
 }) {}
 
 /**
@@ -362,40 +417,6 @@ export class UserDto extends Schema.Class<UserDto>("UserDto")({
 	token: Schema.String,
 	apiKey: Schema.optionalWith(Schema.String, { exact: true }),
 	username: Schema.String,
-}) {}
-
-/**
- * Genre tag from Kavita metadata.
- *
- * @since 0.0.2
- * @category Kavita Schemas
- */
-export class GenreTagDto extends Schema.Class<GenreTagDto>("GenreTagDto")({
-	id: Schema.Number,
-	title: Schema.String,
-}) {}
-
-/**
- * Tag from Kavita metadata.
- *
- * @since 0.0.2
- * @category Kavita Schemas
- */
-export class TagDto extends Schema.Class<TagDto>("TagDto")({
-	id: Schema.Number,
-	title: Schema.String,
-}) {}
-
-/**
- * Person (author, artist, etc.) from Kavita metadata.
- *
- * @since 0.0.2
- * @category Kavita Schemas
- */
-export class PersonDto extends Schema.Class<PersonDto>("PersonDto")({
-	id: Schema.Number,
-	name: Schema.String,
-	description: Schema.NullOr(Schema.String),
 }) {}
 
 /**

@@ -77,7 +77,7 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 				});
 
 			/**
-			 * Fetch chapter info (book titles) for all unique series.
+			 * Fetch chapter info (book titles, authors, genres) for all unique series.
 			 *
 			 * @since 0.0.2
 			 */
@@ -91,7 +91,13 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 					const chapterEntries: Array<
 						[
 							number,
-							{ chapterId: number; bookTitle: string; sortOrder: number },
+							{
+								chapterId: number;
+								bookTitle: string;
+								sortOrder: number;
+								authors: string[];
+								genres: string[];
+							},
 						]
 					> = [];
 
@@ -107,9 +113,17 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 										volume.name ??
 										`Volume ${volume.number}`;
 									const sortOrder = volume.number;
+									const authors = (chapter.writers ?? []).map((w) => w.name);
+									const genres = (chapter.genres ?? []).map((g) => g.title);
 									chapterEntries.push([
 										chapter.id,
-										{ chapterId: chapter.id, bookTitle, sortOrder },
+										{
+											chapterId: chapter.id,
+											bookTitle,
+											sortOrder,
+											authors,
+											genres,
+										},
 									]);
 								}
 							}

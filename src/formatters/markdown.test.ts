@@ -277,33 +277,18 @@ describe("generateSeriesHeader", () => {
 		expect(lines.some((l) => l.includes("**Tags:**"))).toBe(false);
 	});
 
-	it("includes author from metadata with wikilinks", () => {
+	it("does not include author at series level (moved to book level)", () => {
 		const annotation = createAnnotation({ seriesName: "The Great Gatsby" });
 		const metadata = createMetadata({
 			writers: [{ id: 1, name: "F. Scott Fitzgerald", description: null }],
 		});
 		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
 
-		expect(lines).toContain("**Author:** [[F. Scott Fitzgerald]]");
-		expect(
-			lines.some((l) => l.includes("#kavita/author/f-scott-fitzgerald")),
-		).toBe(true);
+		expect(lines.some((l) => l.includes("**Author:**"))).toBe(false);
+		expect(lines.some((l) => l.includes("#kavita/author/"))).toBe(false);
 	});
 
-	it("includes multiple authors", () => {
-		const annotation = createAnnotation({ seriesName: "Collaboration" });
-		const metadata = createMetadata({
-			writers: [
-				{ id: 1, name: "Author One", description: null },
-				{ id: 2, name: "Author Two", description: null },
-			],
-		});
-		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
-
-		expect(lines).toContain("**Author:** [[Author One]], [[Author Two]]");
-	});
-
-	it("includes genres from metadata", () => {
+	it("does not include genres at series level (moved to book level)", () => {
 		const annotation = createAnnotation({ seriesName: "Test Book" });
 		const metadata = createMetadata({
 			genres: [
@@ -313,9 +298,8 @@ describe("generateSeriesHeader", () => {
 		});
 		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
 
-		expect(lines).toContain("**Genres:** Fiction, Classic");
-		expect(lines.some((l) => l.includes("#kavita/genre/fiction"))).toBe(true);
-		expect(lines.some((l) => l.includes("#kavita/genre/classic"))).toBe(true);
+		expect(lines.some((l) => l.includes("**Genres:**"))).toBe(false);
+		expect(lines.some((l) => l.includes("#kavita/genre/"))).toBe(false);
 	});
 
 	it("works without metadata", () => {
@@ -590,27 +574,35 @@ describe("toMarkdown", () => {
 		expect(resultWithoutLinks).not.toContain("[[Test Book]]");
 	});
 
-	it("includes author and genres from metadata map", () => {
+	it("includes author and genres from chapterInfoMap at book level", () => {
 		const annotations = [
 			createAnnotation({
 				seriesId: 42,
 				seriesName: "The Great Gatsby",
+				chapterId: 1,
 				selectedText: "Highlight",
 			}),
 		];
 
-		const metadataMap: SeriesMetadataMap = new Map([
+		const chapterInfoMap: ChapterInfoMap = new Map([
 			[
-				42,
-				createMetadata({
-					seriesId: 42,
-					writers: [{ id: 1, name: "F. Scott Fitzgerald", description: null }],
-					genres: [{ id: 1, title: "Fiction" }],
-				}),
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "The Great Gatsby",
+					sortOrder: 1,
+					authors: ["F. Scott Fitzgerald"],
+					genres: ["Fiction"],
+				},
 			],
 		]);
 
-		const result = toMarkdown(annotations, defaultOptions, metadataMap);
+		const result = toMarkdown(
+			annotations,
+			defaultOptions,
+			undefined,
+			chapterInfoMap,
+		);
 
 		expect(result).toContain("**Author:** [[F. Scott Fitzgerald]]");
 		expect(result).toContain("**Genres:** Fiction");
@@ -657,8 +649,26 @@ describe("toMarkdown", () => {
 		];
 
 		const chapterInfoMap: ChapterInfoMap = new Map([
-			[1, { chapterId: 1, bookTitle: "Horus Rising", sortOrder: 1 }],
-			[2, { chapterId: 2, bookTitle: "False Gods", sortOrder: 5 }],
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Horus Rising",
+					sortOrder: 1,
+					authors: ["Dan Abnett"],
+					genres: ["Sci-Fi"],
+				},
+			],
+			[
+				2,
+				{
+					chapterId: 2,
+					bookTitle: "False Gods",
+					sortOrder: 5,
+					authors: ["Graham McNeill"],
+					genres: ["Sci-Fi"],
+				},
+			],
 		]);
 
 		const result = toMarkdown(
@@ -672,6 +682,10 @@ describe("toMarkdown", () => {
 		expect(result).toContain("### False Gods");
 		expect(result).toContain("#kavita/book/horus-rising");
 		expect(result).toContain("#kavita/book/false-gods");
+		expect(result).toContain("**Author:** [[Dan Abnett]]");
+		expect(result).toContain("**Author:** [[Graham McNeill]]");
+		expect(result).toContain("#kavita/author/dan-abnett");
+		expect(result).toContain("#kavita/genre/sci-fi");
 	});
 
 	it("falls back to series name when chapterInfoMap is not provided", () => {
@@ -695,7 +709,16 @@ describe("getBookTitle", () => {
 	it("returns book title from chapterInfoMap", () => {
 		const annotation = createAnnotation({ chapterId: 1, seriesName: "Series" });
 		const chapterInfoMap: ChapterInfoMap = new Map([
-			[1, { chapterId: 1, bookTitle: "The Book Title", sortOrder: 1 }],
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "The Book Title",
+					sortOrder: 1,
+					authors: [],
+					genres: [],
+				},
+			],
 		]);
 
 		expect(getBookTitle(annotation, chapterInfoMap)).toBe("The Book Title");
@@ -727,8 +750,26 @@ describe("groupByBookTitle", () => {
 		];
 
 		const chapterInfoMap: ChapterInfoMap = new Map([
-			[1, { chapterId: 1, bookTitle: "Book A", sortOrder: 1 }],
-			[2, { chapterId: 2, bookTitle: "Book B", sortOrder: 2 }],
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Book A",
+					sortOrder: 1,
+					authors: [],
+					genres: [],
+				},
+			],
+			[
+				2,
+				{
+					chapterId: 2,
+					bookTitle: "Book B",
+					sortOrder: 2,
+					authors: [],
+					genres: [],
+				},
+			],
 		]);
 
 		const groups = groupByBookTitle(annotations, chapterInfoMap);
@@ -748,9 +789,36 @@ describe("getSortedBookGroups", () => {
 		];
 
 		const chapterInfoMap: ChapterInfoMap = new Map([
-			[5, { chapterId: 5, bookTitle: "Fulgrim", sortOrder: 5 }],
-			[1, { chapterId: 1, bookTitle: "Horus Rising", sortOrder: 1 }],
-			[3, { chapterId: 3, bookTitle: "Galaxy in Flames", sortOrder: 3 }],
+			[
+				5,
+				{
+					chapterId: 5,
+					bookTitle: "Fulgrim",
+					sortOrder: 5,
+					authors: [],
+					genres: [],
+				},
+			],
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Horus Rising",
+					sortOrder: 1,
+					authors: [],
+					genres: [],
+				},
+			],
+			[
+				3,
+				{
+					chapterId: 3,
+					bookTitle: "Galaxy in Flames",
+					sortOrder: 3,
+					authors: [],
+					genres: [],
+				},
+			],
 		]);
 
 		const sorted = getSortedBookGroups(annotations, chapterInfoMap);
@@ -774,7 +842,16 @@ describe("getBookSortOrder", () => {
 	it("returns sortOrder from chapterInfoMap", () => {
 		const annotations = [createAnnotation({ chapterId: 1 })];
 		const chapterInfoMap: ChapterInfoMap = new Map([
-			[1, { chapterId: 1, bookTitle: "Book", sortOrder: 42 }],
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Book",
+					sortOrder: 42,
+					authors: [],
+					genres: [],
+				},
+			],
 		]);
 
 		expect(getBookSortOrder("Book", annotations, chapterInfoMap)).toBe(42);
@@ -829,5 +906,68 @@ describe("generateBookHeader", () => {
 		});
 
 		expect(lines.some((l) => l.includes("#kavita/book"))).toBe(false);
+	});
+
+	it("includes author with wikilink", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions, [
+			"Test Author",
+		]);
+
+		expect(lines).toContain("**Author:** [[Test Author]]");
+	});
+
+	it("includes multiple authors with wikilinks", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions, [
+			"Author One",
+			"Author Two",
+		]);
+
+		expect(lines).toContain("**Author:** [[Author One]], [[Author Two]]");
+	});
+
+	it("includes author tags when tags enabled", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions, [
+			"Test Author",
+		]);
+
+		expect(lines.some((l) => l.includes("#kavita/author/test-author"))).toBe(
+			true,
+		);
+	});
+
+	it("includes genres", () => {
+		const lines = generateBookHeader(
+			"Test Book",
+			defaultOptions,
+			[],
+			["Fantasy", "Adventure"],
+		);
+
+		expect(lines).toContain("**Genres:** Fantasy, Adventure");
+	});
+
+	it("includes genre tags when tags enabled", () => {
+		const lines = generateBookHeader(
+			"Test Book",
+			defaultOptions,
+			[],
+			["Fantasy"],
+		);
+
+		expect(lines.some((l) => l.includes("#kavita/genre/fantasy"))).toBe(true);
+	});
+
+	it("omits author when wikilinks disabled", () => {
+		const lines = generateBookHeader(
+			"Test Book",
+			{
+				...defaultOptions,
+				includeWikilinks: false,
+			},
+			["Test Author"],
+		);
+
+		expect(lines).toContain("**Author:** Test Author");
+		expect(lines.some((l) => l.includes("[[Test Author]]"))).toBe(false);
 	});
 });

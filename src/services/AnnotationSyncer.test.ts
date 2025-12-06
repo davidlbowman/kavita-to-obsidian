@@ -83,6 +83,8 @@ const createMockKavitaClient = (
 							pages: 10,
 							titleName: "Test Book",
 							sortOrder: 1,
+							writers: [{ id: 1, name: "Test Author", description: null }],
+							genres: [{ id: 1, title: "Fantasy" }],
 						},
 					],
 				},
