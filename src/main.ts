@@ -80,7 +80,6 @@ export default class KavitaToObsidianPlugin extends Plugin {
 
 		// Build the layer stack
 		const ConfigLayer = PluginConfig.fromSettings(this.settings);
-
 		const ObsidianAppLayer = Layer.succeed(ObsidianApp, this.app);
 
 		const ObsidianAdapterLayer = ObsidianAdapter.Default.pipe(

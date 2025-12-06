@@ -9,7 +9,11 @@ import {
 	HttpClientResponse,
 } from "@effect/platform";
 import { Effect, Redacted, Schema } from "effect";
-import { KavitaNetworkError } from "../errors.js";
+import {
+	KavitaAuthError,
+	KavitaNetworkError,
+	KavitaParseError,
+} from "../errors.js";
 import {
 	AnnotationDto,
 	AnnotationsResponse,
@@ -54,13 +58,18 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 				.pipe(HttpClient.filterStatusOk)
 				.execute(authRequest)
 				.pipe(
-					Effect.mapError(
-						(e) =>
-							new KavitaNetworkError({
-								url: "/api/Plugin/authenticate",
-								cause: e,
-							}),
-					),
+					Effect.mapError((e) => {
+						if (
+							e._tag === "ResponseError" &&
+							(e.response.status === 401 || e.response.status === 403)
+						) {
+							return new KavitaAuthError({ reason: "Invalid API key" });
+						}
+						return new KavitaNetworkError({
+							url: "/api/Plugin/authenticate",
+							cause: e,
+						});
+					}),
 					Effect.scoped,
 				);
 
@@ -69,10 +78,9 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 			)(authResponse).pipe(
 				Effect.map((r) => r.token),
 				Effect.mapError(
-					(e) =>
-						new KavitaNetworkError({
-							url: "/api/Plugin/authenticate",
-							cause: e,
+					() =>
+						new KavitaParseError({
+							expected: "{ token: string }",
 						}),
 				),
 			);

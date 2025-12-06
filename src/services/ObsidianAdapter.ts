@@ -4,9 +4,18 @@
  * @module
  */
 import { Effect, Option } from "effect";
-import type { TFile } from "obsidian";
+import type { TAbstractFile, TFile } from "obsidian";
 import { ObsidianFileNotFoundError, ObsidianWriteError } from "../errors.js";
 import { ObsidianApp } from "./ObsidianApp.js";
+
+/**
+ * Type guard to check if a file is a TFile (not a folder).
+ *
+ * @since 0.0.1
+ * @category Type Guards
+ */
+const isTFile = (file: TAbstractFile | null): file is TFile =>
+	file !== null && "extension" in file;
 
 /**
  * Obsidian adapter service.
@@ -33,8 +42,8 @@ export class ObsidianAdapter extends Effect.Service<ObsidianAdapter>()(
 				Effect.tryPromise({
 					try: async () => {
 						const existingFile = vault.getAbstractFileByPath(path);
-						if (existingFile && "extension" in existingFile) {
-							await vault.modify(existingFile as TFile, content);
+						if (isTFile(existingFile)) {
+							await vault.modify(existingFile, content);
 						} else {
 							await vault.create(path, content);
 						}
@@ -51,10 +60,10 @@ export class ObsidianAdapter extends Effect.Service<ObsidianAdapter>()(
 				Effect.tryPromise({
 					try: async () => {
 						const file = vault.getAbstractFileByPath(path);
-						if (file && "extension" in file) {
-							await vault.append(file as TFile, content);
+						if (isTFile(file)) {
+							await vault.append(file, content);
 						} else {
-							return Promise.reject(new Error("File does not exist"));
+							throw new Error("File does not exist");
 						}
 					},
 					catch: (e) => new ObsidianWriteError({ path, cause: e }),
@@ -69,10 +78,10 @@ export class ObsidianAdapter extends Effect.Service<ObsidianAdapter>()(
 				Effect.tryPromise({
 					try: async () => {
 						const file = vault.getAbstractFileByPath(path);
-						if (file && "extension" in file) {
-							return vault.read(file as TFile);
+						if (isTFile(file)) {
+							return vault.read(file);
 						}
-						return Promise.reject(new Error("File not found"));
+						throw new Error("File not found");
 					},
 					catch: () => new ObsidianFileNotFoundError({ path }),
 				});
@@ -85,10 +94,7 @@ export class ObsidianAdapter extends Effect.Service<ObsidianAdapter>()(
 			const getFile = (path: string): Effect.Effect<Option.Option<TFile>> =>
 				Effect.sync(() => {
 					const file = vault.getAbstractFileByPath(path);
-					if (file && "extension" in file) {
-						return Option.some(file as TFile);
-					}
-					return Option.none();
+					return isTFile(file) ? Option.some(file) : Option.none();
 				});
 
 			/**

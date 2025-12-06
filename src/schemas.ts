@@ -116,7 +116,7 @@ export class PluginSettings extends Schema.Class<PluginSettings>(
 		exact: true,
 		default: () => "kavita-annotations.md",
 	}),
-	matchThreshold: Schema.optionalWith(Schema.Number, {
+	matchThreshold: Schema.optionalWith(Schema.Number.pipe(Schema.clamp(0, 1)), {
 		exact: true,
 		default: () => 0.7,
 	}),
