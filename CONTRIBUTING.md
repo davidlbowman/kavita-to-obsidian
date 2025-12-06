@@ -180,28 +180,50 @@ export const formatAnnotation = (
 
 ## Testing
 
+### Running Tests
+
+```bash
+bun run test           # Run all tests
+bun run test:watch     # Run in watch mode
+```
+
+### Coverage Requirements
+
+This project enforces coverage thresholds:
+
+| Metric | Minimum |
+|--------|---------|
+| Lines | 80% |
+| Statements | 80% |
+| Functions | 70% |
+| Branches | 60% |
+
+Run coverage report:
+
+```bash
+bun run test --coverage
+```
+
 ### Unit Tests
 
 Use `@effect/vitest` for Effect-aware testing:
 
 ```typescript
-import { describe, expect, it, layer } from "@effect/vitest";
+import { describe, it } from "@effect/vitest";
 import { Effect, Layer } from "effect";
+import { expect } from "vitest";
 
 describe("MyService", () => {
-  const TestLayer = MyService.Default.pipe(
-    Layer.provide(MockDependency),
+  it.effect("does something", () =>
+    Effect.gen(function* () {
+      const service = yield* MyService;
+      const result = yield* service.doSomething();
+      expect(result).toBe(expected);
+    }).pipe(
+      Effect.provide(MyService.Default),
+      Effect.provide(MockDependencyLayer),
+    )
   );
-
-  it.layer(TestLayer)("does something", (it) => {
-    it.effect("returns expected result", () =>
-      Effect.gen(function* () {
-        const service = yield* MyService;
-        const result = yield* service.doSomething();
-        expect(result).toBe(expected);
-      })
-    );
-  });
 });
 ```
 
@@ -251,8 +273,6 @@ kavita-to-obsidian/
 │   └── docker-compose.yml   # Kavita container
 ├── scripts/
 │   └── build.ts             # Bun build script
-├── docs/
-│   └── strategy.md          # Implementation roadmap
 └── manifest.json            # Obsidian manifest
 ```
 
@@ -283,8 +303,6 @@ This project follows [Semantic Versioning](https://semver.org/):
 - **MAJOR**: Breaking changes to plugin settings or behavior
 - **MINOR**: New features, backward compatible
 - **PATCH**: Bug fixes, backward compatible
-
-See [docs/strategy.md](./docs/strategy.md) for the version roadmap.
 
 ## Questions?
 

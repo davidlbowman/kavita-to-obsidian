@@ -1,185 +1,137 @@
 # Kavita to Obsidian
 
-An Obsidian plugin that syncs your annotations, highlights, and bookmarks from [Kavita](https://www.kavitareader.com/) into your Obsidian vault.
+Sync your reading highlights and notes from [Kavita](https://www.kavitareader.com/) to your Obsidian vault.
 
-## Features
+## What It Does
 
-### v0.0.1 (Current)
+This plugin pulls all your annotations, highlights, and notes from Kavita and saves them as a beautifully formatted markdown file in your Obsidian vault. Your highlights become searchable, linkable, and integrated with the rest of your notes.
 
-- Export all Kavita annotations to a single markdown file
-- Configurable output path
-- Option to include/exclude comments and spoilers
-- Grouped by series and chapter
+**Example output:**
 
-### v0.1.0 (Planned)
+```markdown
+---
+tags:
+  - kavita
+  - annotations
+updated: 2025-12-06T10:30:00Z
+---
 
-- Fuzzy match annotations to existing markdown files in your vault
-- Append annotations to matched files with configurable threshold
+# Kavita Annotations
+
+## The Great Gatsby
+
+**Author:** [[F. Scott Fitzgerald]]
+**Tags:** #kavita/series/the-great-gatsby #kavita/author/f-scott-fitzgerald
+
+### Chapter 1
+
+> In my younger and more vulnerable years my father gave me some advice...
+
+*Note:* This opening is iconic
+
+Page 3
+
+---
+
+> So we beat on, boats against the current...
+
+Page 180
+```
 
 ## Installation
-
-### From Community Plugins (Coming Soon)
-
-Once approved, install directly from Obsidian:
-
-1. Open Settings → Community Plugins
-2. Click "Browse" and search for "Kavita to Obsidian"
-3. Click "Install" then "Enable"
 
 ### From GitHub Release
 
 1. Go to the [Releases](https://github.com/davidlbowman/kavita-to-obsidian/releases) page
 2. Download `main.js` and `manifest.json` from the latest release
-3. Create folder: `<your-vault>/.obsidian/plugins/kavita-to-obsidian/`
-4. Copy both files into that folder
-5. Restart Obsidian and enable the plugin in Settings → Community Plugins
+3. In your vault, create the folder `.obsidian/plugins/kavita-to-obsidian/`
+4. Copy both downloaded files into that folder
+5. Restart Obsidian
+6. Go to Settings → Community Plugins and enable "Kavita to Obsidian"
 
-## Configuration
+### From Community Plugins (Coming Soon)
 
-After enabling the plugin, configure it in Settings → Kavita to Obsidian:
+Once approved, you'll be able to install directly from Obsidian's community plugins browser.
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **Kavita URL** | Your Kavita server URL (e.g., `http://localhost:5000`) | - |
-| **Kavita API Key** | Found in Kavita: User Settings → 3rd Party Clients | - |
-| **Output Path** | Markdown file path for annotations | `kavita-annotations.md` |
-| **Include Comments** | Include your notes with each annotation | `true` |
-| **Include Spoilers** | Include annotations marked as spoilers | `false` |
+## Setup
 
-## Usage
+### 1. Get Your Kavita API Key
 
-### Sync Annotations
+1. Open Kavita and log in
+2. Click your profile icon → **User Settings**
+3. Go to **3rd Party Clients**
+4. Copy your API key (or generate one if you don't have one)
 
-**Option 1:** Click the book icon in the left ribbon
+### 2. Configure the Plugin
 
-**Option 2:** Use the command palette (Ctrl/Cmd + P) → "Sync Kavita Annotations"
+1. In Obsidian, go to Settings → **Kavita to Obsidian**
+2. Enter your Kavita server URL (e.g., `http://localhost:5000` or `https://kavita.example.com`)
+3. Paste your API key
+4. Adjust other settings as desired
 
-### Output Format
+## Settings
 
-Annotations are exported in markdown format, grouped by series and chapter:
+| Setting | What it does | Default |
+|---------|--------------|---------|
+| **Kavita URL** | Your Kavita server address | - |
+| **API Key** | Your Kavita API key for authentication | - |
+| **Output Path** | Where to save your annotations file | `kavita-annotations.md` |
+| **Include Comments** | Include your personal notes with highlights | Yes |
+| **Include Spoilers** | Include highlights marked as spoilers | No |
+| **Include Tags** | Generate Obsidian tags from your books | Yes |
+| **Tag Prefix** | Prefix for generated tags | `kavita/` |
+| **Include Wikilinks** | Create links to author/series notes | Yes |
+
+## How to Use
+
+### Sync Your Annotations
+
+**Option 1:** Click the book icon in the left sidebar
+
+**Option 2:** Press `Ctrl/Cmd + P` to open the command palette, then search for "Sync Kavita Annotations"
+
+Your annotations will be saved to the file you specified in settings.
+
+### Link to Your Annotations
+
+The plugin creates headings for each book, so you can link directly to them from other notes:
 
 ```markdown
-# Kavita Annotations
-
-## Series Name
-
-### Chapter Title
-
-> Highlighted text from your book
-
-*Comment:* Your note about this highlight
-
-<small>Page 42</small>
-
----
+See my highlights from [[kavita-annotations#The Great Gatsby]]
 ```
 
-## Development
+If you have notes for authors or books, the wikilinks will automatically connect:
 
-### Prerequisites
-
-- [Bun](https://bun.sh/) v1.0+
-- Node.js 18+ (for type definitions)
-
-### Setup
-
-```bash
-# Clone the repository
-git clone https://github.com/davidlbowman/kavita-to-obsidian.git
-cd kavita-to-obsidian
-
-# Install dependencies
-bun install
-
-# Development build with watch mode
-bun run dev
-
-# Production build
-bun run build
+```markdown
+**Author:** [[F. Scott Fitzgerald]]  ← Links to your author note if it exists
 ```
 
-### Available Scripts
+## Troubleshooting
 
-| Script | Description |
-|--------|-------------|
-| `bun run dev` | Development build |
-| `bun run build` | Production build (minified) |
-| `bun run lint` | Check for linting issues |
-| `bun run lint:fix` | Auto-fix linting issues |
-| `bun run typecheck` | TypeScript type checking |
-| `bun run test` | Run unit tests |
-| `bun run test:watch` | Run tests in watch mode |
+### "Connection failed" or "Network error"
 
-### Testing
+- Make sure your Kavita URL is correct and accessible
+- Check that Kavita is running
+- If using HTTPS, ensure your certificate is valid
 
-#### Unit Tests
+### "Authentication failed"
 
-```bash
-bun run test
-```
+- Double-check your API key in Kavita's 3rd Party Clients settings
+- Try generating a new API key
 
-#### Integration Tests
+### Annotations not appearing
 
-Integration tests run against a real Kavita instance using Docker:
+- Make sure you have highlights/annotations in Kavita
+- Check that "Include Spoilers" is enabled if your annotations are marked as spoilers
 
-```bash
-# Start Kavita container, create test data, and run setup
-bun run integration
+## Questions or Issues?
 
-# Or run steps individually:
-bun run integration:up      # Start Docker container
-bun run integration:setup   # Set up test data
-bun run integration:down    # Stop container
-bun run integration:clean   # Clean up everything
-```
-
-### Project Structure
-
-```
-src/
-  main.ts                    # Plugin entry point
-  schemas.ts                 # Effect Schema definitions
-  errors.ts                  # Tagged error types
-  index.ts                   # Module exports
-  services/
-    PluginConfig.ts          # Configuration service
-    KavitaClient.ts          # Kavita API client
-    KavitaAuthClient.ts      # Authentication client
-    ObsidianAdapter.ts       # Vault file operations
-    ObsidianApp.ts           # Obsidian App context
-    ObsidianHttpClient.ts    # HTTP client for Obsidian
-    AnnotationSyncer.ts      # Main sync orchestration
-  formatters/
-    markdown.ts              # Annotation → Markdown formatting
-test-integration/
-  scripts/                   # Integration test setup
-  docker-compose.yml         # Kavita test container
-```
-
-## Architecture
-
-Built with [Effect-TS](https://effect.website/) for functional error handling and service composition.
-
-### Key Patterns
-
-- **Effect Services**: All core functionality uses Effect's service pattern with Layer composition
-- **Tagged Errors**: Type-safe error handling with discriminated unions (`KavitaError`, `ObsidianError`)
-- **Schema Validation**: Request/response validation using Effect Schema
-- **Dependency Injection**: Services composed via Layers for testability
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed architecture documentation.
-
-## Kavita API
-
-This plugin uses the [Kavita API](https://www.kavitareader.com/docs/api/#/) to fetch annotations:
-
-- `POST /api/Annotation/all-filtered` - Fetch annotations with filtering
-
-Authentication is handled via API key in the `x-api-key` header.
+- [Report a bug](https://github.com/davidlbowman/kavita-to-obsidian/issues/new?template=bug_report.md)
+- [Request a feature](https://github.com/davidlbowman/kavita-to-obsidian/issues/new?template=feature_request.md)
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development guidelines.
+Want to help improve the plugin? See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup and guidelines.
 
 ## License
 
