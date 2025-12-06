@@ -16,20 +16,56 @@ const mockAnnotations = [
 	{
 		id: 1,
 		chapterId: 10,
+		volumeId: 1,
 		seriesId: 100,
-		content: "This is a highlight",
+		libraryId: 1,
+		ownerUserId: 1,
+		ownerUsername: null,
+		xPath: "/html/body/p[1]",
+		endingXPath: null,
+		selectedText: "This is a highlight",
 		comment: "My note",
-		spoiler: false,
-		highlightSlot: 1,
-		page: 42,
+		commentHtml: null,
+		commentPlainText: null,
+		chapterTitle: null,
+		context: null,
+		highlightCount: 19,
+		containsSpoiler: false,
+		pageNumber: 42,
+		selectedSlotIndex: 1,
+		likes: [],
+		seriesName: null,
+		libraryName: null,
+		ageRating: 0,
+		createdUtc: "2025-01-01T00:00:00Z",
+		lastModifiedUtc: "2025-01-01T00:00:00Z",
 	},
 	{
 		id: 2,
 		chapterId: 10,
+		volumeId: 1,
 		seriesId: 100,
-		content: "Another highlight",
-		spoiler: true,
-		highlightSlot: 2,
+		libraryId: 1,
+		ownerUserId: 1,
+		ownerUsername: null,
+		xPath: "/html/body/p[2]",
+		endingXPath: null,
+		selectedText: "Another highlight",
+		comment: null,
+		commentHtml: null,
+		commentPlainText: null,
+		chapterTitle: null,
+		context: null,
+		highlightCount: 17,
+		containsSpoiler: true,
+		pageNumber: 43,
+		selectedSlotIndex: 2,
+		likes: [],
+		seriesName: null,
+		libraryName: null,
+		ageRating: 0,
+		createdUtc: "2025-01-01T00:00:00Z",
+		lastModifiedUtc: "2025-01-01T00:00:00Z",
 	},
 ];
 
@@ -45,20 +81,28 @@ const MockPluginConfig = Layer.succeed(
 	}),
 );
 
+const mockAuthResponse = { token: "mock-jwt-token" };
+
 const createMockHttpClient = (responseBody: unknown, status = 200) =>
 	Layer.succeed(
 		HttpClient.HttpClient,
-		HttpClient.make((request) =>
-			Effect.succeed(
+		HttpClient.make((request) => {
+			// Return auth response for Plugin/authenticate endpoint
+			const url = request.url;
+			const body = url.includes("/api/Plugin/authenticate")
+				? mockAuthResponse
+				: responseBody;
+
+			return Effect.succeed(
 				HttpClientResponse.fromWeb(
 					request,
-					new Response(JSON.stringify(responseBody), {
+					new Response(JSON.stringify(body), {
 						status,
 						headers: { "Content-Type": "application/json" },
 					}),
 				),
-			),
-		),
+			);
+		}),
 	);
 
 describe("KavitaClient", () => {
@@ -70,9 +114,9 @@ describe("KavitaClient", () => {
 
 				expect(annotations).toHaveLength(2);
 				expect(annotations[0]?.id).toBe(1);
-				expect(annotations[0]?.content).toBe("This is a highlight");
+				expect(annotations[0]?.selectedText).toBe("This is a highlight");
 				expect(annotations[1]?.id).toBe(2);
-				expect(annotations[1]?.spoiler).toBe(true);
+				expect(annotations[1]?.containsSpoiler).toBe(true);
 			}).pipe(
 				Effect.provide(KavitaClient.Default),
 				Effect.provide(MockPluginConfig),
@@ -109,14 +153,27 @@ describe("KavitaClient", () => {
 				Effect.provide(
 					Layer.succeed(
 						HttpClient.HttpClient,
-						HttpClient.make(() =>
-							Effect.succeed(
+						HttpClient.make((request) => {
+							// Auth endpoint succeeds, annotation endpoint fails
+							const url = request.url;
+							if (url.includes("/api/Plugin/authenticate")) {
+								return Effect.succeed(
+									HttpClientResponse.fromWeb(
+										request,
+										new Response(JSON.stringify(mockAuthResponse), {
+											status: 200,
+											headers: { "Content-Type": "application/json" },
+										}),
+									),
+								);
+							}
+							return Effect.succeed(
 								HttpClientResponse.fromWeb(
-									{ url: "http://test" } as never,
+									request,
 									new Response("Unauthorized", { status: 401 }),
 								),
-							),
-						),
+							);
+						}),
 					),
 				),
 			),

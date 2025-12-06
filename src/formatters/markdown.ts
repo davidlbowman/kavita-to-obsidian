@@ -27,22 +27,24 @@ export const formatAnnotation = (
 	annotation: typeof AnnotationDto.Type,
 	options: FormatOptions,
 ): Option.Option<string> => {
-	if (annotation.spoiler && !options.includeSpoilers) {
+	if (annotation.containsSpoiler && !options.includeSpoilers) {
 		return Option.none();
 	}
 
 	const lines: string[] = [];
 
-	lines.push(`> ${annotation.content}`);
+	// Use selectedText as the main content (the highlighted text)
+	const content = annotation.selectedText ?? "";
+	lines.push(`> ${content}`);
 
 	if (options.includeComments && annotation.comment) {
 		lines.push("");
 		lines.push(`*Note:* ${annotation.comment}`);
 	}
 
-	if (annotation.page !== undefined) {
+	if (annotation.pageNumber !== undefined && annotation.pageNumber > 0) {
 		lines.push("");
-		lines.push(`<small>Page ${annotation.page}</small>`);
+		lines.push(`<small>Page ${annotation.pageNumber}</small>`);
 	}
 
 	return Option.some(lines.join("\n"));
