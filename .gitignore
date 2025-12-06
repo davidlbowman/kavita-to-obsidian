@@ -29,3 +29,6 @@ bun.lockb
 test-integration/config/
 test-integration/books/
 test-integration/.env.test
+
+# Coverage reports
+coverage/
