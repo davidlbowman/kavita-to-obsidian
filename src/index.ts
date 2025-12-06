@@ -6,4 +6,6 @@
 export * from "./errors.js";
 export * from "./schemas.js";
 export * from "./services/KavitaClient.js";
+export * from "./services/ObsidianAdapter.js";
+export * from "./services/ObsidianApp.js";
 export * from "./services/PluginConfig.js";
