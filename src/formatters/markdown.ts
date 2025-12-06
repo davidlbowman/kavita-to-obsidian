@@ -18,6 +18,25 @@ export type SeriesMetadataMap = ReadonlyMap<
 >;
 
 /**
+ * Information about a chapter including its book title.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export interface ChapterInfo {
+	readonly chapterId: number;
+	readonly bookTitle: string;
+}
+
+/**
+ * Map of chapterId to chapter info (including book title).
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export type ChapterInfoMap = ReadonlyMap<number, ChapterInfo>;
+
+/**
  * Options for formatting annotations.
  *
  * @since 0.0.1
@@ -129,6 +148,20 @@ export const getLibraryName = (annotation: typeof AnnotationDto.Type): string =>
 	annotation.libraryName ?? `Library ${annotation.libraryId}`;
 
 /**
+ * Get the book title from chapter info map, falling back to series name.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getBookTitle = (
+	annotation: typeof AnnotationDto.Type,
+	chapterInfoMap?: ChapterInfoMap,
+): string => {
+	const chapterInfo = chapterInfoMap?.get(annotation.chapterId);
+	return chapterInfo?.bookTitle ?? getSeriesName(annotation);
+};
+
+/**
  * Group annotations by seriesId.
  *
  * @since 0.0.1
@@ -149,6 +182,41 @@ export const groupByChapterId = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
 ): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
 	Array.groupBy(annotations, (a) => String(a.chapterId));
+
+/**
+ * Group annotations by book title.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const groupByBookTitle = (
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
+	Array.groupBy(annotations, (a) => getBookTitle(a, chapterInfoMap));
+
+/**
+ * Generate book header with title and tags.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const generateBookHeader = (
+	bookTitle: string,
+	options: FormatOptions,
+): string[] => {
+	const lines: string[] = [`### ${bookTitle}`];
+
+	if (options.includeWikilinks) {
+		lines.push(`**Book:** ${makeWikilink(bookTitle)}`);
+	}
+
+	if (options.includeTags) {
+		lines.push(`**Tags:** ${makeTag(options.tagPrefix, "book", bookTitle)}`);
+	}
+
+	return lines;
+};
 
 /**
  * Generate YAML frontmatter for the annotations document.
@@ -261,6 +329,7 @@ export const toMarkdown = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
 	options: FormatOptions,
 	metadataMap?: SeriesMetadataMap,
+	chapterInfoMap?: ChapterInfoMap,
 ): string => {
 	const frontmatter = generateFrontmatter(options);
 
@@ -277,26 +346,37 @@ export const toMarkdown = (
 			if (!firstAnnotation) return [];
 
 			const metadata = metadataMap?.get(Number(seriesId));
-			const chapterGroups = groupByChapterId(seriesAnnotations);
+			const bookGroups = groupByBookTitle(seriesAnnotations, chapterInfoMap);
 
 			return [
 				...generateSeriesHeader(firstAnnotation, options, metadata),
 				"",
 				...pipe(
-					Record.toEntries(chapterGroups),
-					Array.flatMap(([_chapterId, chapterAnnotations]) => {
-						const firstChapterAnnotation = chapterAnnotations[0];
-						const chapterTitle = firstChapterAnnotation
-							? getChapterTitle(firstChapterAnnotation)
-							: "Unknown Chapter";
+					Record.toEntries(bookGroups),
+					Array.flatMap(([bookTitle, bookAnnotations]) => {
+						const chapterGroups = groupByChapterId(bookAnnotations);
 
 						return [
-							`### ${chapterTitle}`,
+							...generateBookHeader(bookTitle, options),
 							"",
 							...pipe(
-								chapterAnnotations,
-								Array.filterMap((a) => formatAnnotation(a, options)),
-								Array.flatMap((formatted) => [formatted, "", "---", ""]),
+								Record.toEntries(chapterGroups),
+								Array.flatMap(([_chapterId, chapterAnnotations]) => {
+									const firstChapterAnnotation = chapterAnnotations[0];
+									const chapterTitle = firstChapterAnnotation
+										? getChapterTitle(firstChapterAnnotation)
+										: "Unknown Chapter";
+
+									return [
+										`#### ${chapterTitle}`,
+										"",
+										...pipe(
+											chapterAnnotations,
+											Array.filterMap((a) => formatAnnotation(a, options)),
+											Array.flatMap((formatted) => [formatted, "", "---", ""]),
+										),
+									];
+								}),
 							),
 						];
 					}),

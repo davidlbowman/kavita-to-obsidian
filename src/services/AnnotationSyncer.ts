@@ -10,7 +10,11 @@ import type {
 	KavitaParseError,
 	ObsidianWriteError,
 } from "../errors.js";
-import { type SeriesMetadataMap, toMarkdown } from "../formatters/markdown.js";
+import {
+	type ChapterInfoMap,
+	type SeriesMetadataMap,
+	toMarkdown,
+} from "../formatters/markdown.js";
 import type { SeriesMetadataDto } from "../schemas.js";
 import { KavitaClient } from "./KavitaClient.js";
 import { ObsidianAdapter } from "./ObsidianAdapter.js";
@@ -73,6 +77,45 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 				});
 
 			/**
+			 * Fetch chapter info (book titles) for all unique series.
+			 *
+			 * @since 0.0.2
+			 */
+			const fetchChapterInfo = (
+				seriesIds: ReadonlyArray<number>,
+			): Effect.Effect<
+				ChapterInfoMap,
+				KavitaAuthError | KavitaNetworkError | KavitaParseError
+			> =>
+				Effect.gen(function* () {
+					const chapterEntries: Array<
+						[number, { chapterId: number; bookTitle: string }]
+					> = [];
+
+					for (const seriesId of seriesIds) {
+						const volumes = yield* kavita
+							.getVolumes(seriesId)
+							.pipe(Effect.option);
+						if (volumes._tag === "Some") {
+							for (const volume of volumes.value) {
+								for (const chapter of volume.chapters) {
+									const bookTitle =
+										chapter.titleName ??
+										volume.name ??
+										`Volume ${volume.number}`;
+									chapterEntries.push([
+										chapter.id,
+										{ chapterId: chapter.id, bookTitle },
+									]);
+								}
+							}
+						}
+					}
+
+					return new Map(chapterEntries);
+				});
+
+			/**
 			 * Sync all annotations to a single file.
 			 *
 			 * @since 0.0.1
@@ -90,6 +133,7 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 					...new Set(annotations.map((a) => a.seriesId)),
 				];
 				const metadataMap = yield* fetchSeriesMetadata(uniqueSeriesIds);
+				const chapterInfoMap = yield* fetchChapterInfo(uniqueSeriesIds);
 
 				const markdown = toMarkdown(
 					annotations,
@@ -101,6 +145,7 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 						includeWikilinks: config.includeWikilinks,
 					},
 					metadataMap,
+					chapterInfoMap,
 				);
 
 				yield* obsidian.writeFile(config.outputPath, markdown);

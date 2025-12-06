@@ -7,15 +7,19 @@ import { Option } from "effect";
 import { describe, expect, it } from "vitest";
 import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
 import {
+	type ChapterInfoMap,
 	type FormatOptions,
 	formatAnnotation,
+	generateBookHeader,
 	generateFrontmatter,
 	generateSeriesHeader,
 	getAuthorNames,
+	getBookTitle,
 	getChapterTitle,
 	getGenreNames,
 	getLibraryName,
 	getSeriesName,
+	groupByBookTitle,
 	groupByChapterId,
 	groupBySeriesId,
 	makeTag,
@@ -628,5 +632,145 @@ describe("toMarkdown", () => {
 		expect(result).toContain("## Unknown Book");
 		expect(result).not.toContain("**Author:**");
 		expect(result).not.toContain("**Genres:**");
+	});
+
+	it("groups annotations by book title when chapterInfoMap is provided", () => {
+		const annotations = [
+			createAnnotation({
+				id: 1,
+				seriesId: 1,
+				seriesName: "Horus Heresy",
+				chapterId: 1,
+				chapterTitle: "Chapter 1",
+				selectedText: "First book highlight",
+			}),
+			createAnnotation({
+				id: 2,
+				seriesId: 1,
+				seriesName: "Horus Heresy",
+				chapterId: 2,
+				chapterTitle: "Chapter 1",
+				selectedText: "Second book highlight",
+			}),
+		];
+
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[1, { chapterId: 1, bookTitle: "Horus Rising" }],
+			[2, { chapterId: 2, bookTitle: "False Gods" }],
+		]);
+
+		const result = toMarkdown(
+			annotations,
+			defaultOptions,
+			undefined,
+			chapterInfoMap,
+		);
+
+		expect(result).toContain("### Horus Rising");
+		expect(result).toContain("### False Gods");
+		expect(result).toContain("#kavita/book/horus-rising");
+		expect(result).toContain("#kavita/book/false-gods");
+	});
+
+	it("falls back to series name when chapterInfoMap is not provided", () => {
+		const annotations = [
+			createAnnotation({
+				seriesId: 1,
+				seriesName: "Test Series",
+				chapterId: 1,
+				selectedText: "Highlight",
+			}),
+		];
+
+		const result = toMarkdown(annotations, defaultOptions);
+
+		expect(result).toContain("### Test Series");
+		expect(result).toContain("#kavita/book/test-series");
+	});
+});
+
+describe("getBookTitle", () => {
+	it("returns book title from chapterInfoMap", () => {
+		const annotation = createAnnotation({ chapterId: 1, seriesName: "Series" });
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[1, { chapterId: 1, bookTitle: "The Book Title" }],
+		]);
+
+		expect(getBookTitle(annotation, chapterInfoMap)).toBe("The Book Title");
+	});
+
+	it("falls back to series name when chapter not in map", () => {
+		const annotation = createAnnotation({
+			chapterId: 99,
+			seriesName: "Fallback Series",
+		});
+		const chapterInfoMap: ChapterInfoMap = new Map();
+
+		expect(getBookTitle(annotation, chapterInfoMap)).toBe("Fallback Series");
+	});
+
+	it("falls back to series name when map is undefined", () => {
+		const annotation = createAnnotation({ seriesName: "My Series" });
+
+		expect(getBookTitle(annotation, undefined)).toBe("My Series");
+	});
+});
+
+describe("groupByBookTitle", () => {
+	it("groups annotations by book title", () => {
+		const annotations = [
+			createAnnotation({ id: 1, chapterId: 1 }),
+			createAnnotation({ id: 2, chapterId: 2 }),
+			createAnnotation({ id: 3, chapterId: 1 }),
+		];
+
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[1, { chapterId: 1, bookTitle: "Book A" }],
+			[2, { chapterId: 2, bookTitle: "Book B" }],
+		]);
+
+		const groups = groupByBookTitle(annotations, chapterInfoMap);
+
+		expect(Object.keys(groups)).toHaveLength(2);
+		expect(groups["Book A"]).toHaveLength(2);
+		expect(groups["Book B"]).toHaveLength(1);
+	});
+});
+
+describe("generateBookHeader", () => {
+	it("generates book header with title", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions);
+
+		expect(lines).toContain("### Test Book");
+	});
+
+	it("includes wikilink when enabled", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions);
+
+		expect(lines.some((l) => l.includes("[[Test Book]]"))).toBe(true);
+	});
+
+	it("includes book tag when tags enabled", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions);
+
+		expect(lines.some((l) => l.includes("#kavita/book/test-book"))).toBe(true);
+	});
+
+	it("omits wikilink when disabled", () => {
+		const lines = generateBookHeader("Test Book", {
+			...defaultOptions,
+			includeWikilinks: false,
+		});
+
+		expect(lines.some((l) => l.includes("[[Test Book]]"))).toBe(false);
+	});
+
+	it("omits tag when tags disabled", () => {
+		const lines = generateBookHeader("Test Book", {
+			...defaultOptions,
+			includeTags: false,
+		});
+
+		expect(lines.some((l) => l.includes("#kavita/book"))).toBe(false);
 	});
 });

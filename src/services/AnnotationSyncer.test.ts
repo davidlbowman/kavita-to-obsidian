@@ -69,6 +69,23 @@ const createMockKavitaClient = (
 				editors: [],
 				translators: [],
 			}),
+		getVolumes: () =>
+			Effect.succeed([
+				{
+					id: 1,
+					number: 1,
+					name: "Volume 1",
+					chapters: [
+						{
+							id: 1,
+							number: "1",
+							title: "Chapter 1",
+							pages: 10,
+							titleName: "Test Book",
+						},
+					],
+				},
+			]),
 	} as unknown as typeof KavitaClient.Service);
 
 const createMockObsidianAdapter = () => {

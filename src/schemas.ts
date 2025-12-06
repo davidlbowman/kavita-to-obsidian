@@ -240,6 +240,11 @@ export class ChapterDto extends Schema.Class<ChapterDto>("ChapterDto")({
 	number: Schema.String,
 	title: Schema.optionalWith(Schema.String, { exact: true }),
 	pages: Schema.optionalWith(Schema.Number, { exact: true }),
+	/**
+	 * The book title from EPUB dc:title metadata.
+	 * @since 0.0.2
+	 */
+	titleName: Schema.optionalWith(Schema.String, { exact: true }),
 }) {}
 
 /**
