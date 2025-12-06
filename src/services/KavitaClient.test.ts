@@ -332,6 +332,9 @@ describe("KavitaClient", () => {
 					name: "New Library",
 					type: 0,
 					folders: ["/books/new"],
+					fileGroupTypes: [],
+					excludePatterns: [],
+					enableMetadata: true,
 				});
 			}).pipe(
 				Effect.provide(KavitaClient.Default),
@@ -462,9 +465,13 @@ describe("KavitaClient", () => {
 					volumeId: 1,
 					seriesId: 1,
 					libraryId: 1,
+					ownerUserId: 1,
 					selectedText: "Test highlight",
 					xPath: "/html/body/p[1]",
 					pageNumber: 1,
+					highlightCount: 14,
+					selectedSlotIndex: 0,
+					containsSpoiler: false,
 				});
 
 				expect(annotation.id).toBe(1);
@@ -557,9 +564,13 @@ describe("KavitaClient", () => {
 						volumeId: 1,
 						seriesId: 1,
 						libraryId: 1,
+						ownerUserId: 1,
 						selectedText: "Test",
 						xPath: "/html/body/p[1]",
 						pageNumber: 1,
+						highlightCount: 4,
+						selectedSlotIndex: 0,
+						containsSpoiler: false,
 					})
 					.pipe(Effect.either);
 

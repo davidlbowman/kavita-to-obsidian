@@ -258,7 +258,7 @@ describe("ObsidianHttpClient", () => {
 			mockRequestUrl.mockResolvedValueOnce({
 				status: 200,
 				headers: {},
-				get text() {
+				get text(): string {
 					throw new Error("Cannot get text");
 				},
 				arrayBuffer: new ArrayBuffer(0),
