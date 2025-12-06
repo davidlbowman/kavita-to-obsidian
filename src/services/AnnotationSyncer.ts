@@ -10,7 +10,12 @@ import type {
 	KavitaParseError,
 	ObsidianWriteError,
 } from "../errors.js";
-import { toMarkdown } from "../formatters/markdown.js";
+import {
+	type ChapterInfoMap,
+	type SeriesMetadataMap,
+	toMarkdown,
+} from "../formatters/markdown.js";
+import type { SeriesMetadataDto } from "../schemas.js";
 import { KavitaClient } from "./KavitaClient.js";
 import { ObsidianAdapter } from "./ObsidianAdapter.js";
 import { PluginConfig } from "./PluginConfig.js";
@@ -44,6 +49,91 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 			const config = yield* PluginConfig;
 
 			/**
+			 * Fetch metadata for all unique series in the annotations.
+			 *
+			 * @since 0.0.2
+			 */
+			const fetchSeriesMetadata = (
+				seriesIds: ReadonlyArray<number>,
+			): Effect.Effect<
+				SeriesMetadataMap,
+				KavitaAuthError | KavitaNetworkError | KavitaParseError
+			> =>
+				Effect.gen(function* () {
+					const metadataEntries: Array<
+						[number, typeof SeriesMetadataDto.Type]
+					> = [];
+
+					for (const seriesId of seriesIds) {
+						const metadata = yield* kavita
+							.getSeriesMetadata(seriesId)
+							.pipe(Effect.option);
+						if (metadata._tag === "Some") {
+							metadataEntries.push([seriesId, metadata.value]);
+						}
+					}
+
+					return new Map(metadataEntries);
+				});
+
+			/**
+			 * Fetch chapter info (book titles, authors, genres) for all unique series.
+			 *
+			 * @since 0.0.2
+			 */
+			const fetchChapterInfo = (
+				seriesIds: ReadonlyArray<number>,
+			): Effect.Effect<
+				ChapterInfoMap,
+				KavitaAuthError | KavitaNetworkError | KavitaParseError
+			> =>
+				Effect.gen(function* () {
+					const chapterEntries: Array<
+						[
+							number,
+							{
+								chapterId: number;
+								bookTitle: string;
+								sortOrder: number;
+								authors: string[];
+								genres: string[];
+							},
+						]
+					> = [];
+
+					for (const seriesId of seriesIds) {
+						const volumes = yield* kavita
+							.getVolumes(seriesId)
+							.pipe(Effect.option);
+						if (volumes._tag === "Some") {
+							for (const volume of volumes.value) {
+								for (const chapter of volume.chapters) {
+									const bookTitle =
+										chapter.titleName ??
+										volume.name ??
+										`Volume ${volume.number}`;
+									const sortOrder = volume.number;
+									const authors = (chapter.writers ?? []).map((w) => w.name);
+									const genres = (chapter.genres ?? []).map((g) => g.title);
+									chapterEntries.push([
+										chapter.id,
+										{
+											chapterId: chapter.id,
+											bookTitle,
+											sortOrder,
+											authors,
+											genres,
+										},
+									]);
+								}
+							}
+						}
+					}
+
+					return new Map(chapterEntries);
+				});
+
+			/**
 			 * Sync all annotations to a single file.
 			 *
 			 * @since 0.0.1
@@ -57,13 +147,24 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 			> = Effect.gen(function* () {
 				const annotations = yield* kavita.fetchAllAnnotations;
 
-				const markdown = toMarkdown(annotations, {
-					includeComments: config.includeComments,
-					includeSpoilers: config.includeSpoilers,
-					includeTags: config.includeTags,
-					tagPrefix: config.tagPrefix,
-					includeWikilinks: config.includeWikilinks,
-				});
+				const uniqueSeriesIds = [
+					...new Set(annotations.map((a) => a.seriesId)),
+				];
+				const metadataMap = yield* fetchSeriesMetadata(uniqueSeriesIds);
+				const chapterInfoMap = yield* fetchChapterInfo(uniqueSeriesIds);
+
+				const markdown = toMarkdown(
+					annotations,
+					{
+						includeComments: config.includeComments,
+						includeSpoilers: config.includeSpoilers,
+						includeTags: config.includeTags,
+						tagPrefix: config.tagPrefix,
+						includeWikilinks: config.includeWikilinks,
+					},
+					metadataMap,
+					chapterInfoMap,
+				);
 
 				yield* obsidian.writeFile(config.outputPath, markdown);
 

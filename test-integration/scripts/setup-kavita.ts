@@ -84,6 +84,7 @@ const setupData = Effect.gen(function* () {
 			folders: ["/data"],
 			fileGroupTypes: [],
 			excludePatterns: [],
+			enableMetadata: true,
 		});
 
 		// Restart Kavita to ensure filesystem is properly detected (WSL2/Docker workaround)

@@ -3,8 +3,48 @@
  *
  * @module
  */
-import { Array, Option, pipe, Record } from "effect";
-import type { AnnotationDto } from "../schemas.js";
+import {
+	Array,
+	Number as EffectNumber,
+	Option,
+	Order,
+	pipe,
+	Record,
+} from "effect";
+import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
+
+/**
+ * Map of seriesId to series metadata.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export type SeriesMetadataMap = ReadonlyMap<
+	number,
+	typeof SeriesMetadataDto.Type
+>;
+
+/**
+ * Information about a chapter including its book title and metadata.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export interface ChapterInfo {
+	readonly chapterId: number;
+	readonly bookTitle: string;
+	readonly sortOrder: number;
+	readonly authors: ReadonlyArray<string>;
+	readonly genres: ReadonlyArray<string>;
+}
+
+/**
+ * Map of chapterId to chapter info (including book title).
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export type ChapterInfoMap = ReadonlyMap<number, ChapterInfo>;
 
 /**
  * Options for formatting annotations.
@@ -118,6 +158,52 @@ export const getLibraryName = (annotation: typeof AnnotationDto.Type): string =>
 	annotation.libraryName ?? `Library ${annotation.libraryId}`;
 
 /**
+ * Get the book title from chapter info map, falling back to series name.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getBookTitle = (
+	annotation: typeof AnnotationDto.Type,
+	chapterInfoMap?: ChapterInfoMap,
+): string => {
+	const chapterInfo = chapterInfoMap?.get(annotation.chapterId);
+	return chapterInfo?.bookTitle ?? getSeriesName(annotation);
+};
+
+/**
+ * Get authors for a book from the first annotation's chapter info.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getBookAuthors = (
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): ReadonlyArray<string> => {
+	const firstAnnotation = annotations[0];
+	if (!firstAnnotation || !chapterInfoMap) return [];
+	const chapterInfo = chapterInfoMap.get(firstAnnotation.chapterId);
+	return chapterInfo?.authors ?? [];
+};
+
+/**
+ * Get genres for a book from the first annotation's chapter info.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getBookGenres = (
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): ReadonlyArray<string> => {
+	const firstAnnotation = annotations[0];
+	if (!firstAnnotation || !chapterInfoMap) return [];
+	const chapterInfo = chapterInfoMap.get(firstAnnotation.chapterId);
+	return chapterInfo?.genres ?? [];
+};
+
+/**
  * Group annotations by seriesId.
  *
  * @since 0.0.1
@@ -138,6 +224,99 @@ export const groupByChapterId = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
 ): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
 	Array.groupBy(annotations, (a) => String(a.chapterId));
+
+/**
+ * Group annotations by book title.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const groupByBookTitle = (
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
+	Array.groupBy(annotations, (a) => getBookTitle(a, chapterInfoMap));
+
+/**
+ * Get the sort order for a book title from the chapter info map.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getBookSortOrder = (
+	_bookTitle: string,
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): number => {
+	const firstAnnotation = annotations[0];
+	if (!firstAnnotation || !chapterInfoMap) return 0;
+	const chapterInfo = chapterInfoMap.get(firstAnnotation.chapterId);
+	return chapterInfo?.sortOrder ?? 0;
+};
+
+/**
+ * Get book groups sorted by series order.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getSortedBookGroups = (
+	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	chapterInfoMap?: ChapterInfoMap,
+): globalThis.Array<[string, globalThis.Array<typeof AnnotationDto.Type>]> => {
+	const groups = groupByBookTitle(annotations, chapterInfoMap);
+	const bookOrder = Order.mapInput(
+		EffectNumber.Order,
+		(entry: [string, globalThis.Array<typeof AnnotationDto.Type>]) =>
+			getBookSortOrder(entry[0], entry[1], chapterInfoMap),
+	);
+	return pipe(Record.toEntries(groups), Array.sort(bookOrder));
+};
+
+/**
+ * Generate book header with title and tags.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const generateBookHeader = (
+	bookTitle: string,
+	options: FormatOptions,
+	authors: ReadonlyArray<string> = [],
+	genres: ReadonlyArray<string> = [],
+): string[] => {
+	const lines: string[] = [`### ${bookTitle}`];
+
+	if (authors.length > 0) {
+		if (options.includeWikilinks) {
+			const authorLinks = authors.map(makeWikilink).join(", ");
+			lines.push(`**Author:** ${authorLinks}`);
+		} else {
+			lines.push(`**Author:** ${authors.join(", ")}`);
+		}
+	}
+
+	if (options.includeWikilinks) {
+		lines.push(`**Book:** ${makeWikilink(bookTitle)}`);
+	}
+
+	if (genres.length > 0) {
+		lines.push(`**Genres:** ${genres.join(", ")}`);
+	}
+
+	if (options.includeTags) {
+		const tags: string[] = [makeTag(options.tagPrefix, "book", bookTitle)];
+		for (const author of authors) {
+			tags.push(makeTag(options.tagPrefix, "author", author));
+		}
+		for (const genre of genres) {
+			tags.push(makeTag(options.tagPrefix, "genre", genre));
+		}
+		lines.push(`**Tags:** ${tags.join(" ")}`);
+	}
+
+	return lines;
+};
 
 /**
  * Generate YAML frontmatter for the annotations document.
@@ -161,6 +340,32 @@ export const generateFrontmatter = (options: FormatOptions): string => {
 };
 
 /**
+ * Get author names from series metadata.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getAuthorNames = (
+	metadata: typeof SeriesMetadataDto.Type | undefined,
+): string[] => {
+	if (!metadata?.writers?.length) return [];
+	return metadata.writers.map((w) => w.name);
+};
+
+/**
+ * Get genre names from series metadata.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getGenreNames = (
+	metadata: typeof SeriesMetadataDto.Type | undefined,
+): string[] => {
+	if (!metadata?.genres?.length) return [];
+	return metadata.genres.map((g) => g.title);
+};
+
+/**
  * Generate series header with metadata.
  *
  * @since 0.0.2
@@ -169,6 +374,7 @@ export const generateFrontmatter = (options: FormatOptions): string => {
 export const generateSeriesHeader = (
 	firstAnnotation: typeof AnnotationDto.Type,
 	options: FormatOptions,
+	_metadata?: typeof SeriesMetadataDto.Type,
 ): string[] => {
 	const seriesName = getSeriesName(firstAnnotation);
 	const libraryName = getLibraryName(firstAnnotation);
@@ -201,6 +407,8 @@ export const generateSeriesHeader = (
 export const toMarkdown = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
 	options: FormatOptions,
+	metadataMap?: SeriesMetadataMap,
+	chapterInfoMap?: ChapterInfoMap,
 ): string => {
 	const frontmatter = generateFrontmatter(options);
 
@@ -212,30 +420,52 @@ export const toMarkdown = (
 
 	const content = pipe(
 		Record.toEntries(seriesGroups),
-		Array.flatMap(([_seriesId, seriesAnnotations]) => {
+		Array.flatMap(([seriesId, seriesAnnotations]) => {
 			const firstAnnotation = seriesAnnotations[0];
 			if (!firstAnnotation) return [];
 
-			const chapterGroups = groupByChapterId(seriesAnnotations);
+			const metadata = metadataMap?.get(Number(seriesId));
+			const sortedBookGroups = getSortedBookGroups(
+				seriesAnnotations,
+				chapterInfoMap,
+			);
 
 			return [
-				...generateSeriesHeader(firstAnnotation, options),
+				...generateSeriesHeader(firstAnnotation, options, metadata),
 				"",
 				...pipe(
-					Record.toEntries(chapterGroups),
-					Array.flatMap(([_chapterId, chapterAnnotations]) => {
-						const firstChapterAnnotation = chapterAnnotations[0];
-						const chapterTitle = firstChapterAnnotation
-							? getChapterTitle(firstChapterAnnotation)
-							: "Unknown Chapter";
+					sortedBookGroups,
+					Array.flatMap(([bookTitle, bookAnnotations]) => {
+						const chapterGroups = groupByChapterId(bookAnnotations);
+						const bookAuthors = getBookAuthors(bookAnnotations, chapterInfoMap);
+						const bookGenres = getBookGenres(bookAnnotations, chapterInfoMap);
 
 						return [
-							`### ${chapterTitle}`,
+							...generateBookHeader(
+								bookTitle,
+								options,
+								bookAuthors,
+								bookGenres,
+							),
 							"",
 							...pipe(
-								chapterAnnotations,
-								Array.filterMap((a) => formatAnnotation(a, options)),
-								Array.flatMap((formatted) => [formatted, "", "---", ""]),
+								Record.toEntries(chapterGroups),
+								Array.flatMap(([_chapterId, chapterAnnotations]) => {
+									const firstChapterAnnotation = chapterAnnotations[0];
+									const chapterTitle = firstChapterAnnotation
+										? getChapterTitle(firstChapterAnnotation)
+										: "Unknown Chapter";
+
+									return [
+										`#### ${chapterTitle}`,
+										"",
+										...pipe(
+											chapterAnnotations,
+											Array.filterMap((a) => formatAnnotation(a, options)),
+											Array.flatMap((formatted) => [formatted, "", "---", ""]),
+										),
+									];
+								}),
 							),
 						];
 					}),

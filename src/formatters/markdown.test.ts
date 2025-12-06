@@ -5,19 +5,28 @@
  */
 import { Option } from "effect";
 import { describe, expect, it } from "vitest";
-import type { AnnotationDto } from "../schemas.js";
+import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
 import {
+	type ChapterInfoMap,
 	type FormatOptions,
 	formatAnnotation,
+	generateBookHeader,
 	generateFrontmatter,
 	generateSeriesHeader,
+	getAuthorNames,
+	getBookSortOrder,
+	getBookTitle,
 	getChapterTitle,
+	getGenreNames,
 	getLibraryName,
 	getSeriesName,
+	getSortedBookGroups,
+	groupByBookTitle,
 	groupByChapterId,
 	groupBySeriesId,
 	makeTag,
 	makeWikilink,
+	type SeriesMetadataMap,
 	toMarkdown,
 	toSlug,
 } from "./markdown.js";
@@ -141,6 +150,74 @@ describe("getLibraryName", () => {
 	});
 });
 
+const createMetadata = (
+	overrides: Partial<typeof SeriesMetadataDto.Type> = {},
+): typeof SeriesMetadataDto.Type => ({
+	id: 1,
+	seriesId: 1,
+	summary: null,
+	releaseYear: 2020,
+	language: null,
+	genres: [],
+	tags: [],
+	writers: [],
+	coverArtists: [],
+	publishers: [],
+	characters: [],
+	pencillers: [],
+	inkers: [],
+	colorists: [],
+	letterers: [],
+	editors: [],
+	translators: [],
+	...overrides,
+});
+
+describe("getAuthorNames", () => {
+	it("returns empty array when metadata is undefined", () => {
+		expect(getAuthorNames(undefined)).toEqual([]);
+	});
+
+	it("returns empty array when writers is empty", () => {
+		const metadata = createMetadata({ writers: [] });
+		expect(getAuthorNames(metadata)).toEqual([]);
+	});
+
+	it("returns writer names", () => {
+		const metadata = createMetadata({
+			writers: [
+				{ id: 1, name: "F. Scott Fitzgerald", description: null },
+				{ id: 2, name: "Ernest Hemingway", description: null },
+			],
+		});
+		expect(getAuthorNames(metadata)).toEqual([
+			"F. Scott Fitzgerald",
+			"Ernest Hemingway",
+		]);
+	});
+});
+
+describe("getGenreNames", () => {
+	it("returns empty array when metadata is undefined", () => {
+		expect(getGenreNames(undefined)).toEqual([]);
+	});
+
+	it("returns empty array when genres is empty", () => {
+		const metadata = createMetadata({ genres: [] });
+		expect(getGenreNames(metadata)).toEqual([]);
+	});
+
+	it("returns genre titles", () => {
+		const metadata = createMetadata({
+			genres: [
+				{ id: 1, title: "Fiction" },
+				{ id: 2, title: "Classic" },
+			],
+		});
+		expect(getGenreNames(metadata)).toEqual(["Fiction", "Classic"]);
+	});
+});
+
 describe("generateFrontmatter", () => {
 	it("generates frontmatter with tags", () => {
 		const result = generateFrontmatter(defaultOptions);
@@ -198,6 +275,40 @@ describe("generateSeriesHeader", () => {
 		});
 
 		expect(lines.some((l) => l.includes("**Tags:**"))).toBe(false);
+	});
+
+	it("does not include author at series level (moved to book level)", () => {
+		const annotation = createAnnotation({ seriesName: "The Great Gatsby" });
+		const metadata = createMetadata({
+			writers: [{ id: 1, name: "F. Scott Fitzgerald", description: null }],
+		});
+		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
+
+		expect(lines.some((l) => l.includes("**Author:**"))).toBe(false);
+		expect(lines.some((l) => l.includes("#kavita/author/"))).toBe(false);
+	});
+
+	it("does not include genres at series level (moved to book level)", () => {
+		const annotation = createAnnotation({ seriesName: "Test Book" });
+		const metadata = createMetadata({
+			genres: [
+				{ id: 1, title: "Fiction" },
+				{ id: 2, title: "Classic" },
+			],
+		});
+		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
+
+		expect(lines.some((l) => l.includes("**Genres:**"))).toBe(false);
+		expect(lines.some((l) => l.includes("#kavita/genre/"))).toBe(false);
+	});
+
+	it("works without metadata", () => {
+		const annotation = createAnnotation({ seriesName: "Test Book" });
+		const lines = generateSeriesHeader(annotation, defaultOptions);
+
+		expect(lines).toContain("## Test Book");
+		expect(lines.some((l) => l.includes("**Author:**"))).toBe(false);
+		expect(lines.some((l) => l.includes("**Genres:**"))).toBe(false);
 	});
 });
 
@@ -461,5 +572,402 @@ describe("toMarkdown", () => {
 
 		expect(resultWithLinks).toContain("[[Test Book]]");
 		expect(resultWithoutLinks).not.toContain("[[Test Book]]");
+	});
+
+	it("includes author and genres from chapterInfoMap at book level", () => {
+		const annotations = [
+			createAnnotation({
+				seriesId: 42,
+				seriesName: "The Great Gatsby",
+				chapterId: 1,
+				selectedText: "Highlight",
+			}),
+		];
+
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "The Great Gatsby",
+					sortOrder: 1,
+					authors: ["F. Scott Fitzgerald"],
+					genres: ["Fiction"],
+				},
+			],
+		]);
+
+		const result = toMarkdown(
+			annotations,
+			defaultOptions,
+			undefined,
+			chapterInfoMap,
+		);
+
+		expect(result).toContain("**Author:** [[F. Scott Fitzgerald]]");
+		expect(result).toContain("**Genres:** Fiction");
+		expect(result).toContain("#kavita/author/f-scott-fitzgerald");
+		expect(result).toContain("#kavita/genre/fiction");
+	});
+
+	it("handles missing metadata gracefully", () => {
+		const annotations = [
+			createAnnotation({
+				seriesId: 99,
+				seriesName: "Unknown Book",
+				selectedText: "Highlight",
+			}),
+		];
+
+		const metadataMap: SeriesMetadataMap = new Map();
+
+		const result = toMarkdown(annotations, defaultOptions, metadataMap);
+
+		expect(result).toContain("## Unknown Book");
+		expect(result).not.toContain("**Author:**");
+		expect(result).not.toContain("**Genres:**");
+	});
+
+	it("groups annotations by book title when chapterInfoMap is provided", () => {
+		const annotations = [
+			createAnnotation({
+				id: 1,
+				seriesId: 1,
+				seriesName: "Horus Heresy",
+				chapterId: 1,
+				chapterTitle: "Chapter 1",
+				selectedText: "First book highlight",
+			}),
+			createAnnotation({
+				id: 2,
+				seriesId: 1,
+				seriesName: "Horus Heresy",
+				chapterId: 2,
+				chapterTitle: "Chapter 1",
+				selectedText: "Second book highlight",
+			}),
+		];
+
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Horus Rising",
+					sortOrder: 1,
+					authors: ["Dan Abnett"],
+					genres: ["Sci-Fi"],
+				},
+			],
+			[
+				2,
+				{
+					chapterId: 2,
+					bookTitle: "False Gods",
+					sortOrder: 5,
+					authors: ["Graham McNeill"],
+					genres: ["Sci-Fi"],
+				},
+			],
+		]);
+
+		const result = toMarkdown(
+			annotations,
+			defaultOptions,
+			undefined,
+			chapterInfoMap,
+		);
+
+		expect(result).toContain("### Horus Rising");
+		expect(result).toContain("### False Gods");
+		expect(result).toContain("#kavita/book/horus-rising");
+		expect(result).toContain("#kavita/book/false-gods");
+		expect(result).toContain("**Author:** [[Dan Abnett]]");
+		expect(result).toContain("**Author:** [[Graham McNeill]]");
+		expect(result).toContain("#kavita/author/dan-abnett");
+		expect(result).toContain("#kavita/genre/sci-fi");
+	});
+
+	it("falls back to series name when chapterInfoMap is not provided", () => {
+		const annotations = [
+			createAnnotation({
+				seriesId: 1,
+				seriesName: "Test Series",
+				chapterId: 1,
+				selectedText: "Highlight",
+			}),
+		];
+
+		const result = toMarkdown(annotations, defaultOptions);
+
+		expect(result).toContain("### Test Series");
+		expect(result).toContain("#kavita/book/test-series");
+	});
+});
+
+describe("getBookTitle", () => {
+	it("returns book title from chapterInfoMap", () => {
+		const annotation = createAnnotation({ chapterId: 1, seriesName: "Series" });
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "The Book Title",
+					sortOrder: 1,
+					authors: [],
+					genres: [],
+				},
+			],
+		]);
+
+		expect(getBookTitle(annotation, chapterInfoMap)).toBe("The Book Title");
+	});
+
+	it("falls back to series name when chapter not in map", () => {
+		const annotation = createAnnotation({
+			chapterId: 99,
+			seriesName: "Fallback Series",
+		});
+		const chapterInfoMap: ChapterInfoMap = new Map();
+
+		expect(getBookTitle(annotation, chapterInfoMap)).toBe("Fallback Series");
+	});
+
+	it("falls back to series name when map is undefined", () => {
+		const annotation = createAnnotation({ seriesName: "My Series" });
+
+		expect(getBookTitle(annotation, undefined)).toBe("My Series");
+	});
+});
+
+describe("groupByBookTitle", () => {
+	it("groups annotations by book title", () => {
+		const annotations = [
+			createAnnotation({ id: 1, chapterId: 1 }),
+			createAnnotation({ id: 2, chapterId: 2 }),
+			createAnnotation({ id: 3, chapterId: 1 }),
+		];
+
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Book A",
+					sortOrder: 1,
+					authors: [],
+					genres: [],
+				},
+			],
+			[
+				2,
+				{
+					chapterId: 2,
+					bookTitle: "Book B",
+					sortOrder: 2,
+					authors: [],
+					genres: [],
+				},
+			],
+		]);
+
+		const groups = groupByBookTitle(annotations, chapterInfoMap);
+
+		expect(Object.keys(groups)).toHaveLength(2);
+		expect(groups["Book A"]).toHaveLength(2);
+		expect(groups["Book B"]).toHaveLength(1);
+	});
+});
+
+describe("getSortedBookGroups", () => {
+	it("sorts book groups by sortOrder", () => {
+		const annotations = [
+			createAnnotation({ id: 1, chapterId: 5 }),
+			createAnnotation({ id: 2, chapterId: 1 }),
+			createAnnotation({ id: 3, chapterId: 3 }),
+		];
+
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[
+				5,
+				{
+					chapterId: 5,
+					bookTitle: "Fulgrim",
+					sortOrder: 5,
+					authors: [],
+					genres: [],
+				},
+			],
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Horus Rising",
+					sortOrder: 1,
+					authors: [],
+					genres: [],
+				},
+			],
+			[
+				3,
+				{
+					chapterId: 3,
+					bookTitle: "Galaxy in Flames",
+					sortOrder: 3,
+					authors: [],
+					genres: [],
+				},
+			],
+		]);
+
+		const sorted = getSortedBookGroups(annotations, chapterInfoMap);
+
+		expect(sorted[0]?.[0]).toBe("Horus Rising");
+		expect(sorted[1]?.[0]).toBe("Galaxy in Flames");
+		expect(sorted[2]?.[0]).toBe("Fulgrim");
+	});
+
+	it("handles missing chapterInfoMap gracefully", () => {
+		const annotations = [createAnnotation({ id: 1, seriesName: "Test" })];
+
+		const sorted = getSortedBookGroups(annotations, undefined);
+
+		expect(sorted).toHaveLength(1);
+		expect(sorted[0]?.[0]).toBe("Test");
+	});
+});
+
+describe("getBookSortOrder", () => {
+	it("returns sortOrder from chapterInfoMap", () => {
+		const annotations = [createAnnotation({ chapterId: 1 })];
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Book",
+					sortOrder: 42,
+					authors: [],
+					genres: [],
+				},
+			],
+		]);
+
+		expect(getBookSortOrder("Book", annotations, chapterInfoMap)).toBe(42);
+	});
+
+	it("returns 0 when chapterInfoMap is undefined", () => {
+		const annotations = [createAnnotation({ chapterId: 1 })];
+
+		expect(getBookSortOrder("Book", annotations, undefined)).toBe(0);
+	});
+
+	it("returns 0 when chapter not in map", () => {
+		const annotations = [createAnnotation({ chapterId: 99 })];
+		const chapterInfoMap: ChapterInfoMap = new Map();
+
+		expect(getBookSortOrder("Book", annotations, chapterInfoMap)).toBe(0);
+	});
+});
+
+describe("generateBookHeader", () => {
+	it("generates book header with title", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions);
+
+		expect(lines).toContain("### Test Book");
+	});
+
+	it("includes wikilink when enabled", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions);
+
+		expect(lines.some((l) => l.includes("[[Test Book]]"))).toBe(true);
+	});
+
+	it("includes book tag when tags enabled", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions);
+
+		expect(lines.some((l) => l.includes("#kavita/book/test-book"))).toBe(true);
+	});
+
+	it("omits wikilink when disabled", () => {
+		const lines = generateBookHeader("Test Book", {
+			...defaultOptions,
+			includeWikilinks: false,
+		});
+
+		expect(lines.some((l) => l.includes("[[Test Book]]"))).toBe(false);
+	});
+
+	it("omits tag when tags disabled", () => {
+		const lines = generateBookHeader("Test Book", {
+			...defaultOptions,
+			includeTags: false,
+		});
+
+		expect(lines.some((l) => l.includes("#kavita/book"))).toBe(false);
+	});
+
+	it("includes author with wikilink", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions, [
+			"Test Author",
+		]);
+
+		expect(lines).toContain("**Author:** [[Test Author]]");
+	});
+
+	it("includes multiple authors with wikilinks", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions, [
+			"Author One",
+			"Author Two",
+		]);
+
+		expect(lines).toContain("**Author:** [[Author One]], [[Author Two]]");
+	});
+
+	it("includes author tags when tags enabled", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions, [
+			"Test Author",
+		]);
+
+		expect(lines.some((l) => l.includes("#kavita/author/test-author"))).toBe(
+			true,
+		);
+	});
+
+	it("includes genres", () => {
+		const lines = generateBookHeader(
+			"Test Book",
+			defaultOptions,
+			[],
+			["Fantasy", "Adventure"],
+		);
+
+		expect(lines).toContain("**Genres:** Fantasy, Adventure");
+	});
+
+	it("includes genre tags when tags enabled", () => {
+		const lines = generateBookHeader(
+			"Test Book",
+			defaultOptions,
+			[],
+			["Fantasy"],
+		);
+
+		expect(lines.some((l) => l.includes("#kavita/genre/fantasy"))).toBe(true);
+	});
+
+	it("omits author when wikilinks disabled", () => {
+		const lines = generateBookHeader(
+			"Test Book",
+			{
+				...defaultOptions,
+				includeWikilinks: false,
+			},
+			["Test Author"],
+		);
+
+		expect(lines).toContain("**Author:** Test Author");
+		expect(lines.some((l) => l.includes("[[Test Author]]"))).toBe(false);
 	});
 });

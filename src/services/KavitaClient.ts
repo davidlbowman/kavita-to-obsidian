@@ -22,6 +22,7 @@ import {
 	type CreateLibraryDto,
 	LibraryDto,
 	SeriesDto,
+	SeriesMetadataDto,
 	SeriesPagedResponse,
 	VolumeDto,
 } from "../schemas.js";
@@ -294,6 +295,31 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 					Effect.scoped,
 				);
 
+			/**
+			 * Get metadata for a series (authors, genres, tags, etc.).
+			 *
+			 * @since 0.0.2
+			 */
+			const getSeriesMetadata = (seriesId: number) =>
+				Effect.gen(function* () {
+					const request = HttpClientRequest.get(
+						`/api/Series/metadata?seriesId=${seriesId}`,
+					);
+					const response = yield* client.execute(request);
+					return yield* HttpClientResponse.schemaBodyJson(SeriesMetadataDto)(
+						response,
+					);
+				}).pipe(
+					Effect.mapError(
+						(e) =>
+							new KavitaNetworkError({
+								url: `/api/Series/metadata?seriesId=${seriesId}`,
+								cause: e,
+							}),
+					),
+					Effect.scoped,
+				);
+
 			return {
 				fetchAllAnnotations,
 				fetchAnnotationsFiltered,
@@ -304,6 +330,7 @@ export class KavitaClient extends Effect.Service<KavitaClient>()(
 				scanLibrary,
 				getAllSeries,
 				getVolumes,
+				getSeriesMetadata,
 			};
 		}),
 		dependencies: [PluginConfig.Default],
