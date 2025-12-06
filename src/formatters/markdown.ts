@@ -4,7 +4,18 @@
  * @module
  */
 import { Array, Option, pipe, Record } from "effect";
-import type { AnnotationDto } from "../schemas.js";
+import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
+
+/**
+ * Map of seriesId to series metadata.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export type SeriesMetadataMap = ReadonlyMap<
+	number,
+	typeof SeriesMetadataDto.Type
+>;
 
 /**
  * Options for formatting annotations.
@@ -161,6 +172,32 @@ export const generateFrontmatter = (options: FormatOptions): string => {
 };
 
 /**
+ * Get author names from series metadata.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getAuthorNames = (
+	metadata: typeof SeriesMetadataDto.Type | undefined,
+): string[] => {
+	if (!metadata?.writers?.length) return [];
+	return metadata.writers.map((w) => w.name);
+};
+
+/**
+ * Get genre names from series metadata.
+ *
+ * @since 0.0.2
+ * @category Formatters
+ */
+export const getGenreNames = (
+	metadata: typeof SeriesMetadataDto.Type | undefined,
+): string[] => {
+	if (!metadata?.genres?.length) return [];
+	return metadata.genres.map((g) => g.title);
+};
+
+/**
  * Generate series header with metadata.
  *
  * @since 0.0.2
@@ -169,11 +206,23 @@ export const generateFrontmatter = (options: FormatOptions): string => {
 export const generateSeriesHeader = (
 	firstAnnotation: typeof AnnotationDto.Type,
 	options: FormatOptions,
+	metadata?: typeof SeriesMetadataDto.Type,
 ): string[] => {
 	const seriesName = getSeriesName(firstAnnotation);
 	const libraryName = getLibraryName(firstAnnotation);
+	const authorNames = getAuthorNames(metadata);
+	const genreNames = getGenreNames(metadata);
 
 	const lines: string[] = [`## ${seriesName}`];
+
+	if (authorNames.length > 0) {
+		if (options.includeWikilinks) {
+			const authorLinks = authorNames.map(makeWikilink).join(", ");
+			lines.push(`**Author:** ${authorLinks}`);
+		} else {
+			lines.push(`**Author:** ${authorNames.join(", ")}`);
+		}
+	}
 
 	if (options.includeWikilinks) {
 		lines.push(`**Series:** ${makeWikilink(seriesName)}`);
@@ -181,11 +230,21 @@ export const generateSeriesHeader = (
 
 	lines.push(`**Library:** ${libraryName}`);
 
+	if (genreNames.length > 0) {
+		lines.push(`**Genres:** ${genreNames.join(", ")}`);
+	}
+
 	if (options.includeTags) {
 		const tags: string[] = [
 			makeTag(options.tagPrefix, "series", seriesName),
 			makeTag(options.tagPrefix, "library", libraryName),
 		];
+		for (const author of authorNames) {
+			tags.push(makeTag(options.tagPrefix, "author", author));
+		}
+		for (const genre of genreNames) {
+			tags.push(makeTag(options.tagPrefix, "genre", genre));
+		}
 		lines.push(`**Tags:** ${tags.join(" ")}`);
 	}
 
@@ -201,6 +260,7 @@ export const generateSeriesHeader = (
 export const toMarkdown = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
 	options: FormatOptions,
+	metadataMap?: SeriesMetadataMap,
 ): string => {
 	const frontmatter = generateFrontmatter(options);
 
@@ -212,14 +272,15 @@ export const toMarkdown = (
 
 	const content = pipe(
 		Record.toEntries(seriesGroups),
-		Array.flatMap(([_seriesId, seriesAnnotations]) => {
+		Array.flatMap(([seriesId, seriesAnnotations]) => {
 			const firstAnnotation = seriesAnnotations[0];
 			if (!firstAnnotation) return [];
 
+			const metadata = metadataMap?.get(Number(seriesId));
 			const chapterGroups = groupByChapterId(seriesAnnotations);
 
 			return [
-				...generateSeriesHeader(firstAnnotation, options),
+				...generateSeriesHeader(firstAnnotation, options, metadata),
 				"",
 				...pipe(
 					Record.toEntries(chapterGroups),

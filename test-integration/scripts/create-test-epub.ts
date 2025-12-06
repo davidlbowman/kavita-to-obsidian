@@ -33,7 +33,10 @@ const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
     <dc:identifier id="BookId">urn:uuid:test-book-001</dc:identifier>
     <dc:title>Test Book</dc:title>
-    <dc:creator>Test Author</dc:creator>
+    <dc:creator id="author1">Test Author</dc:creator>
+    <meta refines="#author1" property="role" scheme="marc:relators">aut</meta>
+    <dc:subject>Fantasy</dc:subject>
+    <dc:subject>Adventure</dc:subject>
     <dc:language>en</dc:language>
     <meta property="dcterms:modified">2024-01-01T00:00:00Z</meta>
     <meta property="belongs-to-collection" id="series">Test Series</meta>

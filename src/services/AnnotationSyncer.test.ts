@@ -49,6 +49,26 @@ const createMockKavitaClient = (
 	Layer.succeed(KavitaClient, {
 		fetchAllAnnotations: Effect.succeed(annotations),
 		fetchAnnotationsFiltered: () => Effect.succeed(annotations),
+		getSeriesMetadata: () =>
+			Effect.succeed({
+				id: 1,
+				seriesId: 1,
+				summary: null,
+				releaseYear: 2020,
+				language: null,
+				genres: [],
+				tags: [],
+				writers: [],
+				coverArtists: [],
+				publishers: [],
+				characters: [],
+				pencillers: [],
+				inkers: [],
+				colorists: [],
+				letterers: [],
+				editors: [],
+				translators: [],
+			}),
 	} as unknown as typeof KavitaClient.Service);
 
 const createMockObsidianAdapter = () => {

@@ -5,19 +5,22 @@
  */
 import { Option } from "effect";
 import { describe, expect, it } from "vitest";
-import type { AnnotationDto } from "../schemas.js";
+import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
 import {
 	type FormatOptions,
 	formatAnnotation,
 	generateFrontmatter,
 	generateSeriesHeader,
+	getAuthorNames,
 	getChapterTitle,
+	getGenreNames,
 	getLibraryName,
 	getSeriesName,
 	groupByChapterId,
 	groupBySeriesId,
 	makeTag,
 	makeWikilink,
+	type SeriesMetadataMap,
 	toMarkdown,
 	toSlug,
 } from "./markdown.js";
@@ -141,6 +144,74 @@ describe("getLibraryName", () => {
 	});
 });
 
+const createMetadata = (
+	overrides: Partial<typeof SeriesMetadataDto.Type> = {},
+): typeof SeriesMetadataDto.Type => ({
+	id: 1,
+	seriesId: 1,
+	summary: null,
+	releaseYear: 2020,
+	language: null,
+	genres: [],
+	tags: [],
+	writers: [],
+	coverArtists: [],
+	publishers: [],
+	characters: [],
+	pencillers: [],
+	inkers: [],
+	colorists: [],
+	letterers: [],
+	editors: [],
+	translators: [],
+	...overrides,
+});
+
+describe("getAuthorNames", () => {
+	it("returns empty array when metadata is undefined", () => {
+		expect(getAuthorNames(undefined)).toEqual([]);
+	});
+
+	it("returns empty array when writers is empty", () => {
+		const metadata = createMetadata({ writers: [] });
+		expect(getAuthorNames(metadata)).toEqual([]);
+	});
+
+	it("returns writer names", () => {
+		const metadata = createMetadata({
+			writers: [
+				{ id: 1, name: "F. Scott Fitzgerald", description: null },
+				{ id: 2, name: "Ernest Hemingway", description: null },
+			],
+		});
+		expect(getAuthorNames(metadata)).toEqual([
+			"F. Scott Fitzgerald",
+			"Ernest Hemingway",
+		]);
+	});
+});
+
+describe("getGenreNames", () => {
+	it("returns empty array when metadata is undefined", () => {
+		expect(getGenreNames(undefined)).toEqual([]);
+	});
+
+	it("returns empty array when genres is empty", () => {
+		const metadata = createMetadata({ genres: [] });
+		expect(getGenreNames(metadata)).toEqual([]);
+	});
+
+	it("returns genre titles", () => {
+		const metadata = createMetadata({
+			genres: [
+				{ id: 1, title: "Fiction" },
+				{ id: 2, title: "Classic" },
+			],
+		});
+		expect(getGenreNames(metadata)).toEqual(["Fiction", "Classic"]);
+	});
+});
+
 describe("generateFrontmatter", () => {
 	it("generates frontmatter with tags", () => {
 		const result = generateFrontmatter(defaultOptions);
@@ -198,6 +269,56 @@ describe("generateSeriesHeader", () => {
 		});
 
 		expect(lines.some((l) => l.includes("**Tags:**"))).toBe(false);
+	});
+
+	it("includes author from metadata with wikilinks", () => {
+		const annotation = createAnnotation({ seriesName: "The Great Gatsby" });
+		const metadata = createMetadata({
+			writers: [{ id: 1, name: "F. Scott Fitzgerald", description: null }],
+		});
+		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
+
+		expect(lines).toContain("**Author:** [[F. Scott Fitzgerald]]");
+		expect(
+			lines.some((l) => l.includes("#kavita/author/f-scott-fitzgerald")),
+		).toBe(true);
+	});
+
+	it("includes multiple authors", () => {
+		const annotation = createAnnotation({ seriesName: "Collaboration" });
+		const metadata = createMetadata({
+			writers: [
+				{ id: 1, name: "Author One", description: null },
+				{ id: 2, name: "Author Two", description: null },
+			],
+		});
+		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
+
+		expect(lines).toContain("**Author:** [[Author One]], [[Author Two]]");
+	});
+
+	it("includes genres from metadata", () => {
+		const annotation = createAnnotation({ seriesName: "Test Book" });
+		const metadata = createMetadata({
+			genres: [
+				{ id: 1, title: "Fiction" },
+				{ id: 2, title: "Classic" },
+			],
+		});
+		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
+
+		expect(lines).toContain("**Genres:** Fiction, Classic");
+		expect(lines.some((l) => l.includes("#kavita/genre/fiction"))).toBe(true);
+		expect(lines.some((l) => l.includes("#kavita/genre/classic"))).toBe(true);
+	});
+
+	it("works without metadata", () => {
+		const annotation = createAnnotation({ seriesName: "Test Book" });
+		const lines = generateSeriesHeader(annotation, defaultOptions);
+
+		expect(lines).toContain("## Test Book");
+		expect(lines.some((l) => l.includes("**Author:**"))).toBe(false);
+		expect(lines.some((l) => l.includes("**Genres:**"))).toBe(false);
 	});
 });
 
@@ -461,5 +582,51 @@ describe("toMarkdown", () => {
 
 		expect(resultWithLinks).toContain("[[Test Book]]");
 		expect(resultWithoutLinks).not.toContain("[[Test Book]]");
+	});
+
+	it("includes author and genres from metadata map", () => {
+		const annotations = [
+			createAnnotation({
+				seriesId: 42,
+				seriesName: "The Great Gatsby",
+				selectedText: "Highlight",
+			}),
+		];
+
+		const metadataMap: SeriesMetadataMap = new Map([
+			[
+				42,
+				createMetadata({
+					seriesId: 42,
+					writers: [{ id: 1, name: "F. Scott Fitzgerald", description: null }],
+					genres: [{ id: 1, title: "Fiction" }],
+				}),
+			],
+		]);
+
+		const result = toMarkdown(annotations, defaultOptions, metadataMap);
+
+		expect(result).toContain("**Author:** [[F. Scott Fitzgerald]]");
+		expect(result).toContain("**Genres:** Fiction");
+		expect(result).toContain("#kavita/author/f-scott-fitzgerald");
+		expect(result).toContain("#kavita/genre/fiction");
+	});
+
+	it("handles missing metadata gracefully", () => {
+		const annotations = [
+			createAnnotation({
+				seriesId: 99,
+				seriesName: "Unknown Book",
+				selectedText: "Highlight",
+			}),
+		];
+
+		const metadataMap: SeriesMetadataMap = new Map();
+
+		const result = toMarkdown(annotations, defaultOptions, metadataMap);
+
+		expect(result).toContain("## Unknown Book");
+		expect(result).not.toContain("**Author:**");
+		expect(result).not.toContain("**Genres:**");
 	});
 });

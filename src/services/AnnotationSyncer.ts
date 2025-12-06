@@ -10,7 +10,8 @@ import type {
 	KavitaParseError,
 	ObsidianWriteError,
 } from "../errors.js";
-import { toMarkdown } from "../formatters/markdown.js";
+import { type SeriesMetadataMap, toMarkdown } from "../formatters/markdown.js";
+import type { SeriesMetadataDto } from "../schemas.js";
 import { KavitaClient } from "./KavitaClient.js";
 import { ObsidianAdapter } from "./ObsidianAdapter.js";
 import { PluginConfig } from "./PluginConfig.js";
@@ -44,6 +45,34 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 			const config = yield* PluginConfig;
 
 			/**
+			 * Fetch metadata for all unique series in the annotations.
+			 *
+			 * @since 0.0.2
+			 */
+			const fetchSeriesMetadata = (
+				seriesIds: ReadonlyArray<number>,
+			): Effect.Effect<
+				SeriesMetadataMap,
+				KavitaAuthError | KavitaNetworkError | KavitaParseError
+			> =>
+				Effect.gen(function* () {
+					const metadataEntries: Array<
+						[number, typeof SeriesMetadataDto.Type]
+					> = [];
+
+					for (const seriesId of seriesIds) {
+						const metadata = yield* kavita
+							.getSeriesMetadata(seriesId)
+							.pipe(Effect.option);
+						if (metadata._tag === "Some") {
+							metadataEntries.push([seriesId, metadata.value]);
+						}
+					}
+
+					return new Map(metadataEntries);
+				});
+
+			/**
 			 * Sync all annotations to a single file.
 			 *
 			 * @since 0.0.1
@@ -57,13 +86,22 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 			> = Effect.gen(function* () {
 				const annotations = yield* kavita.fetchAllAnnotations;
 
-				const markdown = toMarkdown(annotations, {
-					includeComments: config.includeComments,
-					includeSpoilers: config.includeSpoilers,
-					includeTags: config.includeTags,
-					tagPrefix: config.tagPrefix,
-					includeWikilinks: config.includeWikilinks,
-				});
+				const uniqueSeriesIds = [
+					...new Set(annotations.map((a) => a.seriesId)),
+				];
+				const metadataMap = yield* fetchSeriesMetadata(uniqueSeriesIds);
+
+				const markdown = toMarkdown(
+					annotations,
+					{
+						includeComments: config.includeComments,
+						includeSpoilers: config.includeSpoilers,
+						includeTags: config.includeTags,
+						tagPrefix: config.tagPrefix,
+						includeWikilinks: config.includeWikilinks,
+					},
+					metadataMap,
+				);
 
 				yield* obsidian.writeFile(config.outputPath, markdown);
 
