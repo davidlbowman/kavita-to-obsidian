@@ -1,0 +1,26 @@
+# Dependencies
+node_modules/
+
+# Build output
+main.js
+*.js.map
+
+# Docs (local strategy/planning)
+docs/
+
+# Environment
+.env
+.env.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Bun
+bun.lockb
