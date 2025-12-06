@@ -75,13 +75,21 @@ This document outlines the strategy for syncing annotations/highlights from Kavi
 
 #### Phase 1: Code Quality Refactor
 
-- [ ] Run effect-agent to refactor all code to Effect-TS best practices
-- [ ] Standardize comments to JSDoc only
-  - [ ] Remove all inline comments (`// comment`)
-  - [ ] Remove all block comments (`/* comment */`)
-  - [ ] Convert necessary comments to JSDoc format (`/** @description */`)
-  - [ ] Ensure all public APIs have JSDoc with `@since`, `@category`, `@example` where appropriate
-- [ ] Verify all services follow consistent patterns
+- [x] Run effect-agent to refactor all code to Effect-TS best practices
+  - [x] Add `accessors: true` to all Effect.Service classes
+  - [x] Use Effect's `Array.groupBy` and `Array.filterMap` in formatters
+  - [x] Fix error handling (proper error types, message getters)
+  - [x] Extract type guards (isTFile in ObsidianAdapter)
+  - [x] Add schema validation (Schema.clamp for matchThreshold)
+- [x] Standardize comments to JSDoc only
+  - [x] Remove all inline comments (`// comment`)
+  - [x] Remove all block comments (`/* comment */`)
+  - [x] Convert necessary comments to JSDoc format (`/** @description */`)
+  - [x] All public APIs have JSDoc with `@since`, `@category` tags
+- [x] Verify all services follow consistent patterns
+  - [x] All services use `Effect.Service<T>()("ServiceName", { ... })`
+  - [x] All services have `accessors: true` (except PluginConfig which uses `sync`)
+  - [x] All services have JSDoc with `@since` and `@category`
 
 #### Phase 2: Documentation
 

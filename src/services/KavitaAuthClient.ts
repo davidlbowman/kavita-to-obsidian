@@ -108,6 +108,8 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 				/**
 				 * Reset API key (requires JWT token).
 				 *
+				 * The API returns the key wrapped in quotes which are stripped.
+				 *
 				 * @since 0.0.1
 				 */
 				const resetApiKey = (token: string) =>
@@ -121,7 +123,6 @@ export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
 							.pipe(HttpClient.filterStatusOk)
 							.execute(request);
 						const text = yield* response.text;
-						// API returns the key with quotes, strip them
 						return text.replace(/"/g, "");
 					}).pipe(
 						Effect.mapError(

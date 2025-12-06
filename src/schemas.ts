@@ -145,10 +145,6 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	includeSpoilers: false,
 };
 
-// ============================================================================
-// Kavita Library/Series/Chapter Schemas
-// ============================================================================
-
 /**
  * Kavita library types.
  *
@@ -292,10 +288,6 @@ export class CreateAnnotationDto extends Schema.Class<CreateAnnotationDto>(
 	/** User's comment on the annotation (optional) */
 	comment: Schema.optionalWith(Schema.String, { exact: true }),
 }) {}
-
-// ============================================================================
-// Kavita Auth Schemas
-// ============================================================================
 
 /**
  * Request to register a new user.

@@ -31,12 +31,10 @@ export default class KavitaToObsidianPlugin extends Plugin {
 	override async onload() {
 		await this.loadSettings();
 
-		// Add ribbon icon
 		this.addRibbonIcon("book-open", "Sync Kavita Annotations", () => {
 			this.syncAnnotations();
 		});
 
-		// Add command
 		this.addCommand({
 			id: "sync-kavita-annotations",
 			name: "Sync Kavita Annotations",
@@ -45,7 +43,6 @@ export default class KavitaToObsidianPlugin extends Plugin {
 			},
 		});
 
-		// Add settings tab
 		this.addSettingTab(new KavitaSettingTab(this.app, this));
 	}
 
@@ -61,7 +58,6 @@ export default class KavitaToObsidianPlugin extends Plugin {
 	 * Run the annotation sync using Effect.
 	 */
 	private syncAnnotations() {
-		// Validate settings before running
 		if (!this.settings.kavitaUrl) {
 			new Notice("Please configure Kavita URL in settings");
 			return;
@@ -78,7 +74,6 @@ export default class KavitaToObsidianPlugin extends Plugin {
 			return yield* syncer.syncToFile;
 		});
 
-		// Build the layer stack
 		const ConfigLayer = PluginConfig.fromSettings(this.settings);
 		const ObsidianAppLayer = Layer.succeed(ObsidianApp, this.app);
 

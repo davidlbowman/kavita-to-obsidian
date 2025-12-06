@@ -33,7 +33,6 @@ export const formatAnnotation = (
 
 	const lines: string[] = [];
 
-	// Use selectedText as the main content (the highlighted text)
 	const content = annotation.selectedText ?? "";
 	lines.push(`> ${content}`);
 
