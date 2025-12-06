@@ -4,7 +4,9 @@
  * @module
  */
 export * from "./errors.js";
+export * from "./formatters/markdown.js";
 export * from "./schemas.js";
+export * from "./services/AnnotationSyncer.js";
 export * from "./services/KavitaClient.js";
 export * from "./services/ObsidianAdapter.js";
 export * from "./services/ObsidianApp.js";
