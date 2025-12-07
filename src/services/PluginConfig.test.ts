@@ -21,7 +21,7 @@ describe("PluginConfig", () => {
 				expect(config.includeComments).toBe(true);
 				expect(config.includeSpoilers).toBe(false);
 				expect(config.includeTags).toBe(true);
-				expect(config.tagPrefix).toBe("kavita/");
+				expect(config.tagPrefix).toBe("");
 				expect(config.includeWikilinks).toBe(true);
 			}).pipe(Effect.provide(PluginConfig.Default)),
 		);
@@ -104,7 +104,7 @@ describe("PluginConfig", () => {
 				expect(config.includeComments).toBe(true);
 				expect(config.includeSpoilers).toBe(false);
 				expect(config.includeTags).toBe(true);
-				expect(config.tagPrefix).toBe("kavita/");
+				expect(config.tagPrefix).toBe("");
 				expect(config.includeWikilinks).toBe(true);
 			}).pipe(
 				Effect.provide(PluginConfig.fromEnv),

@@ -35,7 +35,7 @@ const defaultOptions: FormatOptions = {
 	includeComments: true,
 	includeSpoilers: false,
 	includeTags: true,
-	tagPrefix: "kavita/",
+	tagPrefix: "",
 	includeWikilinks: true,
 };
 
@@ -93,16 +93,12 @@ describe("toSlug", () => {
 });
 
 describe("makeTag", () => {
-	it("creates prefixed tag with slug", () => {
-		expect(makeTag("kavita/", "series", "The Great Gatsby")).toBe(
-			"#kavita/series/the-great-gatsby",
-		);
+	it("creates tag with slug", () => {
+		expect(makeTag("The Great Gatsby")).toBe("#the-great-gatsby");
 	});
 
-	it("works with different prefixes", () => {
-		expect(makeTag("book/", "author", "F. Scott Fitzgerald")).toBe(
-			"#book/author/f-scott-fitzgerald",
-		);
+	it("works with optional prefix", () => {
+		expect(makeTag("Fiction", "genre/")).toBe("#genre/fiction");
 	});
 });
 
@@ -240,7 +236,7 @@ describe("generateFrontmatter", () => {
 });
 
 describe("generateSeriesHeader", () => {
-	it("generates header with wikilinks and tags", () => {
+	it("generates header with wikilinks", () => {
 		const annotation = createAnnotation({
 			seriesName: "The Great Gatsby",
 			libraryName: "Fiction",
@@ -250,10 +246,6 @@ describe("generateSeriesHeader", () => {
 		expect(lines).toContain("## The Great Gatsby");
 		expect(lines).toContain("**Series:** [[The Great Gatsby]]");
 		expect(lines).toContain("**Library:** Fiction");
-		expect(
-			lines.some((l) => l.includes("#kavita/series/the-great-gatsby")),
-		).toBe(true);
-		expect(lines.some((l) => l.includes("#kavita/library/fiction"))).toBe(true);
 	});
 
 	it("omits wikilinks when disabled", () => {
@@ -267,12 +259,9 @@ describe("generateSeriesHeader", () => {
 		expect(lines).toContain("## Test Series");
 	});
 
-	it("omits tags when disabled", () => {
+	it("does not include tags (tags are only for genres at book level)", () => {
 		const annotation = createAnnotation({ seriesName: "Test Series" });
-		const lines = generateSeriesHeader(annotation, {
-			...defaultOptions,
-			includeTags: false,
-		});
+		const lines = generateSeriesHeader(annotation, defaultOptions);
 
 		expect(lines.some((l) => l.includes("**Tags:**"))).toBe(false);
 	});
@@ -285,7 +274,6 @@ describe("generateSeriesHeader", () => {
 		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
 
 		expect(lines.some((l) => l.includes("**Author:**"))).toBe(false);
-		expect(lines.some((l) => l.includes("#kavita/author/"))).toBe(false);
 	});
 
 	it("does not include genres at series level (moved to book level)", () => {
@@ -299,7 +287,6 @@ describe("generateSeriesHeader", () => {
 		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
 
 		expect(lines.some((l) => l.includes("**Genres:**"))).toBe(false);
-		expect(lines.some((l) => l.includes("#kavita/genre/"))).toBe(false);
 	});
 
 	it("works without metadata", () => {
@@ -313,7 +300,7 @@ describe("generateSeriesHeader", () => {
 });
 
 describe("formatAnnotation", () => {
-	it("formats basic annotation", () => {
+	it("formats basic annotation without note line when no comment", () => {
 		const annotation = createAnnotation({
 			selectedText: "Hello world",
 			pageNumber: 0,
@@ -322,11 +309,12 @@ describe("formatAnnotation", () => {
 
 		expect(Option.isSome(result)).toBe(true);
 		if (Option.isSome(result)) {
-			expect(result.value).toBe("> Hello world");
+			expect(result.value).toContain("> Hello world");
+			expect(result.value).not.toContain("*Note:*");
 		}
 	});
 
-	it("includes comment when enabled", () => {
+	it("includes comment when present", () => {
 		const annotation = createAnnotation({
 			selectedText: "Highlight",
 			comment: "My note",
@@ -339,7 +327,46 @@ describe("formatAnnotation", () => {
 		}
 	});
 
-	it("excludes comment when disabled", () => {
+	it("excludes note line when comment is null", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: null,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).not.toContain("*Note:*");
+		}
+	});
+
+	it("excludes note line when comment is empty string", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: "",
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).not.toContain("*Note:*");
+		}
+	});
+
+	it("excludes note line when comment is empty object string '{}'", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: "{}",
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).not.toContain("*Note:*");
+		}
+	});
+
+	it("excludes note line when includeComments disabled", () => {
 		const annotation = createAnnotation({
 			selectedText: "Highlight",
 			comment: "My note",
@@ -352,6 +379,22 @@ describe("formatAnnotation", () => {
 		expect(Option.isSome(result)).toBe(true);
 		if (Option.isSome(result)) {
 			expect(result.value).not.toContain("My note");
+			expect(result.value).not.toContain("*Note:*");
+		}
+	});
+
+	it("handles multi-paragraph text with blockquotes on each line", () => {
+		const annotation = createAnnotation({
+			selectedText: "First paragraph.\n\nSecond paragraph.",
+			pageNumber: 0,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("> First paragraph.");
+			expect(result.value).toContain("> ");
+			expect(result.value).toContain("> Second paragraph.");
 		}
 	});
 
@@ -441,7 +484,7 @@ describe("toMarkdown", () => {
 				seriesId: 1,
 				seriesName: "The Great Gatsby",
 				chapterId: 1,
-				chapterTitle: "Chapter 1: In My Younger Years",
+				chapterTitle: "In My Younger Years",
 				libraryName: "Fiction",
 				selectedText: "First highlight",
 			}),
@@ -450,10 +493,9 @@ describe("toMarkdown", () => {
 		const result = toMarkdown(annotations, defaultOptions);
 
 		expect(result).toContain("## The Great Gatsby");
-		expect(result).toContain("### Chapter 1: In My Younger Years");
+		expect(result).toContain("#### Chapter: In My Younger Years");
 		expect(result).toContain("**Series:** [[The Great Gatsby]]");
 		expect(result).toContain("**Library:** Fiction");
-		expect(result).toContain("#kavita/series/the-great-gatsby");
 		expect(result).toContain("> First highlight");
 	});
 
@@ -474,7 +516,7 @@ describe("toMarkdown", () => {
 		const result = toMarkdown(annotations, defaultOptions);
 
 		expect(result).toContain("## Series 123");
-		expect(result).toContain("### Chapter 456");
+		expect(result).toContain("#### Chapter: Chapter 456");
 		expect(result).toContain("**Library:** Library 7");
 	});
 
@@ -485,7 +527,7 @@ describe("toMarkdown", () => {
 				seriesId: 1,
 				seriesName: "Book One",
 				chapterId: 1,
-				chapterTitle: "Chapter 1",
+				chapterTitle: "One",
 				selectedText: "First",
 			}),
 			createAnnotation({
@@ -493,7 +535,7 @@ describe("toMarkdown", () => {
 				seriesId: 1,
 				seriesName: "Book One",
 				chapterId: 2,
-				chapterTitle: "Chapter 2",
+				chapterTitle: "Two",
 				selectedText: "Second",
 			}),
 			createAnnotation({
@@ -510,9 +552,9 @@ describe("toMarkdown", () => {
 
 		expect(result).toContain("## Book One");
 		expect(result).toContain("## Book Two");
-		expect(result).toContain("### Chapter 1");
-		expect(result).toContain("### Chapter 2");
-		expect(result).toContain("### Introduction");
+		expect(result).toContain("#### Chapter: One");
+		expect(result).toContain("#### Chapter: Two");
+		expect(result).toContain("#### Chapter: Introduction");
 		expect(result).toContain("> First");
 		expect(result).toContain("> Second");
 		expect(result).toContain("> Third");
@@ -538,22 +580,46 @@ describe("toMarkdown", () => {
 		expect(result).not.toContain("> Secret");
 	});
 
-	it("respects includeTags option", () => {
+	it("respects includeTags option for genres", () => {
 		const annotations = [
 			createAnnotation({
 				seriesName: "Test Book",
+				chapterId: 1,
 				selectedText: "Highlight",
 			}),
 		];
 
-		const resultWithTags = toMarkdown(annotations, defaultOptions);
-		const resultWithoutTags = toMarkdown(annotations, {
-			...defaultOptions,
-			includeTags: false,
-		});
+		const chapterInfoMap: ChapterInfoMap = new Map([
+			[
+				1,
+				{
+					chapterId: 1,
+					bookTitle: "Test Book",
+					sortOrder: 1,
+					authors: [],
+					genres: ["Fiction"],
+				},
+			],
+		]);
 
-		expect(resultWithTags).toContain("#kavita/series/test-book");
-		expect(resultWithoutTags).not.toContain("#kavita/series/test-book");
+		const resultWithTags = toMarkdown(
+			annotations,
+			defaultOptions,
+			undefined,
+			chapterInfoMap,
+		);
+		const resultWithoutTags = toMarkdown(
+			annotations,
+			{
+				...defaultOptions,
+				includeTags: false,
+			},
+			undefined,
+			chapterInfoMap,
+		);
+
+		expect(resultWithTags).toContain("#fiction");
+		expect(resultWithoutTags).not.toContain("#fiction");
 	});
 
 	it("respects includeWikilinks option", () => {
@@ -606,8 +672,7 @@ describe("toMarkdown", () => {
 
 		expect(result).toContain("**Author:** [[F. Scott Fitzgerald]]");
 		expect(result).toContain("**Genres:** Fiction");
-		expect(result).toContain("#kavita/author/f-scott-fitzgerald");
-		expect(result).toContain("#kavita/genre/fiction");
+		expect(result).toContain("#fiction");
 	});
 
 	it("handles missing metadata gracefully", () => {
@@ -635,7 +700,7 @@ describe("toMarkdown", () => {
 				seriesId: 1,
 				seriesName: "Horus Heresy",
 				chapterId: 1,
-				chapterTitle: "Chapter 1",
+				chapterTitle: "One",
 				selectedText: "First book highlight",
 			}),
 			createAnnotation({
@@ -643,7 +708,7 @@ describe("toMarkdown", () => {
 				seriesId: 1,
 				seriesName: "Horus Heresy",
 				chapterId: 2,
-				chapterTitle: "Chapter 1",
+				chapterTitle: "One",
 				selectedText: "Second book highlight",
 			}),
 		];
@@ -680,12 +745,9 @@ describe("toMarkdown", () => {
 
 		expect(result).toContain("### Horus Rising");
 		expect(result).toContain("### False Gods");
-		expect(result).toContain("#kavita/book/horus-rising");
-		expect(result).toContain("#kavita/book/false-gods");
 		expect(result).toContain("**Author:** [[Dan Abnett]]");
 		expect(result).toContain("**Author:** [[Graham McNeill]]");
-		expect(result).toContain("#kavita/author/dan-abnett");
-		expect(result).toContain("#kavita/genre/sci-fi");
+		expect(result).toContain("#sci-fi");
 	});
 
 	it("falls back to series name when chapterInfoMap is not provided", () => {
@@ -701,7 +763,6 @@ describe("toMarkdown", () => {
 		const result = toMarkdown(annotations, defaultOptions);
 
 		expect(result).toContain("### Test Series");
-		expect(result).toContain("#kavita/book/test-series");
 	});
 });
 
@@ -884,12 +945,6 @@ describe("generateBookHeader", () => {
 		expect(lines.some((l) => l.includes("[[Test Book]]"))).toBe(true);
 	});
 
-	it("includes book tag when tags enabled", () => {
-		const lines = generateBookHeader("Test Book", defaultOptions);
-
-		expect(lines.some((l) => l.includes("#kavita/book/test-book"))).toBe(true);
-	});
-
 	it("omits wikilink when disabled", () => {
 		const lines = generateBookHeader("Test Book", {
 			...defaultOptions,
@@ -897,15 +952,6 @@ describe("generateBookHeader", () => {
 		});
 
 		expect(lines.some((l) => l.includes("[[Test Book]]"))).toBe(false);
-	});
-
-	it("omits tag when tags disabled", () => {
-		const lines = generateBookHeader("Test Book", {
-			...defaultOptions,
-			includeTags: false,
-		});
-
-		expect(lines.some((l) => l.includes("#kavita/book"))).toBe(false);
 	});
 
 	it("includes author with wikilink", () => {
@@ -923,16 +969,6 @@ describe("generateBookHeader", () => {
 		]);
 
 		expect(lines).toContain("**Author:** [[Author One]], [[Author Two]]");
-	});
-
-	it("includes author tags when tags enabled", () => {
-		const lines = generateBookHeader("Test Book", defaultOptions, [
-			"Test Author",
-		]);
-
-		expect(lines.some((l) => l.includes("#kavita/author/test-author"))).toBe(
-			true,
-		);
 	});
 
 	it("includes genres", () => {
@@ -954,7 +990,13 @@ describe("generateBookHeader", () => {
 			["Fantasy"],
 		);
 
-		expect(lines.some((l) => l.includes("#kavita/genre/fantasy"))).toBe(true);
+		expect(lines.some((l) => l.includes("#fantasy"))).toBe(true);
+	});
+
+	it("omits genre tags when no genres", () => {
+		const lines = generateBookHeader("Test Book", defaultOptions, [], []);
+
+		expect(lines.some((l) => l.includes("**Tags:**"))).toBe(false);
 	});
 
 	it("omits author when wikilinks disabled", () => {
@@ -969,5 +1011,16 @@ describe("generateBookHeader", () => {
 
 		expect(lines).toContain("**Author:** Test Author");
 		expect(lines.some((l) => l.includes("[[Test Author]]"))).toBe(false);
+	});
+
+	it("respects tagPrefix option", () => {
+		const lines = generateBookHeader(
+			"Test Book",
+			{ ...defaultOptions, tagPrefix: "reading/" },
+			[],
+			["Fantasy"],
+		);
+
+		expect(lines.some((l) => l.includes("#reading/fantasy"))).toBe(true);
 	});
 });

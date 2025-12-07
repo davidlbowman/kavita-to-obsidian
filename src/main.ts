@@ -209,12 +209,12 @@ class KavitaSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Tag Prefix")
 			.setDesc(
-				"Prefix for generated tags (e.g., 'kavita/' produces #kavita/series/...)",
+				"Optional prefix for genre tags (e.g., 'genre/' produces #genre/fiction)",
 			)
 			.addText((text) =>
 				text
-					.setPlaceholder("kavita/")
-					.setValue(this.plugin.settings.tagPrefix ?? "kavita/")
+					.setPlaceholder("")
+					.setValue(this.plugin.settings.tagPrefix ?? "")
 					.onChange(async (value) => {
 						this.plugin.settings.tagPrefix = value;
 						await this.plugin.saveSettings();

@@ -79,7 +79,7 @@ const MockPluginConfig = Layer.succeed(
 		includeComments: true,
 		includeSpoilers: false,
 		includeTags: true,
-		tagPrefix: "kavita/",
+		tagPrefix: "",
 		includeWikilinks: true,
 	}),
 );
