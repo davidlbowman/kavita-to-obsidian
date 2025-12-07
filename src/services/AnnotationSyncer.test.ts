@@ -132,7 +132,7 @@ const createMockConfig = (
 		includeComments: true,
 		includeSpoilers: false,
 		includeTags: true,
-		tagPrefix: "kavita/",
+		tagPrefix: "",
 		includeWikilinks: true,
 		...overrides,
 	} as unknown as typeof PluginConfig.Service);

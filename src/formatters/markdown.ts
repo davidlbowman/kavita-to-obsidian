@@ -78,16 +78,13 @@ export const toSlug = (input: string): string =>
 		.replace(/^-|-$/g, "");
 
 /**
- * Generate a prefixed tag.
+ * Generate a tag from a value with optional prefix.
  *
- * @since 0.0.2
+ * @since 0.0.3
  * @category Formatters
  */
-export const makeTag = (
-	prefix: string,
-	category: string,
-	value: string,
-): string => `#${prefix}${category}/${toSlug(value)}`;
+export const makeTag = (value: string, prefix = ""): string =>
+	`#${prefix}${toSlug(value)}`;
 
 /**
  * Generate a wikilink.
@@ -100,7 +97,7 @@ export const makeWikilink = (value: string): string => `[[${value}]]`;
 /**
  * Format a single annotation to markdown.
  *
- * @since 0.0.1
+ * @since 0.0.3
  * @category Formatters
  */
 export const formatAnnotation = (
@@ -114,9 +111,18 @@ export const formatAnnotation = (
 	const lines: string[] = [];
 
 	const content = annotation.selectedText ?? "";
-	lines.push(`> ${content}`);
+	const blockquote = content
+		.split("\n")
+		.map((line) => `> ${line}`)
+		.join("\n");
+	lines.push(blockquote);
 
-	if (options.includeComments && annotation.comment) {
+	const hasComment =
+		annotation.comment &&
+		annotation.comment.trim() !== "" &&
+		annotation.comment.trim() !== "{}";
+
+	if (options.includeComments && hasComment) {
 		lines.push("");
 		lines.push(`*Note:* ${annotation.comment}`);
 	}
@@ -276,7 +282,7 @@ export const getSortedBookGroups = (
 /**
  * Generate book header with title and tags.
  *
- * @since 0.0.2
+ * @since 0.0.3
  * @category Formatters
  */
 export const generateBookHeader = (
@@ -304,14 +310,8 @@ export const generateBookHeader = (
 		lines.push(`**Genres:** ${genres.join(", ")}`);
 	}
 
-	if (options.includeTags) {
-		const tags: string[] = [makeTag(options.tagPrefix, "book", bookTitle)];
-		for (const author of authors) {
-			tags.push(makeTag(options.tagPrefix, "author", author));
-		}
-		for (const genre of genres) {
-			tags.push(makeTag(options.tagPrefix, "genre", genre));
-		}
+	if (options.includeTags && genres.length > 0) {
+		const tags = genres.map((g) => makeTag(g, options.tagPrefix));
 		lines.push(`**Tags:** ${tags.join(" ")}`);
 	}
 
@@ -321,7 +321,7 @@ export const generateBookHeader = (
 /**
  * Generate YAML frontmatter for the annotations document.
  *
- * @since 0.0.2
+ * @since 0.0.3
  * @category Formatters
  */
 export const generateFrontmatter = (options: FormatOptions): string => {
@@ -329,8 +329,8 @@ export const generateFrontmatter = (options: FormatOptions): string => {
 
 	if (options.includeTags) {
 		lines.push("tags:");
-		lines.push(`  - ${options.tagPrefix.replace(/\/$/, "")}`);
 		lines.push("  - annotations");
+		lines.push("  - kavita");
 	}
 
 	lines.push(`updated: ${new Date().toISOString()}`);
@@ -368,7 +368,7 @@ export const getGenreNames = (
 /**
  * Generate series header with metadata.
  *
- * @since 0.0.2
+ * @since 0.0.3
  * @category Formatters
  */
 export const generateSeriesHeader = (
@@ -387,21 +387,13 @@ export const generateSeriesHeader = (
 
 	lines.push(`**Library:** ${libraryName}`);
 
-	if (options.includeTags) {
-		const tags: string[] = [
-			makeTag(options.tagPrefix, "series", seriesName),
-			makeTag(options.tagPrefix, "library", libraryName),
-		];
-		lines.push(`**Tags:** ${tags.join(" ")}`);
-	}
-
 	return lines;
 };
 
 /**
  * Convert annotations to a markdown document.
  *
- * @since 0.0.1
+ * @since 0.0.3
  * @category Formatters
  */
 export const toMarkdown = (
@@ -457,7 +449,7 @@ export const toMarkdown = (
 										: "Unknown Chapter";
 
 									return [
-										`#### ${chapterTitle}`,
+										`#### Chapter: ${chapterTitle}`,
 										"",
 										...pipe(
 											chapterAnnotations,

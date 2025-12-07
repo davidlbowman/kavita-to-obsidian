@@ -137,12 +137,12 @@ export class PluginSettings extends Schema.Class<PluginSettings>(
 		default: () => true,
 	}),
 	/**
-	 * Prefix for generated tags (e.g., "kavita/" produces #kavita/series/...).
+	 * Prefix for generated tags (e.g., "reading/" produces #reading/book/...).
 	 * @since 0.0.2
 	 */
 	tagPrefix: Schema.optionalWith(Schema.String, {
 		exact: true,
-		default: () => "kavita/",
+		default: () => "",
 	}),
 	/**
 	 * Include wikilinks for series and author names (e.g., [[Author Name]]).
@@ -168,7 +168,7 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	includeComments: true,
 	includeSpoilers: false,
 	includeTags: true,
-	tagPrefix: "kavita/",
+	tagPrefix: "",
 	includeWikilinks: true,
 };
 

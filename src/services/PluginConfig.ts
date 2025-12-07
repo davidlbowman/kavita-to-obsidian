@@ -54,7 +54,7 @@ const EnvConfig = Config.all({
 		Config.withDefault(false),
 	),
 	includeTags: Config.boolean("INCLUDE_TAGS").pipe(Config.withDefault(true)),
-	tagPrefix: Config.string("TAG_PREFIX").pipe(Config.withDefault("kavita/")),
+	tagPrefix: Config.string("TAG_PREFIX").pipe(Config.withDefault("")),
 	includeWikilinks: Config.boolean("INCLUDE_WIKILINKS").pipe(
 		Config.withDefault(true),
 	),
@@ -79,7 +79,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 			includeComments: true,
 			includeSpoilers: false,
 			includeTags: true,
-			tagPrefix: "kavita/",
+			tagPrefix: "",
 			includeWikilinks: true,
 		}),
 	},

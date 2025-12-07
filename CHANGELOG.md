@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.3] - 2025-12-07
+
+### Changed
+
+- **Improved Annotation Display**
+  - Chapter headings now prefixed with "Chapter:" for clarity (e.g., `#### Chapter: Four`)
+  - Multi-paragraph annotations now properly blockquote each line
+  - Empty notes (null, empty string, or "{}") are now excluded from output
+- **Better Obsidian Tagging Defaults**
+  - Default `tagPrefix` changed from `kavita/` to empty string
+  - Tags now only generated for genres (e.g., `#fiction`, `#sci-fi`)
+  - Removed nested tag categories (`book/`, `author/`, `series/`, `library/`)
+  - Authors and books are better represented as wikilinks, not tags
+- Updated settings UI description for tag prefix
+
+### Fixed
+
+- Multi-paragraph text now renders correctly in blockquotes
+- Empty comment marker `{}` from Kavita no longer displayed as a note
+
 ## [0.0.2] - 2025-12-06
 
 ### Added
@@ -64,5 +84,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bun bundler for fast builds
 - TypeScript with strict mode enabled
 
+[0.0.3]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.3
 [0.0.2]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.2
 [0.0.1]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.1
