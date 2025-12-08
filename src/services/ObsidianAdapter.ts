@@ -79,7 +79,7 @@ export class ObsidianAdapter extends Effect.Service<ObsidianAdapter>()(
 					try: async () => {
 						const file = vault.getAbstractFileByPath(path);
 						if (isTFile(file)) {
-							return vault.read(file);
+							return await vault.read(file);
 						}
 						throw new Error("File not found");
 					},

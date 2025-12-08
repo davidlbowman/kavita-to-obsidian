@@ -34,13 +34,13 @@ export default class KavitaToObsidianPlugin extends Plugin {
 	override async onload() {
 		await this.loadSettings();
 
-		this.addRibbonIcon("book-open", "Sync Kavita Annotations", () => {
+		this.addRibbonIcon("book-open", "Sync kavita annotations", () => {
 			this.syncAnnotations();
 		});
 
 		this.addCommand({
 			id: "sync-kavita-annotations",
-			name: "Sync Kavita Annotations",
+			name: "Sync kavita annotations",
 			callback: () => {
 				this.syncAnnotations();
 			},
@@ -50,7 +50,8 @@ export default class KavitaToObsidianPlugin extends Plugin {
 	}
 
 	async loadSettings() {
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		const data = (await this.loadData()) as Partial<PluginSettingsData> | null;
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, data ?? {});
 	}
 
 	async saveSettings() {
@@ -62,15 +63,15 @@ export default class KavitaToObsidianPlugin extends Plugin {
 	 */
 	private syncAnnotations() {
 		if (!this.settings.kavitaUrl) {
-			new Notice("Please configure Kavita URL in settings");
+			new Notice("Please configure kavita URL in plugin settings");
 			return;
 		}
 		if (!this.settings.kavitaApiKey) {
-			new Notice("Please configure Kavita API key in settings");
+			new Notice("Please configure kavita API key in plugin settings");
 			return;
 		}
 
-		new Notice("Syncing Kavita annotations...");
+		new Notice("Syncing kavita annotations…");
 
 		const program = Effect.gen(function* () {
 			const syncer = yield* AnnotationSyncer;
@@ -103,9 +104,10 @@ export default class KavitaToObsidianPlugin extends Plugin {
 					`Synced ${result.count} annotations to ${result.outputPath}`,
 				);
 			})
-			.catch((error) => {
-				console.error("Kavita sync error:", error);
-				new Notice(`Sync failed: ${error.message ?? "Unknown error"}`);
+			.catch((error: unknown) => {
+				const message =
+					error instanceof Error ? error.message : "Unknown error";
+				new Notice(`Sync failed: ${message}`);
 			});
 	}
 }
@@ -122,14 +124,14 @@ class KavitaSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl("h2", { text: "Kavita to Obsidian Settings" });
+		new Setting(containerEl).setName("Kavita to Obsidian").setHeading();
 
 		new Setting(containerEl)
 			.setName("Kavita URL")
-			.setDesc("The URL of your Kavita server (e.g., http://localhost:5000)")
+			.setDesc("The URL of your Kavita server (e.g., http://localhost:5000).")
 			.addText((text) =>
 				text
-					.setPlaceholder("http://localhost:5000")
+					.setPlaceholder("Enter URL")
 					.setValue(this.plugin.settings.kavitaUrl)
 					.onChange(async (value) => {
 						this.plugin.settings.kavitaUrl = value;
@@ -138,10 +140,8 @@ class KavitaSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Kavita API Key")
-			.setDesc(
-				"Your Kavita API key (found in User Settings > 3rd Party Clients)",
-			)
+			.setName("Kavita API key")
+			.setDesc("API key for your server.")
 			.addText((text) => {
 				text
 					.setPlaceholder("Enter your API key")
@@ -154,11 +154,11 @@ class KavitaSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName("Output Path")
-			.setDesc("Path to the markdown file where annotations will be saved")
+			.setName("Output path")
+			.setDesc("Path to the Markdown file where annotations will be saved.")
 			.addText((text) =>
 				text
-					.setPlaceholder("kavita-annotations.md")
+					.setPlaceholder("Enter file path")
 					.setValue(this.plugin.settings.outputPath ?? "kavita-annotations.md")
 					.onChange(async (value) => {
 						this.plugin.settings.outputPath = value;
@@ -167,8 +167,8 @@ class KavitaSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Include Comments")
-			.setDesc("Include your comments/notes with each annotation")
+			.setName("Include comments")
+			.setDesc("Include your comments and notes with each annotation.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.includeComments ?? true)
@@ -179,8 +179,8 @@ class KavitaSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Include Spoilers")
-			.setDesc("Include annotations marked as spoilers")
+			.setName("Include spoilers")
+			.setDesc("Include annotations marked as spoilers.")
 			.addToggle((toggle) =>
 				toggle
 					.setValue(this.plugin.settings.includeSpoilers ?? false)
@@ -190,12 +190,12 @@ class KavitaSettingTab extends PluginSettingTab {
 					}),
 			);
 
-		containerEl.createEl("h3", { text: "Formatting Options" });
+		new Setting(containerEl).setName("Formatting").setHeading();
 
 		new Setting(containerEl)
-			.setName("Include Tags")
+			.setName("Include tags")
 			.setDesc(
-				"Generate Obsidian tags from series, author, and library names (e.g., #kavita/series/the-great-gatsby)",
+				"Generate Obsidian tags from series, author, and library names (e.g., #kavita/series/the-great-gatsby).",
 			)
 			.addToggle((toggle) =>
 				toggle
@@ -207,9 +207,9 @@ class KavitaSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Tag Prefix")
+			.setName("Tag prefix")
 			.setDesc(
-				"Optional prefix for genre tags (e.g., 'genre/' produces #genre/fiction)",
+				"Optional prefix for genre tags (e.g., 'genre/' produces #genre/fiction).",
 			)
 			.addText((text) =>
 				text
@@ -222,9 +222,9 @@ class KavitaSettingTab extends PluginSettingTab {
 			);
 
 		new Setting(containerEl)
-			.setName("Include Wikilinks")
+			.setName("Include wikilinks")
 			.setDesc(
-				"Create [[wikilinks]] for series and author names to link to existing notes",
+				"Create [[wikilinks]] for series and author names to link to existing notes.",
 			)
 			.addToggle((toggle) =>
 				toggle
