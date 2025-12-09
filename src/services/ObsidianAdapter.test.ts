@@ -47,14 +47,15 @@ const createMockApp = (initialFiles: Record<string, string> = {}): MockApp => {
 			}
 			return null;
 		},
-		create: async (path: string, content: string) => {
+		create: (path: string, content: string) => {
 			files.set(path, { path, content });
-			return { path, extension: "md" };
+			return Promise.resolve({ path, extension: "md" });
 		},
-		modify: async (file: { path: string }, content: string) => {
+		modify: (file: { path: string }, content: string) => {
 			files.set(file.path, { path: file.path, content });
+			return Promise.resolve();
 		},
-		append: async (file: { path: string }, content: string) => {
+		append: (file: { path: string }, content: string) => {
 			const existing = files.get(file.path);
 			if (existing) {
 				files.set(file.path, {
@@ -62,10 +63,11 @@ const createMockApp = (initialFiles: Record<string, string> = {}): MockApp => {
 					content: existing.content + content,
 				});
 			}
+			return Promise.resolve();
 		},
-		read: async (file: { path: string }) => {
+		read: (file: { path: string }) => {
 			const existing = files.get(file.path);
-			return existing?.content ?? "";
+			return Promise.resolve(existing?.content ?? "");
 		},
 		getMarkdownFiles: () => {
 			return Array.from(files.values()).map((f) => ({

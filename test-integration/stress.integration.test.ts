@@ -71,12 +71,7 @@ describe("Kavita Stress Test (10,000 annotations)", () => {
 			const annotations = yield* client.fetchAllAnnotations;
 			const fetchTime = Date.now() - startTime;
 
-			console.debug(`\n📊 Performance Results:`);
-			console.debug(`   Annotations fetched: ${annotations.length}`);
-			console.debug(`   Fetch time: ${fetchTime}ms`);
-			console.debug(
-				`   Rate: ${((annotations.length / fetchTime) * 1000).toFixed(0)} annotations/second`,
-			);
+			/** Performance: ${annotations.length} annotations in ${fetchTime}ms */
 
 			expect(annotations.length).toBeGreaterThanOrEqual(10_000);
 			expect(fetchTime).toBeLessThan(30_000); // Should complete within 30 seconds
@@ -92,11 +87,7 @@ describe("Kavita Stress Test (10,000 annotations)", () => {
 				a.seriesName?.includes("Stress"),
 			);
 
-			console.debug(`\n📊 Filtering Results:`);
-			console.debug(`   Total annotations: ${annotations.length}`);
-			console.debug(
-				`   Stress series annotations: ${stressAnnotations.length}`,
-			);
+			/** Filtering: ${stressAnnotations.length} of ${annotations.length} annotations */
 
 			expect(stressAnnotations.length).toBeGreaterThanOrEqual(10_000);
 
@@ -117,12 +108,7 @@ describe("Kavita Stress Test (10,000 annotations)", () => {
 			);
 			const formatTime = Date.now() - startTime;
 
-			console.debug(`\n📊 Markdown Generation:`);
-			console.debug(`   Format time: ${formatTime}ms`);
-			console.debug(
-				`   Output size: ${(markdown.length / 1024).toFixed(1)} KB`,
-			);
-			console.debug(`   Lines: ${markdown.split("\n").length}`);
+			/** Markdown: ${formatTime}ms, ${(markdown.length / 1024).toFixed(1)} KB */
 
 			expect(formatTime).toBeLessThan(5_000); // Should format within 5 seconds
 			expect(markdown.length).toBeGreaterThan(0);
@@ -145,14 +131,7 @@ describe("Kavita Stress Test (10,000 annotations)", () => {
 			const result = yield* syncer.syncToFile.pipe(Effect.provide(SyncerLayer));
 			const syncTime = Date.now() - startTime;
 
-			const writes = mockAdapter.getWrites();
-			const totalBytes = writes.reduce((sum, w) => sum + w.content.length, 0);
-
-			console.debug(`\n📊 Full Sync Results:`);
-			console.debug(`   Sync time: ${syncTime}ms`);
-			console.debug(`   Files written: ${writes.length}`);
-			console.debug(`   Total output: ${(totalBytes / 1024).toFixed(1)} KB`);
-			console.debug(`   Annotations synced: ${result.count}`);
+			/** Sync completed in ${syncTime}ms */
 
 			expect(result.count).toBeGreaterThanOrEqual(10_000);
 			expect(syncTime).toBeLessThan(60_000); // Should complete within 60 seconds

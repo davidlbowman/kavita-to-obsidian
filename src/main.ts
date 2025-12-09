@@ -34,13 +34,13 @@ export default class KavitaToObsidianPlugin extends Plugin {
 	override async onload() {
 		await this.loadSettings();
 
-		this.addRibbonIcon("book-open", "Sync kavita annotations", () => {
+		this.addRibbonIcon("book-open", "Sync annotations", () => {
 			this.syncAnnotations();
 		});
 
 		this.addCommand({
 			id: "sync-kavita-annotations",
-			name: "Sync kavita annotations",
+			name: "Sync annotations",
 			callback: () => {
 				this.syncAnnotations();
 			},
@@ -63,15 +63,15 @@ export default class KavitaToObsidianPlugin extends Plugin {
 	 */
 	private syncAnnotations() {
 		if (!this.settings.kavitaUrl) {
-			new Notice("Please configure kavita URL in plugin settings");
+			new Notice("Please configure server URL in plugin settings");
 			return;
 		}
 		if (!this.settings.kavitaApiKey) {
-			new Notice("Please configure kavita API key in plugin settings");
+			new Notice("Please configure API key in plugin settings");
 			return;
 		}
 
-		new Notice("Syncing kavita annotations…");
+		new Notice("Syncing annotations…");
 
 		const program = Effect.gen(function* () {
 			const syncer = yield* AnnotationSyncer;
