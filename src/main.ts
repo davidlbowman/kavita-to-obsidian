@@ -3,8 +3,9 @@
  *
  * @module
  */
-import { Effect, Layer } from "effect";
+import { Effect, Layer, Match } from "effect";
 import { type App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
+import type { SyncError } from "./errors.js";
 import { DEFAULT_SETTINGS } from "./schemas.js";
 import { AnnotationSyncer } from "./services/AnnotationSyncer.js";
 import { HierarchicalSyncer } from "./services/HierarchicalSyncer.js";
@@ -13,6 +14,57 @@ import { ObsidianAdapter } from "./services/ObsidianAdapter.js";
 import { ObsidianApp } from "./services/ObsidianApp.js";
 import { ObsidianHttpClient } from "./services/ObsidianHttpClient.js";
 import { PluginConfig } from "./services/PluginConfig.js";
+
+const TROUBLESHOOTING_URL =
+	"https://github.com/davidlbowman/kavita-to-obsidian/blob/main/TROUBLESHOOTING.md";
+
+/**
+ * Show user-friendly error notices based on error type.
+ *
+ * @since 1.2.0
+ */
+const showErrorNotice = (error: SyncError): void => {
+	Match.value(error).pipe(
+		Match.tag("KavitaAuthError", () => {
+			new Notice("Authentication failed. Check your API key in settings.");
+			new Notice(`See: ${TROUBLESHOOTING_URL}#authentication-failed`, 8000);
+		}),
+		Match.tag("KavitaNetworkError", (e) => {
+			if (e.statusCode === 401 || e.statusCode === 403) {
+				new Notice("Access denied. Your API key may be invalid or expired.");
+				new Notice(
+					`See: ${TROUBLESHOOTING_URL}#network-error-status-401403`,
+					8000,
+				);
+			} else if (e.statusCode === 404) {
+				new Notice("Kavita server not found. Check your URL in settings.");
+				new Notice(
+					`See: ${TROUBLESHOOTING_URL}#network-error-status-404`,
+					8000,
+				);
+			} else {
+				new Notice(`Cannot reach Kavita: ${e.message}`);
+				new Notice(`See: ${TROUBLESHOOTING_URL}#connection-refused`, 8000);
+			}
+		}),
+		Match.tag("KavitaParseError", () => {
+			new Notice("Unexpected response - update plugin or server version.");
+			new Notice(`See: ${TROUBLESHOOTING_URL}#failed-to-parse-response`, 8000);
+		}),
+		Match.tag("ObsidianWriteError", (e) => {
+			new Notice(`Cannot write to ${e.path}. Check the path is valid.`);
+			new Notice(`See: ${TROUBLESHOOTING_URL}#failed-to-write-file`, 8000);
+		}),
+		Match.tag("ObsidianFolderError", (e) => {
+			new Notice(`Folder error: ${e.path}. Check folder name is valid.`);
+			new Notice(`See: ${TROUBLESHOOTING_URL}#folder-operation-failed`, 8000);
+		}),
+		Match.tag("ObsidianFileNotFoundError", (e) => {
+			new Notice(`File not found: ${e.path}`);
+		}),
+		Match.exhaustive,
+	);
+};
 
 /**
  * Mutable settings interface for plugin storage.
@@ -103,19 +155,21 @@ export default class KavitaToObsidianPlugin extends Plugin {
 				Layer.provide(ConfigLayer),
 			);
 
-			const runnable = program.pipe(Effect.provide(SyncerLayer));
+			const runnable = program.pipe(
+				Effect.provide(SyncerLayer),
+				Effect.match({
+					onSuccess: (result) => {
+						new Notice(
+							`Synced ${result.totalAnnotations} annotations across ${result.seriesCount} series (${result.bookCount} books)`,
+						);
+					},
+					onFailure: (error) => {
+						showErrorNotice(error);
+					},
+				}),
+			);
 
-			Effect.runPromise(runnable)
-				.then((result) => {
-					new Notice(
-						`Synced ${result.totalAnnotations} annotations across ${result.seriesCount} series (${result.bookCount} books)`,
-					);
-				})
-				.catch((error: unknown) => {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					new Notice(`Sync failed: ${message}`);
-				});
+			void Effect.runPromise(runnable);
 		} else {
 			const program = Effect.gen(function* () {
 				const syncer = yield* AnnotationSyncer;
@@ -128,19 +182,21 @@ export default class KavitaToObsidianPlugin extends Plugin {
 				Layer.provide(ConfigLayer),
 			);
 
-			const runnable = program.pipe(Effect.provide(SyncerLayer));
+			const runnable = program.pipe(
+				Effect.provide(SyncerLayer),
+				Effect.match({
+					onSuccess: (result) => {
+						new Notice(
+							`Synced ${result.count} annotations to ${result.outputPath}`,
+						);
+					},
+					onFailure: (error) => {
+						showErrorNotice(error);
+					},
+				}),
+			);
 
-			Effect.runPromise(runnable)
-				.then((result) => {
-					new Notice(
-						`Synced ${result.count} annotations to ${result.outputPath}`,
-					);
-				})
-				.catch((error: unknown) => {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					new Notice(`Sync failed: ${message}`);
-				});
+			void Effect.runPromise(runnable);
 		}
 	}
 }
