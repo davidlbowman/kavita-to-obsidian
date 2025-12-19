@@ -3,7 +3,9 @@
  *
  * @module
  */
+
 import { Array, Effect, Record } from "effect";
+import { normalizePath } from "obsidian";
 import type {
 	KavitaAuthError,
 	KavitaNetworkError,
@@ -215,7 +217,9 @@ export class HierarchicalSyncer extends Effect.Service<HierarchicalSyncer>()(
 				];
 				const volumeInfo = yield* fetchVolumeInfo(uniqueSeriesIds);
 
-				yield* obsidian.ensureFolderExists(config.rootFolderName);
+				yield* obsidian.ensureFolderExists(
+					normalizePath(config.rootFolderName),
+				);
 
 				const seriesGroups = groupBySeriesId(annotations);
 				const seriesEntries = Record.toEntries(seriesGroups);

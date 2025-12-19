@@ -3,6 +3,7 @@
  *
  * @module
  */
+import { normalizePath } from "obsidian";
 
 /**
  * Windows reserved file names that cannot be used.
@@ -80,7 +81,7 @@ export const buildBookPath = (
 ): string => {
 	const sanitizedSeries = sanitizePathSegment(seriesName);
 	const sanitizedBook = sanitizePathSegment(bookTitle);
-	return `${rootFolder}/${sanitizedSeries}/${sanitizedBook}.md`;
+	return normalizePath(`${rootFolder}/${sanitizedSeries}/${sanitizedBook}.md`);
 };
 
 /**
@@ -94,7 +95,7 @@ export const buildSeriesPath = (
 	seriesName: string,
 ): string => {
 	const sanitizedSeries = sanitizePathSegment(seriesName);
-	return `${rootFolder}/${sanitizedSeries}`;
+	return normalizePath(`${rootFolder}/${sanitizedSeries}`);
 };
 
 /**
@@ -118,5 +119,7 @@ export const buildUniqueBookPath = (
 
 	const sanitizedSeries = sanitizePathSegment(seriesName);
 	const sanitizedBook = sanitizePathSegment(bookTitle);
-	return `${rootFolder}/${sanitizedSeries}/${sanitizedBook} (ch-${chapterId}).md`;
+	return normalizePath(
+		`${rootFolder}/${sanitizedSeries}/${sanitizedBook} (ch-${chapterId}).md`,
+	);
 };
