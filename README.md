@@ -4,9 +4,62 @@ Sync your reading highlights and notes from [Kavita](https://www.kavitareader.co
 
 ## What It Does
 
-This plugin pulls all your annotations, highlights, and notes from Kavita and saves them as a beautifully formatted markdown file in your Obsidian vault. Your highlights become searchable, linkable, and integrated with the rest of your notes.
+This plugin pulls all your annotations, highlights, and notes from Kavita and organizes them in your Obsidian vault. Choose between two export modes:
 
-**Example output:**
+### Hierarchical Folders (Recommended)
+
+Organizes annotations as `Root Folder / Series / Book.md`. Each book gets its own markdown file with rich frontmatter for tags and linking.
+
+```
+Kavita Annotations/
+├── The Great Gatsby/
+│   └── The Great Gatsby.md
+├── Foundation Series/
+│   ├── Foundation.md
+│   ├── Foundation and Empire.md
+│   └── Second Foundation.md
+└── Dune/
+    └── Dune.md
+```
+
+**Example book file:**
+
+```markdown
+---
+tags:
+  - kavita
+  - fiction
+  - classic
+kavita_series_id: 42
+kavita_chapter_id: 123
+updated: 2025-12-19T10:30:00Z
+---
+
+# The Great Gatsby
+
+**Series:** [[The Great Gatsby]]
+**Author:** [[F. Scott Fitzgerald]]
+
+## Annotations
+
+#### Chapter: One
+
+> In my younger and more vulnerable years my father gave me some advice...
+
+*Note:* This opening is iconic
+
+Page 3
+
+---
+
+> So we beat on, boats against the current...
+
+Page 180
+```
+
+### Single File
+
+All annotations in one markdown file, grouped by series and chapter.
 
 ```markdown
 ---
@@ -21,21 +74,10 @@ updated: 2025-12-06T10:30:00Z
 ## The Great Gatsby
 
 **Author:** [[F. Scott Fitzgerald]]
-**Tags:** #kavita/series/the-great-gatsby #kavita/author/f-scott-fitzgerald
 
 ### Chapter 1
 
-> In my younger and more vulnerable years my father gave me some advice...
-
-*Note:* This opening is iconic
-
-Page 3
-
----
-
-> So we beat on, boats against the current...
-
-Page 180
+> In my younger and more vulnerable years...
 ```
 
 ## Installation
@@ -75,11 +117,14 @@ Once approved, you'll be able to install directly from Obsidian's community plug
 |---------|--------------|---------|
 | **Kavita URL** | Your Kavita server address | - |
 | **API Key** | Your Kavita API key for authentication | - |
-| **Output Path** | Where to save your annotations file | `kavita-annotations.md` |
+| **Export Mode** | Choose between "Single file" or "Hierarchical folders" | Hierarchical folders |
+| **Output Path** | Where to save annotations (single file mode only) | `kavita-annotations.md` |
+| **Root Folder** | Root folder for book files (hierarchical mode only) | `Kavita Annotations` |
+| **Delete Orphaned Files** | Remove files when annotations are deleted | Yes |
 | **Include Comments** | Include your personal notes with highlights | Yes |
 | **Include Spoilers** | Include highlights marked as spoilers | No |
-| **Include Tags** | Generate Obsidian tags from your books | Yes |
-| **Tag Prefix** | Prefix for generated tags | `kavita/` |
+| **Include Tags** | Generate Obsidian tags from genres | Yes |
+| **Tag Prefix** | Prefix for generated tags (empty for no prefix) | (empty) |
 | **Include Wikilinks** | Create links to author/series notes | Yes |
 
 ## How to Use
@@ -90,17 +135,23 @@ Once approved, you'll be able to install directly from Obsidian's community plug
 
 **Option 2:** Press `Ctrl/Cmd + P` to open the command palette, then search for "Sync Kavita Annotations"
 
-Your annotations will be saved to the file you specified in settings.
+In **hierarchical mode**, each book becomes its own file in a folder structure. In **single file mode**, all annotations are saved to one file.
 
 ### Link to Your Annotations
 
-The plugin creates headings for each book, so you can link directly to them from other notes:
+**Hierarchical mode:** Each book is its own note, perfect for Obsidian's graph view and backlinks:
+
+```markdown
+See my highlights from [[The Great Gatsby]]
+```
+
+**Single file mode:** Link to specific sections:
 
 ```markdown
 See my highlights from [[kavita-annotations#The Great Gatsby]]
 ```
 
-If you have notes for authors or books, the wikilinks will automatically connect:
+If you have notes for authors or series, the wikilinks will automatically connect:
 
 ```markdown
 **Author:** [[F. Scott Fitzgerald]]  ← Links to your author note if it exists
