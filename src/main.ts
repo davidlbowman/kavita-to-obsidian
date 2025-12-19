@@ -7,6 +7,7 @@ import { Effect, Layer } from "effect";
 import { type App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { DEFAULT_SETTINGS } from "./schemas.js";
 import { AnnotationSyncer } from "./services/AnnotationSyncer.js";
+import { HierarchicalSyncer } from "./services/HierarchicalSyncer.js";
 import { KavitaClient } from "./services/KavitaClient.js";
 import { ObsidianAdapter } from "./services/ObsidianAdapter.js";
 import { ObsidianApp } from "./services/ObsidianApp.js";
@@ -76,10 +77,7 @@ export default class KavitaToObsidianPlugin extends Plugin {
 
 		new Notice("Syncing annotations…");
 
-		const program = Effect.gen(function* () {
-			const syncer = yield* AnnotationSyncer;
-			return yield* syncer.syncToFile;
-		});
+		const isHierarchical = this.settings.exportMode === "hierarchical";
 
 		const ConfigLayer = PluginConfig.fromSettings(this.settings);
 		const ObsidianAppLayer = Layer.succeed(ObsidianApp, this.app);
@@ -93,25 +91,57 @@ export default class KavitaToObsidianPlugin extends Plugin {
 			Layer.provide(ObsidianHttpClient),
 		);
 
-		const SyncerLayer = AnnotationSyncer.Default.pipe(
-			Layer.provide(KavitaClientLayer),
-			Layer.provide(ObsidianAdapterLayer),
-			Layer.provide(ConfigLayer),
-		);
-
-		const runnable = program.pipe(Effect.provide(SyncerLayer));
-
-		Effect.runPromise(runnable)
-			.then((result) => {
-				new Notice(
-					`Synced ${result.count} annotations to ${result.outputPath}`,
-				);
-			})
-			.catch((error: unknown) => {
-				const message =
-					error instanceof Error ? error.message : "Unknown error";
-				new Notice(`Sync failed: ${message}`);
+		if (isHierarchical) {
+			const program = Effect.gen(function* () {
+				const syncer = yield* HierarchicalSyncer;
+				return yield* syncer.syncAll;
 			});
+
+			const SyncerLayer = HierarchicalSyncer.Default.pipe(
+				Layer.provide(KavitaClientLayer),
+				Layer.provide(ObsidianAdapterLayer),
+				Layer.provide(ConfigLayer),
+			);
+
+			const runnable = program.pipe(Effect.provide(SyncerLayer));
+
+			Effect.runPromise(runnable)
+				.then((result) => {
+					new Notice(
+						`Synced ${result.totalAnnotations} annotations across ${result.seriesCount} series (${result.bookCount} books)`,
+					);
+				})
+				.catch((error: unknown) => {
+					const message =
+						error instanceof Error ? error.message : "Unknown error";
+					new Notice(`Sync failed: ${message}`);
+				});
+		} else {
+			const program = Effect.gen(function* () {
+				const syncer = yield* AnnotationSyncer;
+				return yield* syncer.syncToFile;
+			});
+
+			const SyncerLayer = AnnotationSyncer.Default.pipe(
+				Layer.provide(KavitaClientLayer),
+				Layer.provide(ObsidianAdapterLayer),
+				Layer.provide(ConfigLayer),
+			);
+
+			const runnable = program.pipe(Effect.provide(SyncerLayer));
+
+			Effect.runPromise(runnable)
+				.then((result) => {
+					new Notice(
+						`Synced ${result.count} annotations to ${result.outputPath}`,
+					);
+				})
+				.catch((error: unknown) => {
+					const message =
+						error instanceof Error ? error.message : "Unknown error";
+					new Notice(`Sync failed: ${message}`);
+				});
+		}
 	}
 }
 

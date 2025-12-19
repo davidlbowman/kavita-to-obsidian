@@ -35,6 +35,7 @@ export interface SyncResult {
  * Annotation syncer service.
  *
  * Orchestrates fetching annotations from Kavita and writing them to Obsidian.
+ * Used for single-file export mode.
  *
  * @since 0.0.1
  * @category Services
