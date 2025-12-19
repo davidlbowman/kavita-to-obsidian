@@ -8,10 +8,17 @@
  *
  * @module
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { FetchHttpClient } from "@effect/platform";
-import { describe, expect, it, beforeAll, afterAll } from "@effect/vitest";
+import { afterAll, beforeAll, describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option, Redacted } from "effect";
 import { HierarchicalSyncer } from "../src/services/HierarchicalSyncer.js";
 import { KavitaClient } from "../src/services/KavitaClient.js";
@@ -40,8 +47,8 @@ const createFilesystemAdapter = (baseDir: string) => {
 			Effect.sync(() => {
 				const fullPath = join(baseDir, path);
 				const dir = fullPath.substring(0, fullPath.lastIndexOf("/"));
-				ensureDir(dir.replace(baseDir + "/", ""));
-				Bun.writeSync(Bun.file(fullPath), content);
+				ensureDir(dir.replace(`${baseDir}/`, ""));
+				writeFileSync(fullPath, content, "utf-8");
 			}),
 		appendToFile: () => Effect.void,
 		readFile: (path: string) =>
@@ -51,9 +58,7 @@ const createFilesystemAdapter = (baseDir: string) => {
 			}),
 		getFile: (path: string) =>
 			Effect.succeed(
-				existsSync(join(baseDir, path))
-					? Option.some({ path })
-					: Option.none(),
+				existsSync(join(baseDir, path)) ? Option.some({ path }) : Option.none(),
 			),
 		listMarkdownFiles: Effect.succeed([]),
 		ensureFolderExists: (path: string) =>
@@ -151,15 +156,25 @@ describe("HierarchicalSyncer Integration", () => {
 				.map((d) => d.name);
 			expect(seriesFolders.length).toBeGreaterThan(0);
 
+			const firstSeriesFolder = seriesFolders[0];
+			if (!firstSeriesFolder) {
+				throw new Error("No series folders found");
+			}
+
 			// Verify book files exist
-			const firstSeriesPath = join(rootPath, seriesFolders[0]!);
+			const firstSeriesPath = join(rootPath, firstSeriesFolder);
 			const bookFiles = readdirSync(firstSeriesPath, { withFileTypes: true })
 				.filter((d) => d.isFile() && d.name.endsWith(".md"))
 				.map((d) => d.name);
 			expect(bookFiles.length).toBeGreaterThan(0);
 
+			const firstBookFile = bookFiles[0];
+			if (!firstBookFile) {
+				throw new Error("No book files found");
+			}
+
 			// Verify book file content
-			const firstBookPath = join(firstSeriesPath, bookFiles[0]!);
+			const firstBookPath = join(firstSeriesPath, firstBookFile);
 			const content = readFileSync(firstBookPath, "utf-8");
 
 			// Check frontmatter
@@ -192,11 +207,25 @@ describe("HierarchicalSyncer Integration", () => {
 				.filter((d) => d.isDirectory())
 				.map((d) => d.name);
 
-			const firstSeriesPath = join(rootPath, seriesFolders[0]!);
-			const bookFiles = readdirSync(firstSeriesPath)
-				.filter((f) => f.endsWith(".md"));
+			const firstSeriesFolder = seriesFolders[0];
+			if (!firstSeriesFolder) {
+				throw new Error("No series folders found");
+			}
 
-			const content = readFileSync(join(firstSeriesPath, bookFiles[0]!), "utf-8");
+			const firstSeriesPath = join(rootPath, firstSeriesFolder);
+			const bookFiles = readdirSync(firstSeriesPath).filter((f) =>
+				f.endsWith(".md"),
+			);
+
+			const firstBookFile = bookFiles[0];
+			if (!firstBookFile) {
+				throw new Error("No book files found");
+			}
+
+			const content = readFileSync(
+				join(firstSeriesPath, firstBookFile),
+				"utf-8",
+			);
 
 			// Verify kavita_series_id and kavita_chapter_id in frontmatter
 			expect(content).toMatch(/kavita_series_id:\s*\d+/);
@@ -222,11 +251,25 @@ describe("HierarchicalSyncer Integration", () => {
 				.filter((d) => d.isDirectory())
 				.map((d) => d.name);
 
-			const firstSeriesPath = join(rootPath, seriesFolders[0]!);
-			const bookFiles = readdirSync(firstSeriesPath)
-				.filter((f) => f.endsWith(".md"));
+			const firstSeriesFolder = seriesFolders[0];
+			if (!firstSeriesFolder) {
+				throw new Error("No series folders found");
+			}
 
-			const content = readFileSync(join(firstSeriesPath, bookFiles[0]!), "utf-8");
+			const firstSeriesPath = join(rootPath, firstSeriesFolder);
+			const bookFiles = readdirSync(firstSeriesPath).filter((f) =>
+				f.endsWith(".md"),
+			);
+
+			const firstBookFile = bookFiles[0];
+			if (!firstBookFile) {
+				throw new Error("No book files found");
+			}
+
+			const content = readFileSync(
+				join(firstSeriesPath, firstBookFile),
+				"utf-8",
+			);
 
 			// Should contain wikilink to series
 			expect(content).toMatch(/\*\*Series:\*\*\s*\[\[.+\]\]/);

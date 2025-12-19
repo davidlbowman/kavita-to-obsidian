@@ -5,6 +5,52 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2025-12-19
+
+### Added
+
+- **Hierarchical Folder Export Mode**
+  - New export mode: organize annotations as `Root Folder / Series / Book.md`
+  - Each book gets its own markdown file with all its annotations
+  - Rich YAML frontmatter with tags for series, author, and genre
+  - Wikilinks for series and author names for Obsidian graph integration
+  - Configurable root folder name (default: "Kavita Annotations")
+- **New Settings**
+  - `exportMode` - Choose between "Single file" or "Hierarchical folders"
+  - `rootFolderName` - Name of the root folder for hierarchical mode
+  - `deleteOrphanedFiles` - Auto-remove files when annotations are deleted
+- **Path Sanitization**
+  - Safe handling of special characters in series/book names
+  - Windows reserved name handling (CON, PRN, etc.)
+  - Automatic truncation of very long titles (200 char limit)
+  - Duplicate book title handling with chapter ID suffix
+
+### Changed
+
+- Settings UI now shows mode-specific options (output path vs root folder)
+- Sync notification shows appropriate message for each mode
+
+### Technical
+
+- New `HierarchicalSyncer` Effect service for folder-based sync
+- New `bookFile.ts` formatter for individual book files
+- New `paths.ts` utilities for path sanitization
+- Added folder operations to `ObsidianAdapter`
+- 167 unit tests (up from 127)
+
+## [1.0.0] - 2025-12-08
+
+### Added
+
+- **Stress Testing**
+  - Added stress test suite for 10,000 annotations
+  - Performance benchmarks for large annotation sets
+
+### Changed
+
+- Promoted to stable v1.0.0 release
+- All core features considered production-ready
+
 ## [0.0.3] - 2025-12-07
 
 ### Changed
@@ -84,6 +130,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bun bundler for fast builds
 - TypeScript with strict mode enabled
 
+[1.1.0]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v1.1.0
+[1.0.0]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v1.0.0
 [0.0.3]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.3
 [0.0.2]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.2
 [0.0.1]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.1
