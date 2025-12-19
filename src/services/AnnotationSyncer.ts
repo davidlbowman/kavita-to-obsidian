@@ -3,7 +3,9 @@
  *
  * @module
  */
+
 import { Effect } from "effect";
+import { normalizePath } from "obsidian";
 import type {
 	KavitaAuthError,
 	KavitaNetworkError,
@@ -35,6 +37,7 @@ export interface SyncResult {
  * Annotation syncer service.
  *
  * Orchestrates fetching annotations from Kavita and writing them to Obsidian.
+ * Used for single-file export mode.
  *
  * @since 0.0.1
  * @category Services
@@ -166,11 +169,12 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 					chapterInfoMap,
 				);
 
-				yield* obsidian.writeFile(config.outputPath, markdown);
+				const normalizedPath = normalizePath(config.outputPath);
+				yield* obsidian.writeFile(normalizedPath, markdown);
 
 				return {
 					count: annotations.length,
-					outputPath: config.outputPath,
+					outputPath: normalizedPath,
 				};
 			});
 

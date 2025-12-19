@@ -81,6 +81,9 @@ const MockPluginConfig = Layer.succeed(
 		includeTags: true,
 		tagPrefix: "",
 		includeWikilinks: true,
+		exportMode: "single-file",
+		rootFolderName: "Kavita Annotations",
+		deleteOrphanedFiles: true,
 	}),
 );
 

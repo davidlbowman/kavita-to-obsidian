@@ -37,20 +37,23 @@ bun run build
 
 ```bash
 # Ensure code quality before committing
-bun run lint:fix && bun run typecheck && bun run test
+bun run lint:fix && bun run lint:obsidian && bun run typecheck && bun run test
 ```
 
 ## Code Style
 
 ### Linting & Formatting
 
-This project uses [Biome](https://biomejs.dev/) for linting and formatting:
+This project uses [Biome](https://biomejs.dev/) for linting and formatting, plus the official [Obsidian ESLint plugin](https://github.com/obsidianmd/eslint-plugin) for plugin-specific rules:
 
 ```bash
-bun run lint        # Check for issues
-bun run lint:fix    # Auto-fix issues
-bun run format      # Format code
+bun run lint           # Check for Biome issues
+bun run lint:fix       # Auto-fix Biome issues
+bun run lint:obsidian  # Check Obsidian plugin rules (REQUIRED before release)
+bun run format         # Format code
 ```
+
+**Important:** Before any release, `bun run lint:obsidian` must pass. This validates against Obsidian's plugin submission requirements.
 
 ### Comments
 
@@ -80,6 +83,32 @@ const fetchAllAnnotations = Effect.gen(function* () {
 - Prefer `const` over `let`
 - Use `readonly` for immutable properties
 - Avoid `any` - use `unknown` with type guards
+
+### Obsidian Plugin Guidelines
+
+Follow [Obsidian's plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines) to avoid CI/CD rejections:
+
+**Security:**
+- Never use `innerHTML`, `outerHTML`, or `insertAdjacentHTML` with user input
+- Use DOM API or Obsidian helpers: `createEl()`, `createDiv()`, `createSpan()`
+
+**Vault Operations:**
+- Use `app.vault` methods, not `app.vault.adapter` (vault has caching and safety)
+- Use `Vault.process()` for atomic file modifications (not `Vault.modify()`)
+- Use `FileManager.processFrontMatter()` for YAML frontmatter
+- Use `normalizePath()` on user-defined or constructed paths
+- Use `getFileByPath()` instead of iterating all files
+
+**Resource Management:**
+- Clean up resources in `onunload()`
+- Use `registerEvent()` and `addCommand()` for automatic cleanup
+- Don't store references to custom views directly
+
+**UI:**
+- Use `this.app` not the global `app` object
+- Use CSS classes and Obsidian CSS variables (not hardcoded styles)
+- Use Sentence case for settings text
+- Don't set default hotkeys for commands
 
 ## Effect-TS Patterns
 
@@ -289,6 +318,7 @@ kavita-to-obsidian/
 
 3. **PR checklist**:
    - [ ] Code passes `bun run lint`
+   - [ ] Code passes `bun run lint:obsidian`
    - [ ] Code passes `bun run typecheck`
    - [ ] All tests pass `bun run test`
    - [ ] JSDoc comments for public APIs
