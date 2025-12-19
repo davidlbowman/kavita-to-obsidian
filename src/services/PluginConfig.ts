@@ -7,6 +7,14 @@ import { Config, Effect, Layer, Redacted } from "effect";
 import type { PluginSettings } from "../schemas.js";
 
 /**
+ * Export mode type.
+ *
+ * @since 1.1.0
+ * @category Config
+ */
+export type ExportModeType = "single-file" | "hierarchical";
+
+/**
  * Shape of plugin configuration values.
  *
  * @since 0.0.1
@@ -25,6 +33,12 @@ export interface PluginConfigShape {
 	readonly tagPrefix: string;
 	/** @since 0.0.2 */
 	readonly includeWikilinks: boolean;
+	/** @since 1.1.0 */
+	readonly exportMode: ExportModeType;
+	/** @since 1.1.0 */
+	readonly rootFolderName: string;
+	/** @since 1.1.0 */
+	readonly deleteOrphanedFiles: boolean;
 }
 
 /**
@@ -58,6 +72,15 @@ const EnvConfig = Config.all({
 	includeWikilinks: Config.boolean("INCLUDE_WIKILINKS").pipe(
 		Config.withDefault(true),
 	),
+	exportMode: Config.string("EXPORT_MODE").pipe(
+		Config.withDefault("single-file" as ExportModeType),
+	) as Config.Config<ExportModeType>,
+	rootFolderName: Config.string("ROOT_FOLDER_NAME").pipe(
+		Config.withDefault("Kavita Annotations"),
+	),
+	deleteOrphanedFiles: Config.boolean("DELETE_ORPHANED_FILES").pipe(
+		Config.withDefault(true),
+	),
 });
 
 /**
@@ -81,6 +104,9 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 			includeTags: true,
 			tagPrefix: "",
 			includeWikilinks: true,
+			exportMode: "single-file",
+			rootFolderName: "Kavita Annotations",
+			deleteOrphanedFiles: true,
 		}),
 	},
 ) {
@@ -103,6 +129,9 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 				includeTags: settings.includeTags,
 				tagPrefix: settings.tagPrefix,
 				includeWikilinks: settings.includeWikilinks,
+				exportMode: settings.exportMode,
+				rootFolderName: settings.rootFolderName,
+				deleteOrphanedFiles: settings.deleteOrphanedFiles,
 			}),
 		);
 	}

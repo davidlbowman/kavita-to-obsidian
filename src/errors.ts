@@ -108,12 +108,34 @@ export class ObsidianWriteError extends Schema.TaggedError<ObsidianWriteError>()
 }
 
 /**
+ * Error with folder operations in Obsidian vault.
+ *
+ * @since 1.1.0
+ * @category Obsidian Errors
+ */
+export class ObsidianFolderError extends Schema.TaggedError<ObsidianFolderError>()(
+	"ObsidianFolderError",
+	{
+		path: Schema.String,
+		operation: Schema.String,
+		cause: Schema.optionalWith(Schema.Defect, { exact: true }),
+	},
+) {
+	override get message(): string {
+		return `Folder ${this.operation} failed: ${this.path}`;
+	}
+}
+
+/**
  * Union of all Obsidian errors.
  *
  * @since 0.0.1
  * @category Obsidian Errors
  */
-export type ObsidianError = ObsidianFileNotFoundError | ObsidianWriteError;
+export type ObsidianError =
+	| ObsidianFileNotFoundError
+	| ObsidianWriteError
+	| ObsidianFolderError;
 
 /**
  * Union of all sync-related errors.

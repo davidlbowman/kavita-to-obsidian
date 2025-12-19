@@ -26,6 +26,9 @@ interface PluginSettingsData {
 	includeTags: boolean;
 	tagPrefix: string;
 	includeWikilinks: boolean;
+	exportMode: "single-file" | "hierarchical";
+	rootFolderName: string;
+	deleteOrphanedFiles: boolean;
 }
 
 export default class KavitaToObsidianPlugin extends Plugin {
@@ -153,18 +156,79 @@ class KavitaSettingTab extends PluginSettingTab {
 				text.inputEl.setAttribute("type", "password");
 			});
 
+		new Setting(containerEl).setName("Export").setHeading();
+
 		new Setting(containerEl)
-			.setName("Output path")
-			.setDesc("Path to the Markdown file where annotations will be saved.")
-			.addText((text) =>
-				text
-					.setPlaceholder("Enter file path")
-					.setValue(this.plugin.settings.outputPath ?? "kavita-annotations.md")
+			.setName("Export mode")
+			.setDesc(
+				"Single file exports all annotations to one file. Hierarchical creates folders for each series with separate book files.",
+			)
+			.addDropdown((dropdown) =>
+				dropdown
+					.addOption("single-file", "Single file")
+					.addOption("hierarchical", "Hierarchical folders")
+					.setValue(this.plugin.settings.exportMode ?? "single-file")
 					.onChange(async (value) => {
-						this.plugin.settings.outputPath = value;
+						this.plugin.settings.exportMode = value as
+							| "single-file"
+							| "hierarchical";
 						await this.plugin.saveSettings();
+						this.display();
 					}),
 			);
+
+		if (this.plugin.settings.exportMode === "single-file") {
+			new Setting(containerEl)
+				.setName("Output path")
+				.setDesc("Path to the Markdown file where annotations will be saved.")
+				.addText((text) =>
+					text
+						.setPlaceholder("Enter file path")
+						.setValue(
+							this.plugin.settings.outputPath ?? "kavita-annotations.md",
+						)
+						.onChange(async (value) => {
+							this.plugin.settings.outputPath = value;
+							await this.plugin.saveSettings();
+						}),
+				);
+		} else {
+			new Setting(containerEl)
+				.setName("Root folder")
+				.setDesc("Name of the folder where series folders will be created.")
+				.addText((text) =>
+					text
+						.setPlaceholder("Enter folder name")
+						.setValue(
+							this.plugin.settings.rootFolderName ?? "Kavita Annotations",
+						)
+						.onChange(async (value) => {
+							this.plugin.settings.rootFolderName = value;
+							await this.plugin.saveSettings();
+						}),
+				);
+
+			new Setting(containerEl)
+				.setName("Delete orphaned files")
+				.setDesc(
+					"Automatically remove files when their source annotations are deleted.",
+				)
+				.addToggle((toggle) =>
+					toggle
+						.setValue(this.plugin.settings.deleteOrphanedFiles ?? true)
+						.onChange(async (value) => {
+							this.plugin.settings.deleteOrphanedFiles = value;
+							await this.plugin.saveSettings();
+						}),
+				);
+
+			containerEl.createEl("p", {
+				text: "Files in hierarchical mode are fully managed by this plugin and regenerated on each sync. Any manual edits will be lost.",
+				cls: "setting-item-description",
+			});
+		}
+
+		new Setting(containerEl).setName("Content").setHeading();
 
 		new Setting(containerEl)
 			.setName("Include comments")

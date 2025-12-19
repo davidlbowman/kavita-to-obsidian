@@ -102,6 +102,14 @@ export const AnnotationsResponse = Schema.Array(AnnotationDto);
 export type AnnotationsResponseType = typeof AnnotationsResponse.Type;
 
 /**
+ * Export mode for annotations.
+ *
+ * @since 1.1.0
+ * @category Plugin Schemas
+ */
+export const ExportMode = Schema.Literal("single-file", "hierarchical");
+
+/**
  * Plugin settings stored in Obsidian.
  *
  * @since 0.0.1
@@ -152,6 +160,30 @@ export class PluginSettings extends Schema.Class<PluginSettings>(
 		exact: true,
 		default: () => true,
 	}),
+	/**
+	 * Export mode: single file or hierarchical folders.
+	 * @since 1.1.0
+	 */
+	exportMode: Schema.optionalWith(ExportMode, {
+		exact: true,
+		default: () => "single-file" as const,
+	}),
+	/**
+	 * Root folder name for hierarchical mode.
+	 * @since 1.1.0
+	 */
+	rootFolderName: Schema.optionalWith(Schema.String, {
+		exact: true,
+		default: () => "Kavita Annotations",
+	}),
+	/**
+	 * Delete orphaned files when annotations are removed from Kavita.
+	 * @since 1.1.0
+	 */
+	deleteOrphanedFiles: Schema.optionalWith(Schema.Boolean, {
+		exact: true,
+		default: () => true,
+	}),
 }) {}
 
 /**
@@ -170,6 +202,9 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	includeTags: true,
 	tagPrefix: "",
 	includeWikilinks: true,
+	exportMode: "single-file",
+	rootFolderName: "Kavita Annotations",
+	deleteOrphanedFiles: true,
 };
 
 /**

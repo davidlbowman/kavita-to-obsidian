@@ -27,6 +27,9 @@ const TestConfigLayer = Layer.succeed(
 		includeTags: true,
 		tagPrefix: "kavita/",
 		includeWikilinks: true,
+		exportMode: "single-file",
+		rootFolderName: "Kavita Annotations",
+		deleteOrphanedFiles: true,
 	}),
 );
 
