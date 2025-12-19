@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-12-19
+
+### Added
+
+- **User-Friendly Error Handling**
+  - Specific, actionable error messages for each error type
+  - Links to troubleshooting guide in error notices
+  - Type-safe error routing using Effect Match
+- **Troubleshooting Guide**
+  - New `TROUBLESHOOTING.md` with solutions for common errors
+  - Quick-fix table in README linking to detailed solutions
+  - Covers authentication, network, parse, and file operation errors
+
+### Technical
+
+- New `ErrorHandler.ts` service for centralized error handling
+- 178 unit tests (up from 167)
+- 11 new tests for error handling coverage
+
 ## [1.1.0] - 2025-12-19
 
 ### Added
@@ -130,8 +149,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Bun bundler for fast builds
 - TypeScript with strict mode enabled
 
-[1.1.0]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v1.1.0
-[1.0.0]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v1.0.0
+[1.2.0]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/1.2.0
+[1.1.0]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/1.1.0
+[1.0.0]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/1.0.0
 [0.0.3]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.3
 [0.0.2]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.2
 [0.0.1]: https://github.com/davidlbowman/kavita-to-obsidian/releases/tag/v0.0.1
