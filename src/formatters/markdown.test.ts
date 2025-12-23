@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
 import {
 	type ChapterInfoMap,
+	extractTextFromQuillDelta,
 	type FormatOptions,
 	formatAnnotation,
 	generateBookHeader,
@@ -17,6 +18,7 @@ import {
 	getBookSortOrder,
 	getBookTitle,
 	getChapterTitle,
+	getCommentText,
 	getGenreNames,
 	getLibraryName,
 	getSeriesName,
@@ -105,6 +107,166 @@ describe("makeTag", () => {
 describe("makeWikilink", () => {
 	it("creates wikilink", () => {
 		expect(makeWikilink("The Great Gatsby")).toBe("[[The Great Gatsby]]");
+	});
+});
+
+describe("extractTextFromQuillDelta", () => {
+	it("extracts text from valid Quill Delta", () => {
+		expect(extractTextFromQuillDelta('{"ops":[{"insert":"Hello\\n"}]}')).toBe(
+			"Hello",
+		);
+	});
+
+	it("handles multiple insert operations", () => {
+		expect(
+			extractTextFromQuillDelta('{"ops":[{"insert":"Hello "},{"insert":"World\\n"}]}'),
+		).toBe("Hello World");
+	});
+
+	it("returns null for non-JSON string", () => {
+		expect(extractTextFromQuillDelta("plain text")).toBe(null);
+	});
+
+	it("returns null for empty ops array", () => {
+		expect(extractTextFromQuillDelta('{"ops":[]}')).toBe(null);
+	});
+
+	it("returns null for ops with only retain operations", () => {
+		expect(extractTextFromQuillDelta('{"ops":[{"retain":5}]}')).toBe(null);
+	});
+
+	it("returns null for ops with only delete operations", () => {
+		expect(extractTextFromQuillDelta('{"ops":[{"delete":3}]}')).toBe(null);
+	});
+
+	it("ignores non-string insert values (embeds)", () => {
+		expect(
+			extractTextFromQuillDelta('{"ops":[{"insert":{"image":"url"}}]}'),
+		).toBe(null);
+	});
+
+	it("handles mixed operations (extracts only insert strings)", () => {
+		expect(
+			extractTextFromQuillDelta(
+				'{"ops":[{"retain":5},{"insert":"text"},{"delete":2}]}',
+			),
+		).toBe("text");
+	});
+
+	it("returns null for malformed JSON", () => {
+		expect(extractTextFromQuillDelta('{"ops":invalid}')).toBe(null);
+	});
+
+	it("returns null for JSON without ops", () => {
+		expect(extractTextFromQuillDelta('{"foo":"bar"}')).toBe(null);
+	});
+
+	it("returns null for ops that is not an array", () => {
+		expect(extractTextFromQuillDelta('{"ops":"not an array"}')).toBe(null);
+	});
+
+	it("returns null for empty string", () => {
+		expect(extractTextFromQuillDelta("")).toBe(null);
+	});
+
+	it("returns null for empty object", () => {
+		expect(extractTextFromQuillDelta("{}")).toBe(null);
+	});
+
+	it("handles whitespace in JSON", () => {
+		expect(extractTextFromQuillDelta('  {"ops":[{"insert":"test\\n"}]}  ')).toBe(
+			"test",
+		);
+	});
+
+	it("handles insert with attributes (ignores attributes, keeps text)", () => {
+		expect(
+			extractTextFromQuillDelta(
+				'{"ops":[{"insert":"bold text","attributes":{"bold":true}}]}',
+			),
+		).toBe("bold text");
+	});
+});
+
+describe("getCommentText", () => {
+	it("returns commentPlainText when available", () => {
+		const annotation = createAnnotation({
+			commentPlainText: "Plain text note",
+			comment: '{"ops":[{"insert":"JSON note\\n"}]}',
+		});
+		expect(getCommentText(annotation)).toBe("Plain text note");
+	});
+
+	it("extracts from Quill Delta when commentPlainText is null", () => {
+		const annotation = createAnnotation({
+			commentPlainText: null,
+			comment: '{"ops":[{"insert":"Quill note\\n"}]}',
+		});
+		expect(getCommentText(annotation)).toBe("Quill note");
+	});
+
+	it("returns plain text when comment is not JSON-like", () => {
+		const annotation = createAnnotation({
+			commentPlainText: null,
+			comment: "Plain text comment",
+		});
+		expect(getCommentText(annotation)).toBe("Plain text comment");
+	});
+
+	it("returns null for malformed JSON (does not expose raw JSON)", () => {
+		const annotation = createAnnotation({
+			commentPlainText: null,
+			comment: '{"ops":invalid}',
+		});
+		expect(getCommentText(annotation)).toBe(null);
+	});
+
+	it("returns null for empty comment", () => {
+		const annotation = createAnnotation({
+			commentPlainText: null,
+			comment: "",
+		});
+		expect(getCommentText(annotation)).toBe(null);
+	});
+
+	it("returns null for empty object comment", () => {
+		const annotation = createAnnotation({
+			commentPlainText: null,
+			comment: "{}",
+		});
+		expect(getCommentText(annotation)).toBe(null);
+	});
+
+	it("returns null when both fields are null", () => {
+		const annotation = createAnnotation({
+			commentPlainText: null,
+			comment: null,
+		});
+		expect(getCommentText(annotation)).toBe(null);
+	});
+
+	it("trims whitespace from commentPlainText", () => {
+		const annotation = createAnnotation({
+			commentPlainText: "  trimmed  ",
+			comment: null,
+		});
+		expect(getCommentText(annotation)).toBe("trimmed");
+	});
+
+	it("trims whitespace from plain text comment", () => {
+		const annotation = createAnnotation({
+			commentPlainText: null,
+			comment: "  trimmed  ",
+		});
+		expect(getCommentText(annotation)).toBe("trimmed");
+	});
+
+	it("returns null for whitespace-only commentPlainText with JSON comment", () => {
+		const annotation = createAnnotation({
+			commentPlainText: "   ",
+			comment: '{"ops":[{"insert":"fallback\\n"}]}',
+		});
+		expect(getCommentText(annotation)).toBe("fallback");
 	});
 });
 
@@ -324,6 +486,50 @@ describe("formatAnnotation", () => {
 		expect(Option.isSome(result)).toBe(true);
 		if (Option.isSome(result)) {
 			expect(result.value).toContain("*Note:* My note");
+		}
+	});
+
+	it("uses commentPlainText when available", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: '{"ops":[{"insert":"JSON note\n"}]}',
+			commentPlainText: "Plain text note",
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* Plain text note");
+			expect(result.value).not.toContain("JSON note");
+		}
+	});
+
+	it("extracts text from Quill Delta JSON when commentPlainText is not available", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: '{"ops":[{"insert":"Just testing annotations\\n"}]}',
+			commentPlainText: null,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* Just testing annotations");
+			expect(result.value).not.toContain('{"ops"');
+		}
+	});
+
+	it("falls back to plain comment when Quill Delta parsing fails", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: "Plain text comment",
+			commentPlainText: null,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* Plain text comment");
 		}
 	});
 

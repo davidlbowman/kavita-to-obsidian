@@ -9,7 +9,7 @@
 import { Array, Option, pipe } from "effect";
 import type { AnnotationDto } from "../schemas.js";
 import type { FormatOptions } from "./markdown.js";
-import { toSlug } from "./markdown.js";
+import { getCommentText, toSlug } from "./markdown.js";
 
 /**
  * Options for formatting a book file.
@@ -133,14 +133,11 @@ export const formatBookAnnotation = (
 		.join("\n");
 	lines.push(blockquote);
 
-	const hasComment =
-		annotation.comment &&
-		annotation.comment.trim() !== "" &&
-		annotation.comment.trim() !== "{}";
+	const commentText = getCommentText(annotation);
 
-	if (options.includeComments && hasComment) {
+	if (options.includeComments && commentText) {
 		lines.push("");
-		lines.push(`*Note:* ${annotation.comment}`);
+		lines.push(`*Note:* ${commentText}`);
 	}
 
 	if (annotation.pageNumber !== undefined && annotation.pageNumber > 0) {

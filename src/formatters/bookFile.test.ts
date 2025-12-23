@@ -181,6 +181,47 @@ describe("formatBookAnnotation", () => {
 		}
 	});
 
+	it("uses commentPlainText when available", () => {
+		const annotation = createAnnotation({
+			comment: '{"ops":[{"insert":"JSON note\n"}]}',
+			commentPlainText: "Plain text note",
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* Plain text note");
+			expect(result.value).not.toContain("JSON note");
+		}
+	});
+
+	it("extracts text from Quill Delta JSON when commentPlainText is not available", () => {
+		const annotation = createAnnotation({
+			comment: '{"ops":[{"insert":"Just testing annotations\\n"}]}',
+			commentPlainText: null,
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* Just testing annotations");
+			expect(result.value).not.toContain('{"ops"');
+		}
+	});
+
+	it("falls back to plain comment when Quill Delta parsing fails", () => {
+		const annotation = createAnnotation({
+			comment: "Plain text comment",
+			commentPlainText: null,
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* Plain text comment");
+		}
+	});
+
 	it("excludes comment when disabled", () => {
 		const annotation = createAnnotation();
 		const options = { ...defaultFormatOptions, includeComments: false };

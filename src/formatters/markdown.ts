@@ -95,6 +95,137 @@ export const makeTag = (value: string, prefix = ""): string =>
 export const makeWikilink = (value: string): string => `[[${value}]]`;
 
 /**
+ * Extract plain text from Quill Delta JSON format.
+ *
+ * Quill Delta is a rich text format used by the Quill editor.
+ * This function extracts only the plain text from insert operations.
+ *
+ * Limitations:
+ * - Only extracts text from 'insert' operations
+ * - Ignores formatting attributes (bold, italic, links, etc.)
+ * - Ignores retain/delete operations
+ * - Ignores embedded objects (images, etc.)
+ *
+ * @example
+ * ```ts
+ * extractTextFromQuillDelta('{"ops":[{"insert":"Hello\\n"}]}') // "Hello"
+ * extractTextFromQuillDelta('{"ops":[{"retain":5}]}') // null
+ * extractTextFromQuillDelta('plain text') // null
+ * ```
+ *
+ * @since 1.1.2
+ * @category Formatters
+ */
+export const extractTextFromQuillDelta = (deltaJson: string): string | null => {
+	const trimmed = deltaJson.trim();
+
+	// Early exit for non-JSON strings (performance optimization)
+	if (!trimmed.startsWith("{")) {
+		return null;
+	}
+
+	try {
+		const delta = JSON.parse(trimmed) as unknown;
+
+		// Validate structure
+		if (
+			!delta ||
+			typeof delta !== "object" ||
+			!("ops" in delta) ||
+			!Array.isArray((delta as { ops: unknown }).ops)
+		) {
+			return null;
+		}
+
+		const ops = (delta as { ops: unknown[] }).ops;
+		if (ops.length === 0) {
+			return null;
+		}
+
+		const textParts: string[] = [];
+
+		for (const op of ops) {
+			if (op && typeof op === "object" && "insert" in op) {
+				const insert = (op as { insert: unknown }).insert;
+				// Only handle string inserts, ignore embeds (objects) and other types
+				if (typeof insert === "string") {
+					textParts.push(insert);
+				}
+			}
+			// Ignore retain/delete operations - they don't contain text
+		}
+
+		const text = textParts.join("").trim();
+		return text || null;
+	} catch {
+		// Invalid JSON - not a Quill Delta
+		return null;
+	}
+};
+
+/**
+ * Get the comment text from an annotation, preferring plain text over Quill Delta.
+ *
+ * Priority:
+ * 1. `commentPlainText` (if available and non-empty)
+ * 2. Parsed Quill Delta JSON from `comment` (if valid JSON starting with `{`)
+ * 3. Plain text `comment` (if not JSON-like)
+ * 4. `null` (for invalid/empty comments or unparseable JSON)
+ *
+ * @example
+ * ```ts
+ * // With commentPlainText
+ * getCommentText({ commentPlainText: "My note", comment: '{"ops":[...]}' }) // "My note"
+ *
+ * // With Quill Delta
+ * getCommentText({ commentPlainText: null, comment: '{"ops":[{"insert":"My note\\n"}]}' }) // "My note"
+ *
+ * // With plain text comment
+ * getCommentText({ commentPlainText: null, comment: 'Plain text' }) // "Plain text"
+ *
+ * // With malformed JSON (returns null to avoid exposing raw JSON)
+ * getCommentText({ commentPlainText: null, comment: '{"ops":invalid}' }) // null
+ * ```
+ *
+ * @since 1.1.2
+ * @category Formatters
+ */
+export const getCommentText = (
+	annotation: typeof AnnotationDto.Type,
+): string | null => {
+	// Priority 1: Use commentPlainText if available
+	if (annotation.commentPlainText) {
+		const trimmed = annotation.commentPlainText.trim();
+		if (trimmed) {
+			return trimmed;
+		}
+	}
+
+	// Priority 2/3: Handle comment field
+	if (annotation.comment) {
+		const trimmed = annotation.comment.trim();
+		if (!trimmed || trimmed === "{}") {
+			return null;
+		}
+
+		// If it looks like JSON, try to parse as Quill Delta
+		if (trimmed.startsWith("{")) {
+			const extracted = extractTextFromQuillDelta(trimmed);
+			if (extracted) {
+				return extracted;
+			}
+			// Failed to parse as Quill Delta - return null to avoid exposing raw JSON
+			return null;
+		}
+
+		// Not JSON-like, treat as plain text
+		return trimmed;
+	}
+
+	return null;
+};
+
+/**
  * Format a single annotation to markdown.
  *
  * @since 0.0.3
@@ -117,14 +248,11 @@ export const formatAnnotation = (
 		.join("\n");
 	lines.push(blockquote);
 
-	const hasComment =
-		annotation.comment &&
-		annotation.comment.trim() !== "" &&
-		annotation.comment.trim() !== "{}";
+	const commentText = getCommentText(annotation);
 
-	if (options.includeComments && hasComment) {
+	if (options.includeComments && commentText) {
 		lines.push("");
-		lines.push(`*Note:* ${annotation.comment}`);
+		lines.push(`*Note:* ${commentText}`);
 	}
 
 	if (annotation.pageNumber !== undefined && annotation.pageNumber > 0) {
