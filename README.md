@@ -159,21 +159,16 @@ If you have notes for authors or series, the wikilinks will automatically connec
 
 ## Troubleshooting
 
-### "Connection failed" or "Network error"
+For detailed solutions to common issues, see the [Troubleshooting Guide](./TROUBLESHOOTING.md).
 
-- Make sure your Kavita URL is correct and accessible
-- Check that Kavita is running
-- If using HTTPS, ensure your certificate is valid
+**Quick fixes:**
 
-### "Authentication failed"
-
-- Double-check your API key in Kavita's 3rd Party Clients settings
-- Try generating a new API key
-
-### Annotations not appearing
-
-- Make sure you have highlights/annotations in Kavita
-- Check that "Include Spoilers" is enabled if your annotations are marked as spoilers
+| Error | Solution |
+|-------|----------|
+| Authentication failed | [Regenerate your API key](./TROUBLESHOOTING.md#authentication-failed) |
+| Network error (404) | [Check your Kavita URL](./TROUBLESHOOTING.md#network-error-status-404) |
+| Connection refused | [Ensure Kavita is running](./TROUBLESHOOTING.md#connection-refused) |
+| No annotations synced | [Create highlights in Kavita first](./TROUBLESHOOTING.md#no-annotations-synced) |
 
 ## Questions or Issues?
 
