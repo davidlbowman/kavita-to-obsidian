@@ -6,9 +6,10 @@
  *
  * @module
  */
-import { FetchHttpClient } from "@effect/platform";
+
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Option, Redacted } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import type { AnnotationDto } from "../src/schemas.js";
 import { AnnotationSyncer } from "../src/services/AnnotationSyncer.js";
 import { KavitaClient } from "../src/services/KavitaClient.js";
@@ -20,7 +21,7 @@ const KAVITA_API_KEY = process.env.KAVITA_API_KEY ?? "";
 
 const TestConfigLayer = Layer.succeed(
 	PluginConfig,
-	new PluginConfig({
+	PluginConfig.of({
 		kavitaUrl: new URL(KAVITA_URL),
 		kavitaApiKey: Redacted.make(KAVITA_API_KEY),
 		outputPath: "stress-test-output.md",
@@ -33,10 +34,11 @@ const TestConfigLayer = Layer.succeed(
 		exportMode: "single-file",
 		rootFolderName: "Kavita Annotations",
 		deleteOrphanedFiles: true,
+		annotationTemplate: "",
 	}),
 );
 
-const KavitaClientLayer = KavitaClient.DefaultWithoutDependencies.pipe(
+const KavitaClientLayer = KavitaClient.layerNoDeps.pipe(
 	Layer.provide(TestConfigLayer),
 	Layer.provide(FetchHttpClient.layer),
 );
@@ -118,26 +120,26 @@ describe("Kavita Stress Test (10,000 annotations)", () => {
 		}).pipe(Effect.provide(KavitaClientLayer)),
 	);
 
-	it.effect.skip("full sync completes within performance budget", () =>
-		Effect.gen(function* () {
-			const mockAdapter = createMockObsidianAdapter();
+	it.effect.skip("full sync completes within performance budget", () => {
+		const mockAdapter = createMockObsidianAdapter();
 
-			const SyncerLayer = AnnotationSyncer.Default.pipe(
-				Layer.provide(KavitaClientLayer),
-				Layer.provide(mockAdapter.layer),
-				Layer.provide(TestConfigLayer),
-			);
+		const SyncerLayer = AnnotationSyncer.layerNoDeps.pipe(
+			Layer.provide(KavitaClientLayer),
+			Layer.provide(mockAdapter.layer),
+			Layer.provide(TestConfigLayer),
+		);
 
-			const syncer = yield* AnnotationSyncer.pipe(Effect.provide(SyncerLayer));
+		return Effect.gen(function* () {
+			const syncer = yield* AnnotationSyncer;
 
 			const startTime = Date.now();
-			const result = yield* syncer.syncToFile.pipe(Effect.provide(SyncerLayer));
+			const result = yield* syncer.syncToFile;
 			const syncTime = Date.now() - startTime;
 
 			/** Sync completed in ${syncTime}ms */
 
 			expect(result.count).toBeGreaterThanOrEqual(10_000);
-			expect(syncTime).toBeLessThan(60_000); // Should complete within 60 seconds
-		}),
-	);
+			expect(syncTime).toBeLessThan(60_000);
+		}).pipe(Effect.provide(SyncerLayer));
+	});
 });

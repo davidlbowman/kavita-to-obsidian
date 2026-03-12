@@ -3,8 +3,9 @@
  *
  * @module
  */
-import { Config, Effect, Layer, Redacted } from "effect";
+import { Config, Effect, Layer, Redacted, ServiceMap } from "effect";
 import type { PluginSettings } from "../schemas.js";
+import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
 
 /**
  * Export mode type.
@@ -39,6 +40,8 @@ export interface PluginConfigShape {
 	readonly rootFolderName: string;
 	/** @since 1.1.0 */
 	readonly deleteOrphanedFiles: boolean;
+	/** @since 1.2.0 */
+	readonly annotationTemplate: string;
 }
 
 /**
@@ -73,13 +76,16 @@ const EnvConfig = Config.all({
 		Config.withDefault(true),
 	),
 	exportMode: Config.string("EXPORT_MODE").pipe(
-		Config.withDefault("single-file" as ExportModeType),
+		Config.withDefault("hierarchical" as ExportModeType),
 	) as Config.Config<ExportModeType>,
 	rootFolderName: Config.string("ROOT_FOLDER_NAME").pipe(
 		Config.withDefault("Kavita Annotations"),
 	),
 	deleteOrphanedFiles: Config.boolean("DELETE_ORPHANED_FILES").pipe(
 		Config.withDefault(true),
+	),
+	annotationTemplate: Config.string("ANNOTATION_TEMPLATE").pipe(
+		Config.withDefault(DEFAULT_ANNOTATION_TEMPLATE),
 	),
 });
 
@@ -91,25 +97,10 @@ const EnvConfig = Config.all({
  * @since 0.0.1
  * @category Services
  */
-export class PluginConfig extends Effect.Service<PluginConfig>()(
-	"PluginConfig",
-	{
-		sync: (): PluginConfigShape => ({
-			kavitaUrl: new URL("http://localhost:5000"),
-			kavitaApiKey: Redacted.make(""),
-			outputPath: "kavita-annotations.md",
-			matchThreshold: 0.7,
-			includeComments: true,
-			includeSpoilers: false,
-			includeTags: true,
-			tagPrefix: "",
-			includeWikilinks: true,
-			exportMode: "single-file",
-			rootFolderName: "Kavita Annotations",
-			deleteOrphanedFiles: true,
-		}),
-	},
-) {
+export class PluginConfig extends ServiceMap.Service<
+	PluginConfig,
+	PluginConfigShape
+>()("PluginConfig") {
 	/**
 	 * Create config layer from Obsidian plugin settings.
 	 *
@@ -119,7 +110,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 	static fromSettings(settings: typeof PluginSettings.Type) {
 		return Layer.succeed(
 			PluginConfig,
-			new PluginConfig({
+			PluginConfig.of({
 				kavitaUrl: new URL(settings.kavitaUrl),
 				kavitaApiKey: Redacted.make(settings.kavitaApiKey),
 				outputPath: settings.outputPath,
@@ -132,6 +123,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 				exportMode: settings.exportMode,
 				rootFolderName: settings.rootFolderName,
 				deleteOrphanedFiles: settings.deleteOrphanedFiles,
+				annotationTemplate: settings.annotationTemplate,
 			}),
 		);
 	}
@@ -146,7 +138,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 		PluginConfig,
 		Effect.gen(function* () {
 			const config = yield* EnvConfig;
-			return new PluginConfig(config);
+			return PluginConfig.of(config);
 		}),
 	);
 }

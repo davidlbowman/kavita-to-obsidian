@@ -5,8 +5,10 @@
  */
 import { Effect, Layer } from "effect";
 import { type App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { DEFAULT_SETTINGS } from "./schemas.js";
+import { validateTemplate } from "./formatters/template.js";
+import { DEFAULT_ANNOTATION_TEMPLATE, DEFAULT_SETTINGS } from "./schemas.js";
 import { AnnotationSyncer } from "./services/AnnotationSyncer.js";
+import { showErrorNotice } from "./services/ErrorHandler.js";
 import { HierarchicalSyncer } from "./services/HierarchicalSyncer.js";
 import { KavitaClient } from "./services/KavitaClient.js";
 import { ObsidianAdapter } from "./services/ObsidianAdapter.js";
@@ -30,6 +32,7 @@ interface PluginSettingsData {
 	exportMode: "single-file" | "hierarchical";
 	rootFolderName: string;
 	deleteOrphanedFiles: boolean;
+	annotationTemplate: string;
 }
 
 export default class KavitaToObsidianPlugin extends Plugin {
@@ -82,11 +85,11 @@ export default class KavitaToObsidianPlugin extends Plugin {
 		const ConfigLayer = PluginConfig.fromSettings(this.settings);
 		const ObsidianAppLayer = Layer.succeed(ObsidianApp, this.app);
 
-		const ObsidianAdapterLayer = ObsidianAdapter.Default.pipe(
+		const ObsidianAdapterLayer = ObsidianAdapter.layerNoDeps.pipe(
 			Layer.provide(ObsidianAppLayer),
 		);
 
-		const KavitaClientLayer = KavitaClient.DefaultWithoutDependencies.pipe(
+		const KavitaClientLayer = KavitaClient.layerNoDeps.pipe(
 			Layer.provide(ConfigLayer),
 			Layer.provide(ObsidianHttpClient),
 		);
@@ -97,50 +100,60 @@ export default class KavitaToObsidianPlugin extends Plugin {
 				return yield* syncer.syncAll;
 			});
 
-			const SyncerLayer = HierarchicalSyncer.Default.pipe(
+			const SyncerLayer = HierarchicalSyncer.layerNoDeps.pipe(
 				Layer.provide(KavitaClientLayer),
 				Layer.provide(ObsidianAdapterLayer),
 				Layer.provide(ConfigLayer),
 			);
 
-			const runnable = program.pipe(Effect.provide(SyncerLayer));
+			const runnable = program.pipe(
+				Effect.provide(SyncerLayer),
+				Effect.match({
+					onSuccess: (result) => {
+						new Notice(
+							`Synced ${result.totalAnnotations} annotations across ${result.seriesCount} series (${result.bookCount} books)`,
+						);
+					},
+					onFailure: (error) => {
+						showErrorNotice(error);
+					},
+				}),
+			);
 
-			Effect.runPromise(runnable)
-				.then((result) => {
-					new Notice(
-						`Synced ${result.totalAnnotations} annotations across ${result.seriesCount} series (${result.bookCount} books)`,
-					);
-				})
-				.catch((error: unknown) => {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					new Notice(`Sync failed: ${message}`);
-				});
+			Effect.runPromise(runnable).catch((defect: unknown) => {
+				console.error("Kavita sync defect:", defect);
+				new Notice("Sync failed unexpectedly. Check the developer console.");
+			});
 		} else {
 			const program = Effect.gen(function* () {
 				const syncer = yield* AnnotationSyncer;
 				return yield* syncer.syncToFile;
 			});
 
-			const SyncerLayer = AnnotationSyncer.Default.pipe(
+			const SyncerLayer = AnnotationSyncer.layerNoDeps.pipe(
 				Layer.provide(KavitaClientLayer),
 				Layer.provide(ObsidianAdapterLayer),
 				Layer.provide(ConfigLayer),
 			);
 
-			const runnable = program.pipe(Effect.provide(SyncerLayer));
+			const runnable = program.pipe(
+				Effect.provide(SyncerLayer),
+				Effect.match({
+					onSuccess: (result) => {
+						new Notice(
+							`Synced ${result.count} annotations to ${result.outputPath}`,
+						);
+					},
+					onFailure: (error) => {
+						showErrorNotice(error);
+					},
+				}),
+			);
 
-			Effect.runPromise(runnable)
-				.then((result) => {
-					new Notice(
-						`Synced ${result.count} annotations to ${result.outputPath}`,
-					);
-				})
-				.catch((error: unknown) => {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					new Notice(`Sync failed: ${message}`);
-				});
+			Effect.runPromise(runnable).catch((defect: unknown) => {
+				console.error("Kavita sync defect:", defect);
+				new Notice("Sync failed unexpectedly. Check the developer console.");
+			});
 		}
 	}
 }
@@ -156,8 +169,6 @@ class KavitaSettingTab extends PluginSettingTab {
 	display(): void {
 		const { containerEl } = this;
 		containerEl.empty();
-
-		new Setting(containerEl).setName("Kavita to Obsidian").setHeading();
 
 		new Setting(containerEl)
 			.setName("Kavita URL")
@@ -197,7 +208,7 @@ class KavitaSettingTab extends PluginSettingTab {
 				dropdown
 					.addOption("single-file", "Single file")
 					.addOption("hierarchical", "Hierarchical folders")
-					.setValue(this.plugin.settings.exportMode ?? "single-file")
+					.setValue(this.plugin.settings.exportMode ?? "hierarchical")
 					.onChange(async (value) => {
 						this.plugin.settings.exportMode = value as
 							| "single-file"
@@ -326,6 +337,41 @@ class KavitaSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.includeWikilinks = value;
 						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Annotation template")
+			.setDesc(
+				"Customize how each annotation is formatted. Variables: {{blockquote}} (blockquoted text), {{selectedText}} (raw text), {{comment}}, {{pageNumber}}, {{chapterTitle}}, {{seriesName}}, {{createdUtc}}. Use {{#if variable}}...{{/if}} for conditionals.",
+			)
+			.addTextArea((text) => {
+				text
+					.setPlaceholder(DEFAULT_ANNOTATION_TEMPLATE)
+					.setValue(this.plugin.settings.annotationTemplate ?? "")
+					.onChange(async (value) => {
+						if (value.trim() !== "") {
+							const result = validateTemplate(value);
+							if (!result.valid) {
+								new Notice(`Template error: ${result.error}`);
+								return;
+							}
+						}
+						this.plugin.settings.annotationTemplate = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.rows = 8;
+				text.inputEl.cols = 40;
+			})
+			.addExtraButton((button) =>
+				button
+					.setIcon("reset")
+					.setTooltip("Reset to default template")
+					.onClick(async () => {
+						this.plugin.settings.annotationTemplate =
+							DEFAULT_ANNOTATION_TEMPLATE;
+						await this.plugin.saveSettings();
+						this.display();
 					}),
 			);
 	}

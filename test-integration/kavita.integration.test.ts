@@ -6,9 +6,10 @@
  *
  * @module
  */
-import { FetchHttpClient } from "@effect/platform";
+
 import { describe, expect, it } from "@effect/vitest";
 import { Effect, Layer, Redacted } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import { KavitaClient } from "../src/services/KavitaClient.js";
 import { PluginConfig } from "../src/services/PluginConfig.js";
 
@@ -17,7 +18,7 @@ const KAVITA_API_KEY = process.env.KAVITA_API_KEY ?? "";
 
 const TestConfigLayer = Layer.succeed(
 	PluginConfig,
-	new PluginConfig({
+	PluginConfig.of({
 		kavitaUrl: new URL(KAVITA_URL),
 		kavitaApiKey: Redacted.make(KAVITA_API_KEY),
 		outputPath: "test-output.md",
@@ -30,10 +31,11 @@ const TestConfigLayer = Layer.succeed(
 		exportMode: "single-file",
 		rootFolderName: "Kavita Annotations",
 		deleteOrphanedFiles: true,
+		annotationTemplate: "",
 	}),
 );
 
-const KavitaClientLayer = KavitaClient.DefaultWithoutDependencies.pipe(
+const KavitaClientLayer = KavitaClient.layerNoDeps.pipe(
 	Layer.provide(TestConfigLayer),
 	Layer.provide(FetchHttpClient.layer),
 );

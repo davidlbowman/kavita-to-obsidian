@@ -3,12 +3,13 @@
  *
  * @module
  */
+
+import { Effect, Layer } from "effect";
 import {
 	HttpClient,
 	HttpClientError,
 	HttpClientResponse,
-} from "@effect/platform";
-import { Effect, Layer } from "effect";
+} from "effect/unstable/http";
 import { requestUrl } from "obsidian";
 
 /**
@@ -22,7 +23,7 @@ import { requestUrl } from "obsidian";
  */
 export const ObsidianHttpClient = Layer.succeed(
 	HttpClient.HttpClient,
-	HttpClient.make((request) =>
+	HttpClient.make((request, _url, _signal, _fiber) =>
 		Effect.tryPromise({
 			try: async () => {
 				const url = request.url;
@@ -94,10 +95,11 @@ export const ObsidianHttpClient = Layer.succeed(
 				);
 			},
 			catch: (error) =>
-				new HttpClientError.RequestError({
-					request,
-					reason: "Transport",
-					cause: error,
+				new HttpClientError.HttpClientError({
+					reason: new HttpClientError.TransportError({
+						request,
+						cause: error,
+					}),
 				}),
 		}),
 	),

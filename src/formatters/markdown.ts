@@ -6,12 +6,14 @@
 import {
 	Array,
 	Number as EffectNumber,
-	Option,
 	Order,
 	pipe,
 	Record,
+	Result,
 } from "effect";
 import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
+import { decodeHtmlEntities, resolveComment } from "./sanitize.js";
+import { DEFAULT_ANNOTATION_TEMPLATE, renderTemplate } from "./template.js";
 
 /**
  * Map of seriesId to series metadata.
@@ -61,6 +63,8 @@ export interface FormatOptions {
 	readonly tagPrefix: string;
 	/** @since 0.0.2 */
 	readonly includeWikilinks: boolean;
+	/** @since 1.2.0 */
+	readonly annotationTemplate?: string;
 }
 
 /**
@@ -103,36 +107,42 @@ export const makeWikilink = (value: string): string => `[[${value}]]`;
 export const formatAnnotation = (
 	annotation: typeof AnnotationDto.Type,
 	options: FormatOptions,
-): Option.Option<string> => {
+): Result.Result<string, void> => {
 	if (annotation.containsSpoiler && !options.includeSpoilers) {
-		return Option.none();
+		return Result.failVoid;
 	}
 
-	const lines: string[] = [];
-
-	const content = annotation.selectedText ?? "";
-	const blockquote = content
+	const rawText = decodeHtmlEntities(annotation.selectedText ?? "");
+	const blockquote = rawText
 		.split("\n")
 		.map((line) => `> ${line}`)
 		.join("\n");
-	lines.push(blockquote);
 
-	const hasComment =
-		annotation.comment &&
-		annotation.comment.trim() !== "" &&
-		annotation.comment.trim() !== "{}";
+	const resolvedComment = resolveComment(annotation);
 
-	if (options.includeComments && hasComment) {
-		lines.push("");
-		lines.push(`*Note:* ${annotation.comment}`);
-	}
+	const context: Record<string, string | number> = {
+		selectedText: rawText,
+		blockquote,
+		comment:
+			options.includeComments && resolvedComment !== null
+				? resolvedComment
+				: "",
+		pageNumber:
+			annotation.pageNumber !== undefined && annotation.pageNumber > 0
+				? annotation.pageNumber
+				: 0,
+		chapterTitle: annotation.chapterTitle ?? "",
+		seriesName: annotation.seriesName ?? "",
+		createdUtc: annotation.createdUtc ?? "",
+		bookTitle: "",
+		authors: "",
+		genres: "",
+	};
 
-	if (annotation.pageNumber !== undefined && annotation.pageNumber > 0) {
-		lines.push("");
-		lines.push(`<small>Page ${annotation.pageNumber}</small>`);
-	}
+	const template = options.annotationTemplate || DEFAULT_ANNOTATION_TEMPLATE;
+	const result = renderTemplate(template, context);
 
-	return Option.some(lines.join("\n"));
+	return result !== "" ? Result.succeed(result) : Result.failVoid;
 };
 
 /**

@@ -159,21 +159,25 @@ If you have notes for authors or series, the wikilinks will automatically connec
 
 ## Troubleshooting
 
-### "Connection failed" or "Network error"
+For detailed solutions to common issues, see the [Troubleshooting Guide](./TROUBLESHOOTING.md).
 
-- Make sure your Kavita URL is correct and accessible
-- Check that Kavita is running
-- If using HTTPS, ensure your certificate is valid
+**Quick fixes:**
 
-### "Authentication failed"
+| Error | Solution |
+|-------|----------|
+| Authentication failed | [Regenerate your API key](./TROUBLESHOOTING.md#authentication-failed) |
+| Network error (404) | [Check your Kavita URL](./TROUBLESHOOTING.md#network-error-status-404) |
+| Connection refused | [Ensure Kavita is running](./TROUBLESHOOTING.md#connection-refused) |
+| No annotations synced | [Create highlights in Kavita first](./TROUBLESHOOTING.md#no-annotations-synced) |
 
-- Double-check your API key in Kavita's 3rd Party Clients settings
-- Try generating a new API key
+## Network & Privacy
 
-### Annotations not appearing
+This plugin connects to your self-hosted Kavita server to sync annotations. Here's what it does:
 
-- Make sure you have highlights/annotations in Kavita
-- Check that "Include Spoilers" is enabled if your annotations are marked as spoilers
+- **Connects to:** Your configured Kavita server URL only (no third-party services)
+- **Authentication:** Sends your API key via HTTP header to authenticate with Kavita
+- **Data fetched:** Annotation, series, and chapter data via Kavita's REST API
+- **No telemetry:** The plugin does not collect analytics, usage data, or send information to any external service
 
 ## Questions or Issues?
 

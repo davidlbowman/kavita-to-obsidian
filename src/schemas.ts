@@ -3,7 +3,26 @@
  *
  * @module
  */
-import { Schema } from "effect";
+import { Schema, SchemaGetter, SchemaTransformation } from "effect";
+
+/**
+ * Helper to create an optional key with a default value.
+ *
+ * Replaces `Schema.optionalWith(schema, { exact: true, default: () => val })` in v4.
+ *
+ * @since 2.0.0
+ * @category Helpers
+ */
+const optionalKeyWithDefault = <S extends Schema.Top>(
+	schema: S,
+	defaultValue: () => S["Type"],
+) =>
+	Schema.optionalKey(schema).pipe(
+		Schema.decodeTo(Schema.toType(schema), {
+			decode: SchemaGetter.withDefault(defaultValue),
+			encode: SchemaGetter.required(),
+		}),
+	);
 
 /**
  * Kavita annotation data transfer object.
@@ -76,13 +95,11 @@ export class AnnotationDto extends Schema.Class<AnnotationDto>("AnnotationDto")(
 export class BrowseAnnotationFilterDto extends Schema.Class<BrowseAnnotationFilterDto>(
 	"BrowseAnnotationFilterDto",
 )({
-	seriesIds: Schema.optionalWith(Schema.Array(Schema.Number), { exact: true }),
-	chapterIds: Schema.optionalWith(Schema.Array(Schema.Number), {
-		exact: true,
-	}),
-	includeSpoilers: Schema.optionalWith(Schema.Boolean, { exact: true }),
-	startDate: Schema.optionalWith(Schema.DateTimeUtc, { exact: true }),
-	endDate: Schema.optionalWith(Schema.DateTimeUtc, { exact: true }),
+	seriesIds: Schema.optionalKey(Schema.Array(Schema.Number)),
+	chapterIds: Schema.optionalKey(Schema.Array(Schema.Number)),
+	includeSpoilers: Schema.optionalKey(Schema.Boolean),
+	startDate: Schema.optionalKey(Schema.DateTimeUtc),
+	endDate: Schema.optionalKey(Schema.DateTimeUtc),
 }) {}
 
 /**
@@ -107,7 +124,23 @@ export type AnnotationsResponseType = typeof AnnotationsResponse.Type;
  * @since 1.1.0
  * @category Plugin Schemas
  */
-export const ExportMode = Schema.Literal("single-file", "hierarchical");
+export const ExportMode = Schema.Literals(["single-file", "hierarchical"]);
+
+/**
+ * Default Handlebars template for rendering individual annotations.
+ *
+ * @since 1.2.0
+ * @category Plugin Schemas
+ */
+export const DEFAULT_ANNOTATION_TEMPLATE = `{{blockquote}}
+{{#if comment}}
+
+*Note:* {{comment}}
+{{/if}}
+{{#if pageNumber}}
+
+<small>Page {{pageNumber}}</small>
+{{/if}}`;
 
 /**
  * Plugin settings stored in Obsidian.
@@ -120,70 +153,65 @@ export class PluginSettings extends Schema.Class<PluginSettings>(
 )({
 	kavitaUrl: Schema.String,
 	kavitaApiKey: Schema.String,
-	outputPath: Schema.optionalWith(Schema.String, {
-		exact: true,
-		default: () => "kavita-annotations.md",
-	}),
-	matchThreshold: Schema.optionalWith(Schema.Number.pipe(Schema.clamp(0, 1)), {
-		exact: true,
-		default: () => 0.7,
-	}),
-	includeComments: Schema.optionalWith(Schema.Boolean, {
-		exact: true,
-		default: () => true,
-	}),
-	includeSpoilers: Schema.optionalWith(Schema.Boolean, {
-		exact: true,
-		default: () => false,
-	}),
+	outputPath: optionalKeyWithDefault(
+		Schema.String,
+		() => "kavita-annotations.md",
+	),
+	matchThreshold: optionalKeyWithDefault(
+		Schema.Number.pipe(
+			Schema.decodeTo(
+				Schema.Number,
+				SchemaTransformation.transform({
+					decode: (n) => Math.min(1, Math.max(0, n)),
+					encode: (n) => n,
+				}),
+			),
+		),
+		() => 0.7,
+	),
+	includeComments: optionalKeyWithDefault(Schema.Boolean, () => true),
+	includeSpoilers: optionalKeyWithDefault(Schema.Boolean, () => false),
 	/**
 	 * Include Obsidian tags generated from series, author, and library names.
 	 * @since 0.0.2
 	 */
-	includeTags: Schema.optionalWith(Schema.Boolean, {
-		exact: true,
-		default: () => true,
-	}),
+	includeTags: optionalKeyWithDefault(Schema.Boolean, () => true),
 	/**
 	 * Prefix for generated tags (e.g., "reading/" produces #reading/book/...).
 	 * @since 0.0.2
 	 */
-	tagPrefix: Schema.optionalWith(Schema.String, {
-		exact: true,
-		default: () => "",
-	}),
+	tagPrefix: optionalKeyWithDefault(Schema.String, () => ""),
 	/**
 	 * Include wikilinks for series and author names (e.g., [[Author Name]]).
 	 * @since 0.0.2
 	 */
-	includeWikilinks: Schema.optionalWith(Schema.Boolean, {
-		exact: true,
-		default: () => true,
-	}),
+	includeWikilinks: optionalKeyWithDefault(Schema.Boolean, () => true),
 	/**
 	 * Export mode: single file or hierarchical folders.
 	 * @since 1.1.0
 	 */
-	exportMode: Schema.optionalWith(ExportMode, {
-		exact: true,
-		default: () => "single-file" as const,
-	}),
+	exportMode: optionalKeyWithDefault(ExportMode, () => "hierarchical" as const),
 	/**
 	 * Root folder name for hierarchical mode.
 	 * @since 1.1.0
 	 */
-	rootFolderName: Schema.optionalWith(Schema.String, {
-		exact: true,
-		default: () => "Kavita Annotations",
-	}),
+	rootFolderName: optionalKeyWithDefault(
+		Schema.String,
+		() => "Kavita Annotations",
+	),
 	/**
 	 * Delete orphaned files when annotations are removed from Kavita.
 	 * @since 1.1.0
 	 */
-	deleteOrphanedFiles: Schema.optionalWith(Schema.Boolean, {
-		exact: true,
-		default: () => true,
-	}),
+	deleteOrphanedFiles: optionalKeyWithDefault(Schema.Boolean, () => true),
+	/**
+	 * Handlebars template for rendering individual annotations.
+	 * @since 1.2.0
+	 */
+	annotationTemplate: optionalKeyWithDefault(
+		Schema.String,
+		() => DEFAULT_ANNOTATION_TEMPLATE,
+	),
 }) {}
 
 /**
@@ -202,9 +230,10 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	includeTags: true,
 	tagPrefix: "",
 	includeWikilinks: true,
-	exportMode: "single-file",
+	exportMode: "hierarchical",
 	rootFolderName: "Kavita Annotations",
 	deleteOrphanedFiles: true,
+	annotationTemplate: DEFAULT_ANNOTATION_TEMPLATE,
 };
 
 /**
@@ -231,7 +260,7 @@ export class LibraryDto extends Schema.Class<LibraryDto>("LibraryDto")({
 	id: Schema.Number,
 	name: Schema.String,
 	type: Schema.Number,
-	folders: Schema.optionalWith(Schema.Array(Schema.String), { exact: true }),
+	folders: Schema.optionalKey(Schema.Array(Schema.String)),
 }) {}
 
 /**
@@ -246,22 +275,16 @@ export class CreateLibraryDto extends Schema.Class<CreateLibraryDto>(
 	name: Schema.String,
 	type: Schema.Number,
 	folders: Schema.Array(Schema.String),
-	fileGroupTypes: Schema.optionalWith(Schema.Array(Schema.Number), {
-		exact: true,
-		default: () => [],
-	}),
-	excludePatterns: Schema.optionalWith(Schema.Array(Schema.String), {
-		exact: true,
-		default: () => [],
-	}),
+	fileGroupTypes: optionalKeyWithDefault(Schema.Array(Schema.Number), () => []),
+	excludePatterns: optionalKeyWithDefault(
+		Schema.Array(Schema.String),
+		() => [],
+	),
 	/**
 	 * Enable reading metadata from files (authors, genres, etc.).
 	 * @since 0.0.2
 	 */
-	enableMetadata: Schema.optionalWith(Schema.Boolean, {
-		exact: true,
-		default: () => true,
-	}),
+	enableMetadata: optionalKeyWithDefault(Schema.Boolean, () => true),
 }) {}
 
 /**
@@ -307,34 +330,28 @@ export class PersonDto extends Schema.Class<PersonDto>("PersonDto")({
 export class ChapterDto extends Schema.Class<ChapterDto>("ChapterDto")({
 	id: Schema.Number,
 	number: Schema.String,
-	title: Schema.optionalWith(Schema.String, { exact: true }),
-	pages: Schema.optionalWith(Schema.Number, { exact: true }),
+	title: Schema.optionalKey(Schema.String),
+	pages: Schema.optionalKey(Schema.Number),
 	/**
 	 * The book title from EPUB dc:title metadata.
 	 * @since 0.0.2
 	 */
-	titleName: Schema.optionalWith(Schema.String, { exact: true }),
+	titleName: Schema.optionalKey(Schema.String),
 	/**
 	 * Sort order for the chapter within the series.
 	 * @since 0.0.2
 	 */
-	sortOrder: Schema.optionalWith(Schema.Number, { exact: true }),
+	sortOrder: Schema.optionalKey(Schema.Number),
 	/**
 	 * Writers/authors for this specific chapter/book.
 	 * @since 0.0.2
 	 */
-	writers: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
+	writers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
 	/**
 	 * Genres for this specific chapter/book.
 	 * @since 0.0.2
 	 */
-	genres: Schema.optionalWith(Schema.Array(GenreTagDto), {
-		exact: true,
-		default: () => [],
-	}),
+	genres: optionalKeyWithDefault(Schema.Array(GenreTagDto), () => []),
 }) {}
 
 /**
@@ -346,7 +363,7 @@ export class ChapterDto extends Schema.Class<ChapterDto>("ChapterDto")({
 export class VolumeDto extends Schema.Class<VolumeDto>("VolumeDto")({
 	id: Schema.Number,
 	number: Schema.Number,
-	name: Schema.optionalWith(Schema.String, { exact: true }),
+	name: Schema.optionalKey(Schema.String),
 	chapters: Schema.Array(ChapterDto),
 }) {}
 
@@ -359,7 +376,7 @@ export class VolumeDto extends Schema.Class<VolumeDto>("VolumeDto")({
 export class SeriesDto extends Schema.Class<SeriesDto>("SeriesDto")({
 	id: Schema.Number,
 	name: Schema.String,
-	libraryId: Schema.optionalWith(Schema.Number, { exact: true }),
+	libraryId: Schema.optionalKey(Schema.Number),
 }) {}
 
 /**
@@ -372,13 +389,12 @@ export class SeriesPagedResponse extends Schema.Class<SeriesPagedResponse>(
 	"SeriesPagedResponse",
 )({
 	result: Schema.Array(SeriesDto),
-	pagination: Schema.optionalWith(
+	pagination: Schema.optionalKey(
 		Schema.Struct({
 			currentPage: Schema.Number,
 			totalPages: Schema.Number,
 			totalItems: Schema.Number,
 		}),
-		{ exact: true },
 	),
 }) {}
 
@@ -414,9 +430,9 @@ export class CreateAnnotationDto extends Schema.Class<CreateAnnotationDto>(
 	/** Whether this annotation contains spoilers (required) */
 	containsSpoiler: Schema.Boolean,
 	/** Ending XPath selector (optional, defaults to xPath) */
-	endingXPath: Schema.optionalWith(Schema.String, { exact: true }),
+	endingXPath: Schema.optionalKey(Schema.String),
 	/** User's comment on the annotation (optional) */
-	comment: Schema.optionalWith(Schema.String, { exact: true }),
+	comment: Schema.optionalKey(Schema.String),
 }) {}
 
 /**
@@ -450,7 +466,7 @@ export class LoginDto extends Schema.Class<LoginDto>("LoginDto")({
  */
 export class UserDto extends Schema.Class<UserDto>("UserDto")({
 	token: Schema.String,
-	apiKey: Schema.optionalWith(Schema.String, { exact: true }),
+	apiKey: Schema.optionalKey(Schema.String),
 	username: Schema.String,
 }) {}
 
@@ -470,52 +486,16 @@ export class SeriesMetadataDto extends Schema.Class<SeriesMetadataDto>(
 	summary: Schema.NullOr(Schema.String),
 	releaseYear: Schema.Number,
 	language: Schema.NullOr(Schema.String),
-	genres: Schema.optionalWith(Schema.Array(GenreTagDto), {
-		exact: true,
-		default: () => [],
-	}),
-	tags: Schema.optionalWith(Schema.Array(TagDto), {
-		exact: true,
-		default: () => [],
-	}),
-	writers: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	coverArtists: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	publishers: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	characters: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	pencillers: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	inkers: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	colorists: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	letterers: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	editors: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
-	translators: Schema.optionalWith(Schema.Array(PersonDto), {
-		exact: true,
-		default: () => [],
-	}),
+	genres: optionalKeyWithDefault(Schema.Array(GenreTagDto), () => []),
+	tags: optionalKeyWithDefault(Schema.Array(TagDto), () => []),
+	writers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	coverArtists: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	publishers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	characters: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	pencillers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	inkers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	colorists: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	letterers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	editors: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
+	translators: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
 }) {}

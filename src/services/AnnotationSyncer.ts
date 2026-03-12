@@ -4,7 +4,7 @@
  * @module
  */
 
-import { Effect } from "effect";
+import { Effect, Layer, ServiceMap } from "effect";
 import { normalizePath } from "obsidian";
 import type {
 	KavitaAuthError,
@@ -42,143 +42,149 @@ export interface SyncResult {
  * @since 0.0.1
  * @category Services
  */
-export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
-	"AnnotationSyncer",
+export class AnnotationSyncer extends ServiceMap.Service<
+	AnnotationSyncer,
 	{
-		accessors: true,
-		effect: Effect.gen(function* () {
-			const kavita = yield* KavitaClient;
-			const obsidian = yield* ObsidianAdapter;
-			const config = yield* PluginConfig;
+		readonly syncToFile: Effect.Effect<
+			SyncResult,
+			| KavitaAuthError
+			| KavitaNetworkError
+			| KavitaParseError
+			| ObsidianWriteError
+		>;
+	}
+>()("AnnotationSyncer") {
+	static readonly make = Effect.gen(function* () {
+		const kavita = yield* KavitaClient;
+		const obsidian = yield* ObsidianAdapter;
+		const config = yield* PluginConfig;
 
-			/**
-			 * Fetch metadata for all unique series in the annotations.
-			 *
-			 * @since 0.0.2
-			 */
-			const fetchSeriesMetadata = (
-				seriesIds: ReadonlyArray<number>,
-			): Effect.Effect<
-				SeriesMetadataMap,
-				KavitaAuthError | KavitaNetworkError | KavitaParseError
-			> =>
-				Effect.gen(function* () {
-					const metadataEntries: Array<
-						[number, typeof SeriesMetadataDto.Type]
-					> = [];
+		/**
+		 * Fetch metadata for all unique series in the annotations.
+		 *
+		 * @since 0.0.2
+		 */
+		const fetchSeriesMetadata = (
+			seriesIds: ReadonlyArray<number>,
+		): Effect.Effect<
+			SeriesMetadataMap,
+			KavitaAuthError | KavitaNetworkError | KavitaParseError
+		> =>
+			Effect.gen(function* () {
+				const metadataEntries: Array<[number, typeof SeriesMetadataDto.Type]> =
+					[];
 
-					for (const seriesId of seriesIds) {
-						const metadata = yield* kavita
-							.getSeriesMetadata(seriesId)
-							.pipe(Effect.option);
-						if (metadata._tag === "Some") {
-							metadataEntries.push([seriesId, metadata.value]);
-						}
+				for (const seriesId of seriesIds) {
+					const metadata = yield* kavita
+						.getSeriesMetadata(seriesId)
+						.pipe(Effect.option);
+					if (metadata._tag === "Some") {
+						metadataEntries.push([seriesId, metadata.value]);
 					}
+				}
 
-					return new Map(metadataEntries);
-				});
+				return new Map(metadataEntries);
+			});
 
-			/**
-			 * Fetch chapter info (book titles, authors, genres) for all unique series.
-			 *
-			 * @since 0.0.2
-			 */
-			const fetchChapterInfo = (
-				seriesIds: ReadonlyArray<number>,
-			): Effect.Effect<
-				ChapterInfoMap,
-				KavitaAuthError | KavitaNetworkError | KavitaParseError
-			> =>
-				Effect.gen(function* () {
-					const chapterEntries: Array<
-						[
-							number,
-							{
-								chapterId: number;
-								bookTitle: string;
-								sortOrder: number;
-								authors: string[];
-								genres: string[];
-							},
-						]
-					> = [];
+		/**
+		 * Fetch chapter info (book titles, authors, genres) for all unique series.
+		 *
+		 * @since 0.0.2
+		 */
+		const fetchChapterInfo = (
+			seriesIds: ReadonlyArray<number>,
+		): Effect.Effect<
+			ChapterInfoMap,
+			KavitaAuthError | KavitaNetworkError | KavitaParseError
+		> =>
+			Effect.gen(function* () {
+				const chapterEntries: Array<
+					[
+						number,
+						{
+							chapterId: number;
+							bookTitle: string;
+							sortOrder: number;
+							authors: string[];
+							genres: string[];
+						},
+					]
+				> = [];
 
-					for (const seriesId of seriesIds) {
-						const volumes = yield* kavita
-							.getVolumes(seriesId)
-							.pipe(Effect.option);
-						if (volumes._tag === "Some") {
-							for (const volume of volumes.value) {
-								for (const chapter of volume.chapters) {
-									const bookTitle =
-										chapter.titleName ??
-										volume.name ??
-										`Volume ${volume.number}`;
-									const sortOrder = volume.number;
-									const authors = (chapter.writers ?? []).map((w) => w.name);
-									const genres = (chapter.genres ?? []).map((g) => g.title);
-									chapterEntries.push([
-										chapter.id,
-										{
-											chapterId: chapter.id,
-											bookTitle,
-											sortOrder,
-											authors,
-											genres,
-										},
-									]);
-								}
+				for (const seriesId of seriesIds) {
+					const volumes = yield* kavita
+						.getVolumes(seriesId)
+						.pipe(Effect.option);
+					if (volumes._tag === "Some") {
+						for (const volume of volumes.value) {
+							for (const chapter of volume.chapters) {
+								const bookTitle =
+									chapter.titleName ?? volume.name ?? `Volume ${volume.number}`;
+								const sortOrder = volume.number;
+								const authors = (chapter.writers ?? []).map((w) => w.name);
+								const genres = (chapter.genres ?? []).map((g) => g.title);
+								chapterEntries.push([
+									chapter.id,
+									{
+										chapterId: chapter.id,
+										bookTitle,
+										sortOrder,
+										authors,
+										genres,
+									},
+								]);
 							}
 						}
 					}
+				}
 
-					return new Map(chapterEntries);
-				});
-
-			/**
-			 * Sync all annotations to a single file.
-			 *
-			 * @since 0.0.1
-			 */
-			const syncToFile: Effect.Effect<
-				SyncResult,
-				| KavitaAuthError
-				| KavitaNetworkError
-				| KavitaParseError
-				| ObsidianWriteError
-			> = Effect.gen(function* () {
-				const annotations = yield* kavita.fetchAllAnnotations;
-
-				const uniqueSeriesIds = [
-					...new Set(annotations.map((a) => a.seriesId)),
-				];
-				const metadataMap = yield* fetchSeriesMetadata(uniqueSeriesIds);
-				const chapterInfoMap = yield* fetchChapterInfo(uniqueSeriesIds);
-
-				const markdown = toMarkdown(
-					annotations,
-					{
-						includeComments: config.includeComments,
-						includeSpoilers: config.includeSpoilers,
-						includeTags: config.includeTags,
-						tagPrefix: config.tagPrefix,
-						includeWikilinks: config.includeWikilinks,
-					},
-					metadataMap,
-					chapterInfoMap,
-				);
-
-				const normalizedPath = normalizePath(config.outputPath);
-				yield* obsidian.writeFile(normalizedPath, markdown);
-
-				return {
-					count: annotations.length,
-					outputPath: normalizedPath,
-				};
+				return new Map(chapterEntries);
 			});
 
-			return { syncToFile };
-		}),
-	},
-) {}
+		/**
+		 * Sync all annotations to a single file.
+		 *
+		 * @since 0.0.1
+		 */
+		const syncToFile: Effect.Effect<
+			SyncResult,
+			| KavitaAuthError
+			| KavitaNetworkError
+			| KavitaParseError
+			| ObsidianWriteError
+		> = Effect.gen(function* () {
+			const annotations = yield* kavita.fetchAllAnnotations;
+
+			const uniqueSeriesIds = [...new Set(annotations.map((a) => a.seriesId))];
+			const metadataMap = yield* fetchSeriesMetadata(uniqueSeriesIds);
+			const chapterInfoMap = yield* fetchChapterInfo(uniqueSeriesIds);
+
+			const markdown = toMarkdown(
+				annotations,
+				{
+					includeComments: config.includeComments,
+					includeSpoilers: config.includeSpoilers,
+					includeTags: config.includeTags,
+					tagPrefix: config.tagPrefix,
+					includeWikilinks: config.includeWikilinks,
+					annotationTemplate: config.annotationTemplate,
+				},
+				metadataMap,
+				chapterInfoMap,
+			);
+
+			const normalizedPath = normalizePath(config.outputPath);
+			yield* obsidian.writeFile(normalizedPath, markdown);
+
+			return {
+				count: annotations.length,
+				outputPath: normalizedPath,
+			};
+		});
+
+		return AnnotationSyncer.of({ syncToFile });
+	});
+
+	static readonly layer = Layer.effect(AnnotationSyncer, AnnotationSyncer.make);
+	static readonly layerNoDeps = AnnotationSyncer.layer;
+}

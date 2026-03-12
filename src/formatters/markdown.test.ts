@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { Option } from "effect";
+import { Result } from "effect";
 import { describe, expect, it } from "vitest";
 import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
 import {
@@ -37,6 +37,7 @@ const defaultOptions: FormatOptions = {
 	includeTags: true,
 	tagPrefix: "",
 	includeWikilinks: true,
+	annotationTemplate: "",
 };
 
 const createAnnotation = (
@@ -307,10 +308,10 @@ describe("formatAnnotation", () => {
 		});
 		const result = formatAnnotation(annotation, defaultOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("> Hello world");
-			expect(result.value).not.toContain("*Note:*");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> Hello world");
+			expect(result.success).not.toContain("*Note:*");
 		}
 	});
 
@@ -321,9 +322,9 @@ describe("formatAnnotation", () => {
 		});
 		const result = formatAnnotation(annotation, defaultOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("*Note:* My note");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* My note");
 		}
 	});
 
@@ -334,9 +335,9 @@ describe("formatAnnotation", () => {
 		});
 		const result = formatAnnotation(annotation, defaultOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).not.toContain("*Note:*");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).not.toContain("*Note:*");
 		}
 	});
 
@@ -347,9 +348,9 @@ describe("formatAnnotation", () => {
 		});
 		const result = formatAnnotation(annotation, defaultOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).not.toContain("*Note:*");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).not.toContain("*Note:*");
 		}
 	});
 
@@ -360,9 +361,9 @@ describe("formatAnnotation", () => {
 		});
 		const result = formatAnnotation(annotation, defaultOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).not.toContain("*Note:*");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).not.toContain("*Note:*");
 		}
 	});
 
@@ -376,25 +377,25 @@ describe("formatAnnotation", () => {
 			includeComments: false,
 		});
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).not.toContain("My note");
-			expect(result.value).not.toContain("*Note:*");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).not.toContain("My note");
+			expect(result.success).not.toContain("*Note:*");
 		}
 	});
 
-	it("handles multi-paragraph text with blockquotes on each line", () => {
+	it("handles multi-paragraph text with proper blockquoting", () => {
 		const annotation = createAnnotation({
 			selectedText: "First paragraph.\n\nSecond paragraph.",
 			pageNumber: 0,
 		});
 		const result = formatAnnotation(annotation, defaultOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("> First paragraph.");
-			expect(result.value).toContain("> ");
-			expect(result.value).toContain("> Second paragraph.");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain(
+				"> First paragraph.\n> \n> Second paragraph.",
+			);
 		}
 	});
 
@@ -405,9 +406,9 @@ describe("formatAnnotation", () => {
 		});
 		const result = formatAnnotation(annotation, defaultOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("<small>Page 42</small>");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("<small>Page 42</small>");
 		}
 	});
 
@@ -418,7 +419,7 @@ describe("formatAnnotation", () => {
 		});
 		const result = formatAnnotation(annotation, defaultOptions);
 
-		expect(Option.isNone(result)).toBe(true);
+		expect(Result.isFailure(result)).toBe(true);
 	});
 
 	it("includes spoilers when enabled", () => {
@@ -431,7 +432,116 @@ describe("formatAnnotation", () => {
 			includeSpoilers: true,
 		});
 
-		expect(Option.isSome(result)).toBe(true);
+		expect(Result.isSuccess(result)).toBe(true);
+	});
+
+	it("decodes HTML entities in selectedText", () => {
+		const annotation = createAnnotation({
+			selectedText: "it&#39;s a test &amp; more",
+			pageNumber: 0,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> it's a test & more");
+		}
+	});
+
+	it("renders Quill delta JSON comment as plain text", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: '{"ops":[{"insert":"My note\\n"}]}',
+			commentPlainText: null,
+			commentHtml: null,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* My note");
+		}
+	});
+
+	it("prefers commentPlainText over comment", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			commentPlainText: "Plain text note",
+			comment: '{"ops":[{"insert":"Rich text\\n"}]}',
+			commentHtml: null,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* Plain text note");
+		}
+	});
+
+	it("uses commentHtml as fallback with tags stripped", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: null,
+			commentPlainText: null,
+			commentHtml: "<p>HTML note</p>",
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* HTML note");
+		}
+	});
+
+	it("renders with a custom annotation template", () => {
+		const annotation = createAnnotation({
+			selectedText: "Important passage",
+			pageNumber: 99,
+		});
+		const result = formatAnnotation(annotation, {
+			...defaultOptions,
+			annotationTemplate: "**{{selectedText}}** (p. {{pageNumber}})",
+		});
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toBe("**Important passage** (p. 99)");
+		}
+	});
+
+	it("falls back to default template when annotationTemplate is empty", () => {
+		const annotation = createAnnotation({
+			selectedText: "Hello world",
+			pageNumber: 5,
+		});
+		const result = formatAnnotation(annotation, {
+			...defaultOptions,
+			annotationTemplate: "",
+		});
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> Hello world");
+			expect(result.success).toContain("<small>Page 5</small>");
+		}
+	});
+
+	it("strips comment from template context when includeComments is false", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: "Secret note",
+		});
+		const result = formatAnnotation(annotation, {
+			...defaultOptions,
+			includeComments: false,
+			annotationTemplate:
+				"{{selectedText}}{{#if comment}} - {{comment}}{{/if}}",
+		});
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toBe("Highlight");
+		}
 	});
 });
 

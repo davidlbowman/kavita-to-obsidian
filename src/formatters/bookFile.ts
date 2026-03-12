@@ -6,10 +6,10 @@
  *
  * @module
  */
-import { Array, Option, pipe } from "effect";
+import { Array, pipe, type Result } from "effect";
 import type { AnnotationDto } from "../schemas.js";
 import type { FormatOptions } from "./markdown.js";
-import { toSlug } from "./markdown.js";
+import { formatAnnotation, toSlug } from "./markdown.js";
 
 /**
  * Options for formatting a book file.
@@ -119,37 +119,7 @@ export const generateBookHeader = (options: BookFileOptions): string => {
 export const formatBookAnnotation = (
 	annotation: typeof AnnotationDto.Type,
 	options: FormatOptions,
-): Option.Option<string> => {
-	if (annotation.containsSpoiler && !options.includeSpoilers) {
-		return Option.none();
-	}
-
-	const lines: string[] = [];
-
-	const content = annotation.selectedText ?? "";
-	const blockquote = content
-		.split("\n")
-		.map((line) => `> ${line}`)
-		.join("\n");
-	lines.push(blockquote);
-
-	const hasComment =
-		annotation.comment &&
-		annotation.comment.trim() !== "" &&
-		annotation.comment.trim() !== "{}";
-
-	if (options.includeComments && hasComment) {
-		lines.push("");
-		lines.push(`*Note:* ${annotation.comment}`);
-	}
-
-	if (annotation.pageNumber !== undefined && annotation.pageNumber > 0) {
-		lines.push("");
-		lines.push(`<small>Page ${annotation.pageNumber}</small>`);
-	}
-
-	return Option.some(lines.join("\n"));
-};
+): Result.Result<string, void> => formatAnnotation(annotation, options);
 
 /**
  * Generate the annotations section of a book file.

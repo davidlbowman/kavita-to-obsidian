@@ -3,17 +3,20 @@ name: Release
 on:
   push:
     tags:
-      - "*"
+      - "[0-9]*"
 
 permissions:
   contents: write
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -24,6 +27,9 @@ jobs:
 
       - name: Lint
         run: bun run lint
+
+      - name: Obsidian lint
+        run: bun run lint:obsidian
 
       - name: Type check
         run: bun run typecheck
@@ -40,4 +46,5 @@ jobs:
           files: |
             main.js
             manifest.json
+            styles.css
           generate_release_notes: true

@@ -4,12 +4,13 @@
  * @module
  */
 import { describe, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Redacted } from "effect";
+import { ConfigProvider, Effect, Layer, Redacted } from "effect";
 import { expect } from "vitest";
+import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
 import { PluginConfig } from "./PluginConfig.js";
 
 describe("PluginConfig", () => {
-	describe("Default", () => {
+	describe("Default values via fromEnv", () => {
 		it.effect("provides default configuration values", () =>
 			Effect.gen(function* () {
 				const config = yield* PluginConfig;
@@ -23,7 +24,12 @@ describe("PluginConfig", () => {
 				expect(config.includeTags).toBe(true);
 				expect(config.tagPrefix).toBe("");
 				expect(config.includeWikilinks).toBe(true);
-			}).pipe(Effect.provide(PluginConfig.Default)),
+				expect(config.exportMode).toBe("hierarchical");
+				expect(config.annotationTemplate).toBe(DEFAULT_ANNOTATION_TEMPLATE);
+			}).pipe(
+				Effect.provide(PluginConfig.fromEnv),
+				Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({}))),
+			),
 		);
 	});
 
@@ -41,6 +47,7 @@ describe("PluginConfig", () => {
 				expect(config.includeTags).toBe(false);
 				expect(config.tagPrefix).toBe("book/");
 				expect(config.includeWikilinks).toBe(false);
+				expect(config.annotationTemplate).toBe("custom template");
 			}).pipe(
 				Effect.provide(
 					PluginConfig.fromSettings({
@@ -56,6 +63,7 @@ describe("PluginConfig", () => {
 						exportMode: "single-file",
 						rootFolderName: "Kavita Annotations",
 						deleteOrphanedFiles: true,
+						annotationTemplate: "custom template",
 					}),
 				),
 			),
@@ -76,21 +84,23 @@ describe("PluginConfig", () => {
 				expect(config.includeTags).toBe(false);
 				expect(config.tagPrefix).toBe("book/");
 				expect(config.includeWikilinks).toBe(false);
+				expect(config.annotationTemplate).toBe("env custom template");
 			}).pipe(
 				Effect.provide(PluginConfig.fromEnv),
-				Effect.withConfigProvider(
-					ConfigProvider.fromMap(
-						new Map([
-							["KAVITA_URL", "https://env-kavita.example.com"],
-							["KAVITA_API_KEY", "env-api-key"],
-							["OUTPUT_PATH", "env/output.md"],
-							["MATCH_THRESHOLD", "0.9"],
-							["INCLUDE_COMMENTS", "false"],
-							["INCLUDE_SPOILERS", "true"],
-							["INCLUDE_TAGS", "false"],
-							["TAG_PREFIX", "book/"],
-							["INCLUDE_WIKILINKS", "false"],
-						]),
+				Effect.provide(
+					ConfigProvider.layer(
+						ConfigProvider.fromUnknown({
+							KAVITA_URL: "https://env-kavita.example.com",
+							KAVITA_API_KEY: "env-api-key",
+							OUTPUT_PATH: "env/output.md",
+							MATCH_THRESHOLD: "0.9",
+							INCLUDE_COMMENTS: "false",
+							INCLUDE_SPOILERS: "true",
+							INCLUDE_TAGS: "false",
+							TAG_PREFIX: "book/",
+							INCLUDE_WIKILINKS: "false",
+							ANNOTATION_TEMPLATE: "env custom template",
+						}),
 					),
 				),
 			),
@@ -109,9 +119,11 @@ describe("PluginConfig", () => {
 				expect(config.includeTags).toBe(true);
 				expect(config.tagPrefix).toBe("");
 				expect(config.includeWikilinks).toBe(true);
+				expect(config.exportMode).toBe("hierarchical");
+				expect(config.annotationTemplate).toBe(DEFAULT_ANNOTATION_TEMPLATE);
 			}).pipe(
 				Effect.provide(PluginConfig.fromEnv),
-				Effect.withConfigProvider(ConfigProvider.fromMap(new Map())),
+				Effect.provide(ConfigProvider.layer(ConfigProvider.fromUnknown({}))),
 			),
 		);
 	});

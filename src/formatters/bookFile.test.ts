@@ -4,7 +4,7 @@
  * @module
  */
 
-import { Option } from "effect";
+import { Result } from "effect";
 import { describe, expect, it } from "vitest";
 import type { AnnotationDto } from "../schemas.js";
 import {
@@ -55,6 +55,7 @@ const defaultFormatOptions: FormatOptions = {
 	includeTags: true,
 	tagPrefix: "",
 	includeWikilinks: true,
+	annotationTemplate: "",
 };
 
 const createBookOptions = (
@@ -173,11 +174,11 @@ describe("formatBookAnnotation", () => {
 		const annotation = createAnnotation();
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("> This is highlighted text");
-			expect(result.value).toContain("*Note:* My note");
-			expect(result.value).toContain("<small>Page 42</small>");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> This is highlighted text");
+			expect(result.success).toContain("*Note:* My note");
+			expect(result.success).toContain("<small>Page 42</small>");
 		}
 	});
 
@@ -186,9 +187,9 @@ describe("formatBookAnnotation", () => {
 		const options = { ...defaultFormatOptions, includeComments: false };
 		const result = formatBookAnnotation(annotation, options);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).not.toContain("*Note:*");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).not.toContain("*Note:*");
 		}
 	});
 
@@ -196,7 +197,7 @@ describe("formatBookAnnotation", () => {
 		const annotation = createAnnotation({ containsSpoiler: true });
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isNone(result)).toBe(true);
+		expect(Result.isFailure(result)).toBe(true);
 	});
 
 	it("includes spoilers when enabled", () => {
@@ -204,18 +205,105 @@ describe("formatBookAnnotation", () => {
 		const options = { ...defaultFormatOptions, includeSpoilers: true };
 		const result = formatBookAnnotation(annotation, options);
 
-		expect(Option.isSome(result)).toBe(true);
+		expect(Result.isSuccess(result)).toBe(true);
 	});
 
-	it("handles multiline text", () => {
+	it("decodes HTML entities in selectedText", () => {
+		const annotation = createAnnotation({
+			selectedText: "it&#39;s a test &amp; more",
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> it's a test & more");
+		}
+	});
+
+	it("renders Quill delta JSON comment as plain text", () => {
+		const annotation = createAnnotation({
+			comment: '{"ops":[{"insert":"My note\\n"}]}',
+			commentPlainText: null,
+			commentHtml: null,
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* My note");
+		}
+	});
+
+	it("prefers commentPlainText over comment", () => {
+		const annotation = createAnnotation({
+			commentPlainText: "Plain text note",
+			comment: '{"ops":[{"insert":"Rich text\\n"}]}',
+			commentHtml: null,
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* Plain text note");
+		}
+	});
+
+	it("uses commentHtml as fallback with tags stripped", () => {
+		const annotation = createAnnotation({
+			comment: null,
+			commentPlainText: null,
+			commentHtml: "<p>HTML note</p>",
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* HTML note");
+		}
+	});
+
+	it("handles multiline text with proper blockquoting", () => {
 		const annotation = createAnnotation({
 			selectedText: "Line one\nLine two\nLine three",
 		});
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("> Line one\n> Line two\n> Line three");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> Line one\n> Line two\n> Line three");
+		}
+	});
+
+	it("renders with a custom annotation template", () => {
+		const annotation = createAnnotation({
+			selectedText: "Key insight",
+			pageNumber: 7,
+		});
+		const result = formatBookAnnotation(annotation, {
+			...defaultFormatOptions,
+			annotationTemplate: "**{{selectedText}}** (p. {{pageNumber}})",
+		});
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toBe("**Key insight** (p. 7)");
+		}
+	});
+
+	it("falls back to default template when annotationTemplate is empty", () => {
+		const annotation = createAnnotation({
+			selectedText: "Some text",
+			pageNumber: 42,
+		});
+		const result = formatBookAnnotation(annotation, {
+			...defaultFormatOptions,
+			annotationTemplate: "",
+		});
+
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> Some text");
+			expect(result.success).toContain("<small>Page 42</small>");
 		}
 	});
 });

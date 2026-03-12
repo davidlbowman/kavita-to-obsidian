@@ -11,12 +11,12 @@ import { Schema } from "effect";
  * @since 0.0.1
  * @category Kavita Errors
  */
-export class KavitaNetworkError extends Schema.TaggedError<KavitaNetworkError>()(
+export class KavitaNetworkError extends Schema.TaggedErrorClass<KavitaNetworkError>()(
 	"KavitaNetworkError",
 	{
 		url: Schema.String,
-		statusCode: Schema.optionalWith(Schema.Number, { exact: true }),
-		cause: Schema.optionalWith(Schema.Defect, { exact: true }),
+		statusCode: Schema.optionalKey(Schema.Number),
+		cause: Schema.optionalKey(Schema.Defect),
 	},
 ) {
 	override get message(): string {
@@ -32,7 +32,7 @@ export class KavitaNetworkError extends Schema.TaggedError<KavitaNetworkError>()
  * @since 0.0.1
  * @category Kavita Errors
  */
-export class KavitaAuthError extends Schema.TaggedError<KavitaAuthError>()(
+export class KavitaAuthError extends Schema.TaggedErrorClass<KavitaAuthError>()(
 	"KavitaAuthError",
 	{
 		reason: Schema.String,
@@ -49,11 +49,11 @@ export class KavitaAuthError extends Schema.TaggedError<KavitaAuthError>()(
  * @since 0.0.1
  * @category Kavita Errors
  */
-export class KavitaParseError extends Schema.TaggedError<KavitaParseError>()(
+export class KavitaParseError extends Schema.TaggedErrorClass<KavitaParseError>()(
 	"KavitaParseError",
 	{
 		expected: Schema.String,
-		actual: Schema.optionalWith(Schema.Unknown, { exact: true }),
+		actual: Schema.optionalKey(Schema.Unknown),
 	},
 ) {
 	override get message(): string {
@@ -78,7 +78,7 @@ export type KavitaError =
  * @since 0.0.1
  * @category Obsidian Errors
  */
-export class ObsidianFileNotFoundError extends Schema.TaggedError<ObsidianFileNotFoundError>()(
+export class ObsidianFileNotFoundError extends Schema.TaggedErrorClass<ObsidianFileNotFoundError>()(
 	"ObsidianFileNotFoundError",
 	{
 		path: Schema.String,
@@ -95,11 +95,11 @@ export class ObsidianFileNotFoundError extends Schema.TaggedError<ObsidianFileNo
  * @since 0.0.1
  * @category Obsidian Errors
  */
-export class ObsidianWriteError extends Schema.TaggedError<ObsidianWriteError>()(
+export class ObsidianWriteError extends Schema.TaggedErrorClass<ObsidianWriteError>()(
 	"ObsidianWriteError",
 	{
 		path: Schema.String,
-		cause: Schema.optionalWith(Schema.Defect, { exact: true }),
+		cause: Schema.optionalKey(Schema.Defect),
 	},
 ) {
 	override get message(): string {
@@ -113,12 +113,12 @@ export class ObsidianWriteError extends Schema.TaggedError<ObsidianWriteError>()
  * @since 1.1.0
  * @category Obsidian Errors
  */
-export class ObsidianFolderError extends Schema.TaggedError<ObsidianFolderError>()(
+export class ObsidianFolderError extends Schema.TaggedErrorClass<ObsidianFolderError>()(
 	"ObsidianFolderError",
 	{
 		path: Schema.String,
 		operation: Schema.String,
-		cause: Schema.optionalWith(Schema.Defect, { exact: true }),
+		cause: Schema.optionalKey(Schema.Defect),
 	},
 ) {
 	override get message(): string {

@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { Context } from "effect";
+import { ServiceMap } from "effect";
 import type { App } from "obsidian";
 
 /**
@@ -14,7 +14,6 @@ import type { App } from "obsidian";
  * @since 0.0.1
  * @category Context
  */
-export class ObsidianApp extends Context.Tag("ObsidianApp")<
-	ObsidianApp,
-	App
->() {}
+export class ObsidianApp extends ServiceMap.Service<ObsidianApp, App>()(
+	"ObsidianApp",
+) {}

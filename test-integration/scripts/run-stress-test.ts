@@ -6,8 +6,8 @@
  * @module
  */
 
-import { FetchHttpClient } from "@effect/platform";
 import { Effect, Layer, Option, Redacted } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import { toMarkdown } from "../../src/formatters/markdown.js";
 import { AnnotationSyncer } from "../../src/services/AnnotationSyncer.js";
 import { KavitaClient } from "../../src/services/KavitaClient.js";
@@ -26,7 +26,7 @@ if (!KAVITA_API_KEY) {
 
 const TestConfigLayer = Layer.succeed(
 	PluginConfig,
-	new PluginConfig({
+	PluginConfig.of({
 		kavitaUrl: new URL(KAVITA_URL),
 		kavitaApiKey: Redacted.make(KAVITA_API_KEY),
 		outputPath: "stress-test-output.md",
@@ -39,10 +39,11 @@ const TestConfigLayer = Layer.succeed(
 		exportMode: "single-file",
 		rootFolderName: "Kavita Annotations",
 		deleteOrphanedFiles: true,
+		annotationTemplate: "",
 	}),
 );
 
-const KavitaClientLayer = KavitaClient.DefaultWithoutDependencies.pipe(
+const KavitaClientLayer = KavitaClient.layerNoDeps.pipe(
 	Layer.provide(TestConfigLayer),
 	Layer.provide(FetchHttpClient.layer),
 );
@@ -117,15 +118,17 @@ const runStressTest = Effect.gen(function* () {
 	console.log("\n🔄 Test 3: Full sync workflow...");
 	const mockAdapter = createMockObsidianAdapter();
 
-	const SyncerLayer = AnnotationSyncer.Default.pipe(
+	const SyncerLayer = AnnotationSyncer.layerNoDeps.pipe(
 		Layer.provide(KavitaClientLayer),
 		Layer.provide(mockAdapter.layer),
 		Layer.provide(TestConfigLayer),
 	);
 
 	const syncStart = Date.now();
-	const syncer = yield* AnnotationSyncer.pipe(Effect.provide(SyncerLayer));
-	const result = yield* syncer.syncToFile.pipe(Effect.provide(SyncerLayer));
+	const result = yield* Effect.gen(function* () {
+		const syncer = yield* AnnotationSyncer;
+		return yield* syncer.syncToFile;
+	}).pipe(Effect.provide(SyncerLayer));
 	const syncTime = Date.now() - syncStart;
 
 	const writes = mockAdapter.getWrites();

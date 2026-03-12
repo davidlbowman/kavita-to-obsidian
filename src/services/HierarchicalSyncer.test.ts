@@ -66,7 +66,7 @@ const mockVolumes: (typeof VolumeDto.Type)[] = [
 const createMockConfig = () =>
 	Layer.succeed(
 		PluginConfig,
-		new PluginConfig({
+		PluginConfig.of({
 			kavitaUrl: new URL("http://test.local"),
 			kavitaApiKey: Redacted.make("test-key"),
 			outputPath: "test.md",
@@ -79,6 +79,7 @@ const createMockConfig = () =>
 			exportMode: "hierarchical",
 			rootFolderName: "Kavita Annotations",
 			deleteOrphanedFiles: true,
+			annotationTemplate: "",
 		}),
 	);
 
@@ -117,7 +118,7 @@ const createMockKavitaClient = (
 				editors: [],
 				translators: [],
 			}),
-	} as unknown as typeof KavitaClient.Service);
+	} as typeof KavitaClient.Service);
 
 /**
  * Creates a mock ObsidianAdapter that tracks writes and folders.
@@ -174,7 +175,7 @@ describe("HierarchicalSyncer", () => {
 				expect(result.bookCount).toBe(0);
 				expect(result.filesCreated).toBe(0);
 			}).pipe(
-				Effect.provide(HierarchicalSyncer.Default),
+				Effect.provide(HierarchicalSyncer.layerNoDeps),
 				Effect.provide(createMockKavitaClient([])),
 				Effect.provide(createMockObsidianAdapter().layer),
 				Effect.provide(createMockConfig()),
@@ -198,7 +199,7 @@ describe("HierarchicalSyncer", () => {
 				expect(writes[0]?.path).toContain("Test Series");
 				expect(writes[0]?.path).toContain(".md");
 			}).pipe(
-				Effect.provide(HierarchicalSyncer.Default),
+				Effect.provide(HierarchicalSyncer.layerNoDeps),
 				Effect.provide(
 					createMockKavitaClient([
 						createAnnotation({
@@ -228,7 +229,7 @@ describe("HierarchicalSyncer", () => {
 				const writes = mockAdapter.getWrites();
 				expect(writes.length).toBe(3);
 			}).pipe(
-				Effect.provide(HierarchicalSyncer.Default),
+				Effect.provide(HierarchicalSyncer.layerNoDeps),
 				Effect.provide(
 					createMockKavitaClient([
 						createAnnotation({
@@ -272,7 +273,7 @@ describe("HierarchicalSyncer", () => {
 				const writes = mockAdapter.getWrites();
 				expect(writes[0]?.path).toContain("The Beginning");
 			}).pipe(
-				Effect.provide(HierarchicalSyncer.Default),
+				Effect.provide(HierarchicalSyncer.layerNoDeps),
 				Effect.provide(
 					createMockKavitaClient([createAnnotation({ chapterId: 10 })]),
 				),
@@ -298,7 +299,7 @@ describe("HierarchicalSyncer", () => {
 				expect(content).toContain("## Annotations");
 				expect(content).toContain("> Important quote");
 			}).pipe(
-				Effect.provide(HierarchicalSyncer.Default),
+				Effect.provide(HierarchicalSyncer.layerNoDeps),
 				Effect.provide(
 					createMockKavitaClient([
 						createAnnotation({
