@@ -25,6 +25,9 @@ jobs:
       - name: Lint
         run: bun run lint
 
+      - name: Obsidian lint
+        run: bun run lint:obsidian
+
       - name: Type check
         run: bun run typecheck
 
