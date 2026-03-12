@@ -11,7 +11,7 @@ import type { SyncError } from "../errors.js";
 /**
  * Base URL for troubleshooting documentation.
  *
- * @since 1.1.0
+ * @since 1.2.0
  * @category Constants
  */
 const TROUBLESHOOTING_URL =
@@ -20,7 +20,7 @@ const TROUBLESHOOTING_URL =
 /**
  * Display a troubleshooting notice with a link to the relevant documentation section.
  *
- * @since 1.1.0
+ * @since 1.2.0
  * @category Helpers
  */
 const showTroubleshootingNotice = (anchor: string): void => {
@@ -33,7 +33,7 @@ const showTroubleshootingNotice = (anchor: string): void => {
  * Uses exhaustive pattern matching on the error's `_tag` to ensure
  * all error types are handled at compile time.
  *
- * @since 1.1.0
+ * @since 1.2.0
  * @category Error Handling
  */
 export const showErrorNotice = (error: SyncError): void =>

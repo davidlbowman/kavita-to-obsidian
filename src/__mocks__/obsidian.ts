@@ -11,7 +11,7 @@ export const requestUrl = vi.fn();
 /**
  * Captured Notice instances for test assertions.
  *
- * @since 1.1.0
+ * @since 1.2.0
  * @category Test Helpers
  */
 export const capturedNotices: Array<{ message: string; timeout?: number }> = [];
@@ -19,7 +19,7 @@ export const capturedNotices: Array<{ message: string; timeout?: number }> = [];
 /**
  * Reset captured notices between tests.
  *
- * @since 1.1.0
+ * @since 1.2.0
  * @category Test Helpers
  */
 export const clearCapturedNotices = (): void => {
@@ -47,7 +47,7 @@ export const getNotice = (
 /**
  * Mock Notice class that captures constructor calls for assertions.
  *
- * @since 1.1.0
+ * @since 1.2.0
  * @category Mocks
  */
 export class Notice {
