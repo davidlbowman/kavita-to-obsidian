@@ -73,15 +73,10 @@ describe("renderTemplate", () => {
 	});
 
 	describe("malformed templates", () => {
-		it("returns empty string and warns for unclosed if", () => {
-			const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+		it("returns empty string for unclosed if", () => {
 			const result = renderTemplate("{{#if name}}Hello", { name: "World" });
 
 			expect(result).toBe("");
-			expect(warnSpy).toHaveBeenCalledWith(
-				expect.stringContaining("Template validation failed"),
-			);
-			warnSpy.mockRestore();
 		});
 	});
 

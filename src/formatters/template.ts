@@ -141,7 +141,6 @@ export const renderTemplate = (
 ): string => {
 	const validation = validateTemplate(template);
 	if (!validation.valid) {
-		console.warn(`Template validation failed: ${validation.error}`);
 		return "";
 	}
 
