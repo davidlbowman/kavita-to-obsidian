@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { Config, Effect, Layer, Redacted } from "effect";
+import { Config, Effect, Layer, Redacted, ServiceMap } from "effect";
 import type { PluginSettings } from "../schemas.js";
 import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
 
@@ -97,26 +97,10 @@ const EnvConfig = Config.all({
  * @since 0.0.1
  * @category Services
  */
-export class PluginConfig extends Effect.Service<PluginConfig>()(
-	"PluginConfig",
-	{
-		sync: (): PluginConfigShape => ({
-			kavitaUrl: new URL("http://localhost:5000"),
-			kavitaApiKey: Redacted.make(""),
-			outputPath: "kavita-annotations.md",
-			matchThreshold: 0.7,
-			includeComments: true,
-			includeSpoilers: false,
-			includeTags: true,
-			tagPrefix: "",
-			includeWikilinks: true,
-			exportMode: "hierarchical",
-			rootFolderName: "Kavita Annotations",
-			deleteOrphanedFiles: true,
-			annotationTemplate: DEFAULT_ANNOTATION_TEMPLATE,
-		}),
-	},
-) {
+export class PluginConfig extends ServiceMap.Service<
+	PluginConfig,
+	PluginConfigShape
+>()("PluginConfig") {
 	/**
 	 * Create config layer from Obsidian plugin settings.
 	 *
@@ -126,7 +110,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 	static fromSettings(settings: typeof PluginSettings.Type) {
 		return Layer.succeed(
 			PluginConfig,
-			new PluginConfig({
+			PluginConfig.of({
 				kavitaUrl: new URL(settings.kavitaUrl),
 				kavitaApiKey: Redacted.make(settings.kavitaApiKey),
 				outputPath: settings.outputPath,
@@ -154,7 +138,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 		PluginConfig,
 		Effect.gen(function* () {
 			const config = yield* EnvConfig;
-			return new PluginConfig(config);
+			return PluginConfig.of(config);
 		}),
 	);
 }

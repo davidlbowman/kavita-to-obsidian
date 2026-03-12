@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { Array, type Result, pipe } from "effect";
+import { Array, pipe, type Result } from "effect";
 import type { AnnotationDto } from "../schemas.js";
 import type { FormatOptions } from "./markdown.js";
 import { formatAnnotation, toSlug } from "./markdown.js";

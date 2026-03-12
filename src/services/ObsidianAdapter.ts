@@ -3,7 +3,7 @@
  *
  * @module
  */
-import { Effect, Option } from "effect";
+import { Effect, Layer, Option, ServiceMap } from "effect";
 import type { TAbstractFile, TFile, TFolder } from "obsidian";
 import {
 	ObsidianFileNotFoundError,
@@ -38,188 +38,208 @@ const isTFolder = (file: TAbstractFile | null): file is TFolder =>
  * @since 0.0.1
  * @category Services
  */
-export class ObsidianAdapter extends Effect.Service<ObsidianAdapter>()(
-	"ObsidianAdapter",
+export class ObsidianAdapter extends ServiceMap.Service<
+	ObsidianAdapter,
 	{
-		accessors: true,
-		effect: Effect.gen(function* () {
-			const app = yield* ObsidianApp;
-			const vault = app.vault;
+		writeFile(
+			path: string,
+			content: string,
+		): Effect.Effect<void, ObsidianWriteError>;
+		appendToFile(
+			path: string,
+			content: string,
+		): Effect.Effect<void, ObsidianWriteError>;
+		readFile(path: string): Effect.Effect<string, ObsidianFileNotFoundError>;
+		readonly getFile: (path: string) => Effect.Effect<Option.Option<TFile>>;
+		readonly listMarkdownFiles: Effect.Effect<TFile[]>;
+		ensureFolderExists(path: string): Effect.Effect<void, ObsidianFolderError>;
+		deleteFile(path: string): Effect.Effect<void, ObsidianWriteError>;
+		listFilesInFolder(path: string): Effect.Effect<string[]>;
+		listFoldersInFolder(path: string): Effect.Effect<string[]>;
+		folderExists(path: string): Effect.Effect<boolean>;
+		deleteFolder(path: string): Effect.Effect<void, ObsidianFolderError>;
+	}
+>()("ObsidianAdapter") {
+	static readonly make = Effect.gen(function* () {
+		const app = yield* ObsidianApp;
+		const vault = app.vault;
 
-			/**
-			 * Write content to a file, creating it if it doesn't exist.
-			 *
-			 * @since 0.0.1
-			 */
-			const writeFile = (path: string, content: string) =>
-				Effect.tryPromise({
-					try: async () => {
-						const existingFile = vault.getAbstractFileByPath(path);
-						if (isTFile(existingFile)) {
-							await vault.modify(existingFile, content);
-						} else {
-							await vault.create(path, content);
-						}
-					},
-					catch: (e) => new ObsidianWriteError({ path, cause: e }),
-				});
+		/**
+		 * Write content to a file, creating it if it doesn't exist.
+		 *
+		 * @since 0.0.1
+		 */
+		const writeFile = (path: string, content: string) =>
+			Effect.tryPromise({
+				try: async () => {
+					const existingFile = vault.getAbstractFileByPath(path);
+					if (isTFile(existingFile)) {
+						await vault.modify(existingFile, content);
+					} else {
+						await vault.create(path, content);
+					}
+				},
+				catch: (e) => new ObsidianWriteError({ path, cause: e }),
+			});
 
-			/**
-			 * Append content to an existing file.
-			 *
-			 * @since 0.0.1
-			 */
-			const appendToFile = (path: string, content: string) =>
-				Effect.tryPromise({
-					try: async () => {
-						const file = vault.getAbstractFileByPath(path);
-						if (isTFile(file)) {
-							await vault.append(file, content);
-						} else {
-							throw new Error("File does not exist");
-						}
-					},
-					catch: (e) => new ObsidianWriteError({ path, cause: e }),
-				});
-
-			/**
-			 * Read content from a file.
-			 *
-			 * @since 0.0.1
-			 */
-			const readFile = (path: string) =>
-				Effect.tryPromise({
-					try: async () => {
-						const file = vault.getAbstractFileByPath(path);
-						if (isTFile(file)) {
-							return await vault.read(file);
-						}
-						throw new Error("File not found");
-					},
-					catch: () => new ObsidianFileNotFoundError({ path }),
-				});
-
-			/**
-			 * Get a file by path, returning None if not found.
-			 *
-			 * @since 0.0.1
-			 */
-			const getFile = (path: string): Effect.Effect<Option.Option<TFile>> =>
-				Effect.sync(() => {
+		/**
+		 * Append content to an existing file.
+		 *
+		 * @since 0.0.1
+		 */
+		const appendToFile = (path: string, content: string) =>
+			Effect.tryPromise({
+				try: async () => {
 					const file = vault.getAbstractFileByPath(path);
-					return isTFile(file) ? Option.some(file) : Option.none();
-				});
-
-			/**
-			 * List all markdown files in the vault.
-			 *
-			 * @since 0.0.1
-			 */
-			const listMarkdownFiles = Effect.sync(() => vault.getMarkdownFiles());
-
-			/**
-			 * Ensure a folder exists, creating it and parent folders if needed.
-			 *
-			 * @since 1.1.0
-			 */
-			const ensureFolderExists = (path: string) =>
-				Effect.tryPromise({
-					try: async () => {
-						const existingFolder = vault.getAbstractFileByPath(path);
-						if (isTFolder(existingFolder)) {
-							return;
-						}
-						await vault.createFolder(path);
-					},
-					catch: (e) =>
-						new ObsidianFolderError({ path, operation: "create", cause: e }),
-				});
-
-			/**
-			 * Delete a file from the vault (respects user's trash preference).
-			 *
-			 * @since 1.1.0
-			 */
-			const deleteFile = (path: string) =>
-				Effect.tryPromise({
-					try: async () => {
-						const file = vault.getAbstractFileByPath(path);
-						if (isTFile(file)) {
-							await app.fileManager.trashFile(file);
-						}
-					},
-					catch: (e) => new ObsidianWriteError({ path, cause: e }),
-				});
-
-			/**
-			 * List all files in a folder (non-recursive).
-			 *
-			 * @since 1.1.0
-			 */
-			const listFilesInFolder = (path: string) =>
-				Effect.sync(() => {
-					const folder = vault.getAbstractFileByPath(path);
-					if (!isTFolder(folder)) {
-						return [];
+					if (isTFile(file)) {
+						await vault.append(file, content);
+					} else {
+						throw new Error("File does not exist");
 					}
-					return folder.children.filter(isTFile).map((f) => f.path);
-				});
+				},
+				catch: (e) => new ObsidianWriteError({ path, cause: e }),
+			});
 
-			/**
-			 * List all subfolders in a folder (non-recursive).
-			 *
-			 * @since 1.1.0
-			 */
-			const listFoldersInFolder = (path: string) =>
-				Effect.sync(() => {
-					const folder = vault.getAbstractFileByPath(path);
-					if (!isTFolder(folder)) {
-						return [];
+		/**
+		 * Read content from a file.
+		 *
+		 * @since 0.0.1
+		 */
+		const readFile = (path: string) =>
+			Effect.tryPromise({
+				try: async () => {
+					const file = vault.getAbstractFileByPath(path);
+					if (isTFile(file)) {
+						return await vault.read(file);
 					}
-					return folder.children.filter(isTFolder).map((f) => f.path);
-				});
+					throw new Error("File not found");
+				},
+				catch: () => new ObsidianFileNotFoundError({ path }),
+			});
 
-			/**
-			 * Check if a folder exists.
-			 *
-			 * @since 1.1.0
-			 */
-			const folderExists = (path: string) =>
-				Effect.sync(() => {
+		/**
+		 * Get a file by path, returning None if not found.
+		 *
+		 * @since 0.0.1
+		 */
+		const getFile = (path: string): Effect.Effect<Option.Option<TFile>> =>
+			Effect.sync(() => {
+				const file = vault.getAbstractFileByPath(path);
+				return isTFile(file) ? Option.some(file) : Option.none();
+			});
+
+		/**
+		 * List all markdown files in the vault.
+		 *
+		 * @since 0.0.1
+		 */
+		const listMarkdownFiles = Effect.sync(() => vault.getMarkdownFiles());
+
+		/**
+		 * Ensure a folder exists, creating it and parent folders if needed.
+		 *
+		 * @since 1.1.0
+		 */
+		const ensureFolderExists = (path: string) =>
+			Effect.tryPromise({
+				try: async () => {
+					const existingFolder = vault.getAbstractFileByPath(path);
+					if (isTFolder(existingFolder)) {
+						return;
+					}
+					await vault.createFolder(path);
+				},
+				catch: (e) =>
+					new ObsidianFolderError({ path, operation: "create", cause: e }),
+			});
+
+		/**
+		 * Delete a file from the vault (respects user's trash preference).
+		 *
+		 * @since 1.1.0
+		 */
+		const deleteFile = (path: string) =>
+			Effect.tryPromise({
+				try: async () => {
+					const file = vault.getAbstractFileByPath(path);
+					if (isTFile(file)) {
+						await app.fileManager.trashFile(file);
+					}
+				},
+				catch: (e) => new ObsidianWriteError({ path, cause: e }),
+			});
+
+		/**
+		 * List all files in a folder (non-recursive).
+		 *
+		 * @since 1.1.0
+		 */
+		const listFilesInFolder = (path: string) =>
+			Effect.sync(() => {
+				const folder = vault.getAbstractFileByPath(path);
+				if (!isTFolder(folder)) {
+					return [];
+				}
+				return folder.children.filter(isTFile).map((f) => f.path);
+			});
+
+		/**
+		 * List all subfolders in a folder (non-recursive).
+		 *
+		 * @since 1.1.0
+		 */
+		const listFoldersInFolder = (path: string) =>
+			Effect.sync(() => {
+				const folder = vault.getAbstractFileByPath(path);
+				if (!isTFolder(folder)) {
+					return [];
+				}
+				return folder.children.filter(isTFolder).map((f) => f.path);
+			});
+
+		/**
+		 * Check if a folder exists.
+		 *
+		 * @since 1.1.0
+		 */
+		const folderExists = (path: string) =>
+			Effect.sync(() => {
+				const folder = vault.getAbstractFileByPath(path);
+				return isTFolder(folder);
+			});
+
+		/**
+		 * Delete a folder and all its contents (respects user's trash preference).
+		 *
+		 * @since 1.1.0
+		 */
+		const deleteFolder = (path: string) =>
+			Effect.tryPromise({
+				try: async () => {
 					const folder = vault.getAbstractFileByPath(path);
-					return isTFolder(folder);
-				});
+					if (isTFolder(folder)) {
+						await app.fileManager.trashFile(folder);
+					}
+				},
+				catch: (e) =>
+					new ObsidianFolderError({ path, operation: "delete", cause: e }),
+			});
 
-			/**
-			 * Delete a folder and all its contents (respects user's trash preference).
-			 *
-			 * @since 1.1.0
-			 */
-			const deleteFolder = (path: string) =>
-				Effect.tryPromise({
-					try: async () => {
-						const folder = vault.getAbstractFileByPath(path);
-						if (isTFolder(folder)) {
-							await app.fileManager.trashFile(folder);
-						}
-					},
-					catch: (e) =>
-						new ObsidianFolderError({ path, operation: "delete", cause: e }),
-				});
+		return ObsidianAdapter.of({
+			writeFile,
+			appendToFile,
+			readFile,
+			getFile,
+			listMarkdownFiles,
+			ensureFolderExists,
+			deleteFile,
+			listFilesInFolder,
+			listFoldersInFolder,
+			folderExists,
+			deleteFolder,
+		});
+	});
 
-			return {
-				writeFile,
-				appendToFile,
-				readFile,
-				getFile,
-				listMarkdownFiles,
-				ensureFolderExists,
-				deleteFile,
-				listFilesInFolder,
-				listFoldersInFolder,
-				folderExists,
-				deleteFolder,
-			};
-		}),
-	},
-) {}
+	static readonly layer = Layer.effect(ObsidianAdapter, ObsidianAdapter.make);
+	static readonly layerNoDeps = ObsidianAdapter.layer;
+}

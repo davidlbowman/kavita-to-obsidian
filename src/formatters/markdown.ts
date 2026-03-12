@@ -7,9 +7,9 @@ import {
 	Array,
 	Number as EffectNumber,
 	Order,
-	Result,
 	pipe,
 	Record,
+	Result,
 } from "effect";
 import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
 import { decodeHtmlEntities, resolveComment } from "./sanitize.js";

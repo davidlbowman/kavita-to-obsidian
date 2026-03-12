@@ -3,14 +3,14 @@
  *
  * @module
  */
+import { Effect, Layer, ServiceMap } from "effect";
 import {
 	FetchHttpClient,
 	HttpClient,
 	type HttpClientError,
 	HttpClientRequest,
 	HttpClientResponse,
-} from "@effect/platform";
-import { Effect } from "effect";
+} from "effect/unstable/http";
 import { KavitaNetworkError } from "../errors.js";
 import { type LoginDto, type RegisterDto, UserDto } from "../schemas.js";
 
@@ -23,128 +23,149 @@ import { type LoginDto, type RegisterDto, UserDto } from "../schemas.js";
  * @since 0.0.1
  * @category Services
  */
-export class KavitaAuthClient extends Effect.Service<KavitaAuthClient>()(
-	"KavitaAuthClient",
+export class KavitaAuthClient extends ServiceMap.Service<
+	KavitaAuthClient,
 	{
-		accessors: true,
-		effect: Effect.gen(function* () {
-			const httpClient = yield* HttpClient.HttpClient;
+		forUrl(baseUrl: string): {
+			readonly healthCheck: Effect.Effect<boolean, KavitaNetworkError>;
+			register(
+				dto: typeof RegisterDto.Type,
+			): Effect.Effect<void, KavitaNetworkError>;
+			login(
+				dto: typeof LoginDto.Type,
+			): Effect.Effect<typeof UserDto.Type, KavitaNetworkError>;
+			resetApiKey(token: string): Effect.Effect<string, KavitaNetworkError>;
+		};
+	}
+>()("KavitaAuthClient") {
+	static readonly make = Effect.gen(function* () {
+		const httpClient = yield* HttpClient.HttpClient;
+
+		/**
+		 * Create an unauthenticated client for a given base URL.
+		 *
+		 * @since 0.0.1
+		 */
+		const forUrl = (baseUrl: string) => {
+			const client = httpClient.pipe(
+				HttpClient.mapRequest(HttpClientRequest.prependUrl(baseUrl)),
+			);
 
 			/**
-			 * Create an unauthenticated client for a given base URL.
+			 * Check if Kavita server is healthy.
 			 *
 			 * @since 0.0.1
 			 */
-			const forUrl = (baseUrl: string) => {
-				const client = httpClient.pipe(
-					HttpClient.mapRequest(HttpClientRequest.prependUrl(baseUrl)),
+			const healthCheck = Effect.gen(function* () {
+				const request = HttpClientRequest.get("/api/health");
+				const response = yield* client.execute(request);
+				return response.status === 200;
+			}).pipe(
+				Effect.mapError(
+					(e) => new KavitaNetworkError({ url: "/api/health", cause: e }),
+				),
+				Effect.scoped,
+			);
+
+			/**
+			 * Register a new admin user.
+			 *
+			 * @since 0.0.1
+			 */
+			const register = (dto: typeof RegisterDto.Type) =>
+				Effect.gen(function* () {
+					const request = HttpClientRequest.post("/api/Account/register").pipe(
+						HttpClientRequest.bodyJsonUnsafe(dto),
+					);
+					yield* client.execute(request);
+				}).pipe(
+					Effect.scoped,
+					Effect.catchIf(
+						(e) =>
+							"reason" in e &&
+							e.reason._tag === "StatusCodeError" &&
+							e.reason.response.status === 409,
+						() => Effect.void,
+					),
+					Effect.mapError(
+						(e) =>
+							new KavitaNetworkError({
+								url: "/api/Account/register",
+								cause: e,
+							}),
+					),
 				);
 
-				/**
-				 * Check if Kavita server is healthy.
-				 *
-				 * @since 0.0.1
-				 */
-				const healthCheck = Effect.gen(function* () {
-					const request = HttpClientRequest.get("/api/health");
-					const response = yield* client.execute(request);
-					return response.status === 200;
+			/**
+			 * Login and get JWT token.
+			 *
+			 * @since 0.0.1
+			 */
+			const login = (dto: typeof LoginDto.Type) =>
+				Effect.gen(function* () {
+					const request = HttpClientRequest.post("/api/Account/login").pipe(
+						HttpClientRequest.bodyJsonUnsafe(dto),
+					);
+					const response = yield* client
+						.pipe(HttpClient.filterStatusOk)
+						.execute(request);
+					return yield* HttpClientResponse.schemaBodyJson(UserDto)(response);
 				}).pipe(
 					Effect.mapError(
-						(e) => new KavitaNetworkError({ url: "/api/health", cause: e }),
+						(e) =>
+							new KavitaNetworkError({ url: "/api/Account/login", cause: e }),
 					),
 					Effect.scoped,
 				);
 
-				/**
-				 * Register a new admin user.
-				 *
-				 * @since 0.0.1
-				 */
-				const register = (dto: typeof RegisterDto.Type) =>
-					Effect.gen(function* () {
-						const request = HttpClientRequest.post(
-							"/api/Account/register",
-						).pipe(HttpClientRequest.bodyUnsafeJson(dto));
-						yield* client.execute(request);
-					}).pipe(
-						Effect.scoped,
-						Effect.catchIf(
-							(e): e is HttpClientError.ResponseError =>
-								e._tag === "ResponseError" && e.response.status === 409,
-							() => Effect.void,
-						),
-						Effect.mapError(
-							(e) =>
-								new KavitaNetworkError({
-									url: "/api/Account/register",
-									cause: e,
-								}),
-						),
+			/**
+			 * Reset API key (requires JWT token).
+			 *
+			 * The API returns the key wrapped in quotes which are stripped.
+			 *
+			 * @since 0.0.1
+			 */
+			const resetApiKey = (token: string) =>
+				Effect.gen(function* () {
+					const request = HttpClientRequest.post(
+						"/api/Account/reset-api-key",
+					).pipe(
+						HttpClientRequest.setHeader("Authorization", `Bearer ${token}`),
 					);
+					const response = yield* client
+						.pipe(HttpClient.filterStatusOk)
+						.execute(request);
+					const text = yield* response.text;
+					return text.replace(/"/g, "");
+				}).pipe(
+					Effect.mapError(
+						(e) =>
+							new KavitaNetworkError({
+								url: "/api/Account/reset-api-key",
+								cause: e,
+							}),
+					),
+					Effect.scoped,
+				);
 
-				/**
-				 * Login and get JWT token.
-				 *
-				 * @since 0.0.1
-				 */
-				const login = (dto: typeof LoginDto.Type) =>
-					Effect.gen(function* () {
-						const request = HttpClientRequest.post("/api/Account/login").pipe(
-							HttpClientRequest.bodyUnsafeJson(dto),
-						);
-						const response = yield* client
-							.pipe(HttpClient.filterStatusOk)
-							.execute(request);
-						return yield* HttpClientResponse.schemaBodyJson(UserDto)(response);
-					}).pipe(
-						Effect.mapError(
-							(e) =>
-								new KavitaNetworkError({ url: "/api/Account/login", cause: e }),
-						),
-						Effect.scoped,
-					);
-
-				/**
-				 * Reset API key (requires JWT token).
-				 *
-				 * The API returns the key wrapped in quotes which are stripped.
-				 *
-				 * @since 0.0.1
-				 */
-				const resetApiKey = (token: string) =>
-					Effect.gen(function* () {
-						const request = HttpClientRequest.post(
-							"/api/Account/reset-api-key",
-						).pipe(
-							HttpClientRequest.setHeader("Authorization", `Bearer ${token}`),
-						);
-						const response = yield* client
-							.pipe(HttpClient.filterStatusOk)
-							.execute(request);
-						const text = yield* response.text;
-						return text.replace(/"/g, "");
-					}).pipe(
-						Effect.mapError(
-							(e) =>
-								new KavitaNetworkError({
-									url: "/api/Account/reset-api-key",
-									cause: e,
-								}),
-						),
-						Effect.scoped,
-					);
-
-				return {
-					healthCheck,
-					register,
-					login,
-					resetApiKey,
-				};
+			return {
+				healthCheck,
+				register,
+				login,
+				resetApiKey,
 			};
+		};
 
-			return { forUrl };
-		}),
-		dependencies: [FetchHttpClient.layer],
-	},
-) {}
+		return KavitaAuthClient.of({ forUrl });
+	});
+
+	static readonly layer = Layer.effect(
+		KavitaAuthClient,
+		KavitaAuthClient.make,
+	).pipe(Layer.provide(FetchHttpClient.layer));
+
+	static readonly layerNoDeps = Layer.effect(
+		KavitaAuthClient,
+		KavitaAuthClient.make,
+	);
+}
