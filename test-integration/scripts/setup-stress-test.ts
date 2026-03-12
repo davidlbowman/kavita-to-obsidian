@@ -10,8 +10,8 @@
  * @module
  */
 
-import { FetchHttpClient } from "@effect/platform";
 import { Effect, Layer, Redacted, Schedule } from "effect";
+import { FetchHttpClient } from "effect/unstable/http";
 import { KavitaAuthClient } from "../../src/services/KavitaAuthClient.js";
 import { KavitaClient } from "../../src/services/KavitaClient.js";
 import { PluginConfig } from "../../src/services/PluginConfig.js";
@@ -69,7 +69,7 @@ const waitForKavita = Effect.gen(function* () {
 	yield* client.healthCheck.pipe(
 		Effect.retry(
 			Schedule.recurs(10).pipe(
-				Schedule.addDelay(() => "2 seconds"),
+				Schedule.addDelay(() => Effect.succeed("2 seconds")),
 				Schedule.tapOutput((out) => Effect.log(`Attempt ${out + 1}/10...`)),
 			),
 		),
@@ -97,11 +97,11 @@ const getApiKey: Effect.Effect<string, Error> = Effect.gen(function* () {
  * Build the KavitaClient layer with a given API key.
  */
 const makeKavitaClientLayer = (apiKey: string) =>
-	KavitaClient.DefaultWithoutDependencies.pipe(
+	KavitaClient.layerNoDeps.pipe(
 		Layer.provide(
 			Layer.succeed(
 				PluginConfig,
-				new PluginConfig({
+				PluginConfig.of({
 					kavitaUrl: new URL(KAVITA_URL),
 					kavitaApiKey: Redacted.make(apiKey),
 					outputPath: "kavita-annotations.md",
@@ -268,7 +268,7 @@ const main = Effect.gen(function* () {
 	yield* Effect.log("Stress test setup complete!");
 });
 
-const program = main.pipe(Effect.provide(KavitaAuthClient.Default));
+const program = main.pipe(Effect.provide(KavitaAuthClient.layer));
 
 Effect.runPromise(program as Effect.Effect<void>).catch((error) => {
 	console.error("Stress test setup failed:", error);

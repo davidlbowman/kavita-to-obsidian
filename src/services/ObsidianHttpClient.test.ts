@@ -146,7 +146,9 @@ describe("ObsidianHttpClient", () => {
 			});
 
 			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.delete("http://test.local/api/resource/1");
+			const request = HttpClientRequest.delete(
+				"http://test.local/api/resource/1",
+			);
 			const response = yield* client.execute(request).pipe(Effect.scoped);
 
 			expect(response.status).toBe(200);
