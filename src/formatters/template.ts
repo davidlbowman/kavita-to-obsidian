@@ -3,22 +3,9 @@
  *
  * @module
  */
+import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
 
-/**
- * Default template for rendering a single annotation.
- *
- * @since 1.2.0
- * @category Template
- */
-export const DEFAULT_ANNOTATION_TEMPLATE = `> {{selectedText}}
-{{#if comment}}
-
-*Note:* {{comment}}
-{{/if}}
-{{#if pageNumber}}
-
-<small>Page {{pageNumber}}</small>
-{{/if}}`;
+export { DEFAULT_ANNOTATION_TEMPLATE };
 
 /**
  * Validate template syntax by checking that all `{{#if}}` blocks have matching `{{/if}}` closers.
