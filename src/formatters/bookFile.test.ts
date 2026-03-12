@@ -207,6 +207,60 @@ describe("formatBookAnnotation", () => {
 		expect(Option.isSome(result)).toBe(true);
 	});
 
+	it("decodes HTML entities in selectedText", () => {
+		const annotation = createAnnotation({
+			selectedText: "it&#39;s a test &amp; more",
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("> it's a test & more");
+		}
+	});
+
+	it("renders Quill delta JSON comment as plain text", () => {
+		const annotation = createAnnotation({
+			comment: '{"ops":[{"insert":"My note\\n"}]}',
+			commentPlainText: null,
+			commentHtml: null,
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* My note");
+		}
+	});
+
+	it("prefers commentPlainText over comment", () => {
+		const annotation = createAnnotation({
+			commentPlainText: "Plain text note",
+			comment: '{"ops":[{"insert":"Rich text\\n"}]}',
+			commentHtml: null,
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* Plain text note");
+		}
+	});
+
+	it("uses commentHtml as fallback with tags stripped", () => {
+		const annotation = createAnnotation({
+			comment: null,
+			commentPlainText: null,
+			commentHtml: "<p>HTML note</p>",
+		});
+		const result = formatBookAnnotation(annotation, defaultFormatOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* HTML note");
+		}
+	});
+
 	it("handles multiline text", () => {
 		const annotation = createAnnotation({
 			selectedText: "Line one\nLine two\nLine three",

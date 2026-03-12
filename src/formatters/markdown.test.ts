@@ -433,6 +433,64 @@ describe("formatAnnotation", () => {
 
 		expect(Option.isSome(result)).toBe(true);
 	});
+
+	it("decodes HTML entities in selectedText", () => {
+		const annotation = createAnnotation({
+			selectedText: "it&#39;s a test &amp; more",
+			pageNumber: 0,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("> it's a test & more");
+		}
+	});
+
+	it("renders Quill delta JSON comment as plain text", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: '{"ops":[{"insert":"My note\\n"}]}',
+			commentPlainText: null,
+			commentHtml: null,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* My note");
+		}
+	});
+
+	it("prefers commentPlainText over comment", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			commentPlainText: "Plain text note",
+			comment: '{"ops":[{"insert":"Rich text\\n"}]}',
+			commentHtml: null,
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* Plain text note");
+		}
+	});
+
+	it("uses commentHtml as fallback with tags stripped", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: null,
+			commentPlainText: null,
+			commentHtml: "<p>HTML note</p>",
+		});
+		const result = formatAnnotation(annotation, defaultOptions);
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("*Note:* HTML note");
+		}
+	});
 });
 
 describe("groupBySeriesId", () => {
