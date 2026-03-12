@@ -4,7 +4,7 @@
  * @module
  */
 import { describe, it } from "@effect/vitest";
-import { ConfigProvider, Effect, Layer, Redacted } from "effect";
+import { ConfigProvider, Effect, Redacted } from "effect";
 import { expect } from "vitest";
 import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
 import { PluginConfig } from "./PluginConfig.js";

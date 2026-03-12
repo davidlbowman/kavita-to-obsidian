@@ -254,9 +254,7 @@ describe("KavitaClient", () => {
 				expect(result._tag).toBe("Failure");
 				if (result._tag === "Failure") {
 					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect((result.failure as KavitaNetworkError).url).toBe(
-						"/api/Annotation/all-filtered",
-					);
+					expect(result.failure.url).toBe("/api/Annotation/all-filtered");
 				}
 			}).pipe(
 				Effect.provide(KavitaClient.layerNoDeps),
@@ -522,9 +520,7 @@ describe("KavitaClient", () => {
 				expect(result._tag).toBe("Failure");
 				if (result._tag === "Failure") {
 					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect((result.failure as KavitaNetworkError).url).toContain(
-						"/api/Series/metadata",
-					);
+					expect(result.failure.url).toContain("/api/Series/metadata");
 				}
 			}).pipe(
 				Effect.provide(KavitaClient.layerNoDeps),
@@ -547,9 +543,7 @@ describe("KavitaClient", () => {
 				expect(result._tag).toBe("Failure");
 				if (result._tag === "Failure") {
 					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect((result.failure as KavitaNetworkError).url).toBe(
-						"/api/Series/volumes",
-					);
+					expect(result.failure.url).toBe("/api/Series/volumes");
 				}
 			}).pipe(
 				Effect.provide(KavitaClient.layerNoDeps),
@@ -586,9 +580,7 @@ describe("KavitaClient", () => {
 				expect(result._tag).toBe("Failure");
 				if (result._tag === "Failure") {
 					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect((result.failure as KavitaNetworkError).url).toBe(
-						"/api/Annotation/create",
-					);
+					expect(result.failure.url).toBe("/api/Annotation/create");
 				}
 			}).pipe(
 				Effect.provide(KavitaClient.layerNoDeps),
