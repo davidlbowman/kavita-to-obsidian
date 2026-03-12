@@ -73,7 +73,7 @@ const EnvConfig = Config.all({
 		Config.withDefault(true),
 	),
 	exportMode: Config.string("EXPORT_MODE").pipe(
-		Config.withDefault("single-file" as ExportModeType),
+		Config.withDefault("hierarchical" as ExportModeType),
 	) as Config.Config<ExportModeType>,
 	rootFolderName: Config.string("ROOT_FOLDER_NAME").pipe(
 		Config.withDefault("Kavita Annotations"),
@@ -104,7 +104,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 			includeTags: true,
 			tagPrefix: "",
 			includeWikilinks: true,
-			exportMode: "single-file",
+			exportMode: "hierarchical",
 			rootFolderName: "Kavita Annotations",
 			deleteOrphanedFiles: true,
 		}),
