@@ -228,9 +228,7 @@ describe("KavitaAuthClient", () => {
 				expect(result._tag).toBe("Failure");
 				if (result._tag === "Failure") {
 					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect((result.failure as KavitaNetworkError).url).toBe(
-						"/api/health",
-					);
+					expect(result.failure.url).toBe("/api/health");
 				}
 			}).pipe(Effect.provide(TestKavitaAuthClient(createFailingHttpClient()))),
 		);
@@ -271,9 +269,7 @@ describe("KavitaAuthClient", () => {
 				expect(result._tag).toBe("Failure");
 				if (result._tag === "Failure") {
 					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect((result.failure as KavitaNetworkError).url).toBe(
-						"/api/Account/register",
-					);
+					expect(result.failure.url).toBe("/api/Account/register");
 				}
 			}).pipe(Effect.provide(TestKavitaAuthClient(createFailingHttpClient()))),
 		);
@@ -326,9 +322,7 @@ describe("KavitaAuthClient", () => {
 				expect(result._tag).toBe("Failure");
 				if (result._tag === "Failure") {
 					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect((result.failure as KavitaNetworkError).url).toBe(
-						"/api/Account/login",
-					);
+					expect(result.failure.url).toBe("/api/Account/login");
 				}
 			}).pipe(
 				Effect.provide(
@@ -382,9 +376,7 @@ describe("KavitaAuthClient", () => {
 				expect(result._tag).toBe("Failure");
 				if (result._tag === "Failure") {
 					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect((result.failure as KavitaNetworkError).url).toBe(
-						"/api/Account/reset-api-key",
-					);
+					expect(result.failure.url).toBe("/api/Account/reset-api-key");
 				}
 			}).pipe(
 				Effect.provide(

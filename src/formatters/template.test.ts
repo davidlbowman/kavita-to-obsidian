@@ -4,7 +4,7 @@
  * @module
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
 	DEFAULT_ANNOTATION_TEMPLATE,
 	renderTemplate,
