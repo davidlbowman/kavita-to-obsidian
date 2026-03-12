@@ -31,6 +31,7 @@ interface PluginSettingsData {
 	exportMode: "single-file" | "hierarchical";
 	rootFolderName: string;
 	deleteOrphanedFiles: boolean;
+	annotationTemplate: string;
 }
 
 export default class KavitaToObsidianPlugin extends Plugin {

@@ -6,6 +6,7 @@
 import { describe, it } from "@effect/vitest";
 import { ConfigProvider, Effect, Redacted } from "effect";
 import { expect } from "vitest";
+import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
 import { PluginConfig } from "./PluginConfig.js";
 
 describe("PluginConfig", () => {
@@ -24,6 +25,7 @@ describe("PluginConfig", () => {
 				expect(config.tagPrefix).toBe("");
 				expect(config.includeWikilinks).toBe(true);
 				expect(config.exportMode).toBe("hierarchical");
+				expect(config.annotationTemplate).toBe(DEFAULT_ANNOTATION_TEMPLATE);
 			}).pipe(Effect.provide(PluginConfig.Default)),
 		);
 	});
@@ -42,6 +44,7 @@ describe("PluginConfig", () => {
 				expect(config.includeTags).toBe(false);
 				expect(config.tagPrefix).toBe("book/");
 				expect(config.includeWikilinks).toBe(false);
+				expect(config.annotationTemplate).toBe("custom template");
 			}).pipe(
 				Effect.provide(
 					PluginConfig.fromSettings({
@@ -57,6 +60,7 @@ describe("PluginConfig", () => {
 						exportMode: "single-file",
 						rootFolderName: "Kavita Annotations",
 						deleteOrphanedFiles: true,
+						annotationTemplate: "custom template",
 					}),
 				),
 			),
@@ -77,6 +81,7 @@ describe("PluginConfig", () => {
 				expect(config.includeTags).toBe(false);
 				expect(config.tagPrefix).toBe("book/");
 				expect(config.includeWikilinks).toBe(false);
+				expect(config.annotationTemplate).toBe("env custom template");
 			}).pipe(
 				Effect.provide(PluginConfig.fromEnv),
 				Effect.withConfigProvider(
@@ -91,6 +96,7 @@ describe("PluginConfig", () => {
 							["INCLUDE_TAGS", "false"],
 							["TAG_PREFIX", "book/"],
 							["INCLUDE_WIKILINKS", "false"],
+							["ANNOTATION_TEMPLATE", "env custom template"],
 						]),
 					),
 				),
@@ -111,6 +117,7 @@ describe("PluginConfig", () => {
 				expect(config.tagPrefix).toBe("");
 				expect(config.includeWikilinks).toBe(true);
 				expect(config.exportMode).toBe("hierarchical");
+				expect(config.annotationTemplate).toBe(DEFAULT_ANNOTATION_TEMPLATE);
 			}).pipe(
 				Effect.provide(PluginConfig.fromEnv),
 				Effect.withConfigProvider(ConfigProvider.fromMap(new Map())),

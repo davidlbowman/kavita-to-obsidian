@@ -5,6 +5,7 @@
  */
 import { Config, Effect, Layer, Redacted } from "effect";
 import type { PluginSettings } from "../schemas.js";
+import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
 
 /**
  * Export mode type.
@@ -39,6 +40,8 @@ export interface PluginConfigShape {
 	readonly rootFolderName: string;
 	/** @since 1.1.0 */
 	readonly deleteOrphanedFiles: boolean;
+	/** @since 1.2.0 */
+	readonly annotationTemplate: string;
 }
 
 /**
@@ -81,6 +84,9 @@ const EnvConfig = Config.all({
 	deleteOrphanedFiles: Config.boolean("DELETE_ORPHANED_FILES").pipe(
 		Config.withDefault(true),
 	),
+	annotationTemplate: Config.string("ANNOTATION_TEMPLATE").pipe(
+		Config.withDefault(DEFAULT_ANNOTATION_TEMPLATE),
+	),
 });
 
 /**
@@ -107,6 +113,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 			exportMode: "hierarchical",
 			rootFolderName: "Kavita Annotations",
 			deleteOrphanedFiles: true,
+			annotationTemplate: DEFAULT_ANNOTATION_TEMPLATE,
 		}),
 	},
 ) {
@@ -132,6 +139,7 @@ export class PluginConfig extends Effect.Service<PluginConfig>()(
 				exportMode: settings.exportMode,
 				rootFolderName: settings.rootFolderName,
 				deleteOrphanedFiles: settings.deleteOrphanedFiles,
+				annotationTemplate: settings.annotationTemplate,
 			}),
 		);
 	}

@@ -79,6 +79,7 @@ const createMockConfig = () =>
 			exportMode: "hierarchical",
 			rootFolderName: "Kavita Annotations",
 			deleteOrphanedFiles: true,
+			annotationTemplate: "",
 		}),
 	);
 

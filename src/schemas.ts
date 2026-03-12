@@ -110,6 +110,22 @@ export type AnnotationsResponseType = typeof AnnotationsResponse.Type;
 export const ExportMode = Schema.Literal("single-file", "hierarchical");
 
 /**
+ * Default Handlebars template for rendering individual annotations.
+ *
+ * @since 1.2.0
+ * @category Plugin Schemas
+ */
+export const DEFAULT_ANNOTATION_TEMPLATE = `> {{selectedText}}
+{{#if comment}}
+
+*Note:* {{comment}}
+{{/if}}
+{{#if pageNumber}}
+
+<small>Page {{pageNumber}}</small>
+{{/if}}`;
+
+/**
  * Plugin settings stored in Obsidian.
  *
  * @since 0.0.1
@@ -184,6 +200,14 @@ export class PluginSettings extends Schema.Class<PluginSettings>(
 		exact: true,
 		default: () => true,
 	}),
+	/**
+	 * Handlebars template for rendering individual annotations.
+	 * @since 1.2.0
+	 */
+	annotationTemplate: Schema.optionalWith(Schema.String, {
+		exact: true,
+		default: () => DEFAULT_ANNOTATION_TEMPLATE,
+	}),
 }) {}
 
 /**
@@ -205,6 +229,7 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	exportMode: "hierarchical",
 	rootFolderName: "Kavita Annotations",
 	deleteOrphanedFiles: true,
+	annotationTemplate: DEFAULT_ANNOTATION_TEMPLATE,
 };
 
 /**
