@@ -7,7 +7,6 @@ import { Effect, Layer, ServiceMap } from "effect";
 import {
 	FetchHttpClient,
 	HttpClient,
-	type HttpClientError,
 	HttpClientRequest,
 	HttpClientResponse,
 } from "effect/unstable/http";
