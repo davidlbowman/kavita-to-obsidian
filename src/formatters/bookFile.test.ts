@@ -262,7 +262,6 @@ describe("formatBookAnnotation", () => {
 		}
 	});
 
-
 	it("handles multiline text with proper blockquoting", () => {
 		const annotation = createAnnotation({
 			selectedText: "Line one\nLine two\nLine three",
