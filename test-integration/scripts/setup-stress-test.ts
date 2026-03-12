@@ -114,6 +114,7 @@ const makeKavitaClientLayer = (apiKey: string) =>
 					exportMode: "single-file",
 					rootFolderName: "Kavita Annotations",
 					deleteOrphanedFiles: true,
+					annotationTemplate: "",
 				}),
 			),
 		),

@@ -84,6 +84,7 @@ const MockPluginConfig = Layer.succeed(
 		exportMode: "single-file",
 		rootFolderName: "Kavita Annotations",
 		deleteOrphanedFiles: true,
+		annotationTemplate: "",
 	}),
 );
 

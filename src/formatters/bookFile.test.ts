@@ -55,6 +55,7 @@ const defaultFormatOptions: FormatOptions = {
 	includeTags: true,
 	tagPrefix: "",
 	includeWikilinks: true,
+	annotationTemplate: "",
 };
 
 const createBookOptions = (
@@ -261,7 +262,7 @@ describe("formatBookAnnotation", () => {
 		}
 	});
 
-	it("handles multiline text", () => {
+	it("handles multiline text with proper blockquoting", () => {
 		const annotation = createAnnotation({
 			selectedText: "Line one\nLine two\nLine three",
 		});
@@ -270,6 +271,39 @@ describe("formatBookAnnotation", () => {
 		expect(Option.isSome(result)).toBe(true);
 		if (Option.isSome(result)) {
 			expect(result.value).toContain("> Line one\n> Line two\n> Line three");
+		}
+	});
+
+	it("renders with a custom annotation template", () => {
+		const annotation = createAnnotation({
+			selectedText: "Key insight",
+			pageNumber: 7,
+		});
+		const result = formatBookAnnotation(annotation, {
+			...defaultFormatOptions,
+			annotationTemplate: "**{{selectedText}}** (p. {{pageNumber}})",
+		});
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toBe("**Key insight** (p. 7)");
+		}
+	});
+
+	it("falls back to default template when annotationTemplate is empty", () => {
+		const annotation = createAnnotation({
+			selectedText: "Some text",
+			pageNumber: 42,
+		});
+		const result = formatBookAnnotation(annotation, {
+			...defaultFormatOptions,
+			annotationTemplate: "",
+		});
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("> Some text");
+			expect(result.value).toContain("<small>Page 42</small>");
 		}
 	});
 });

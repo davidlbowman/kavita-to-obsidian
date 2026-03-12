@@ -5,7 +5,8 @@
  */
 import { Effect, Layer } from "effect";
 import { type App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { DEFAULT_SETTINGS } from "./schemas.js";
+import { validateTemplate } from "./formatters/template.js";
+import { DEFAULT_ANNOTATION_TEMPLATE, DEFAULT_SETTINGS } from "./schemas.js";
 import { AnnotationSyncer } from "./services/AnnotationSyncer.js";
 import { showErrorNotice } from "./services/ErrorHandler.js";
 import { HierarchicalSyncer } from "./services/HierarchicalSyncer.js";
@@ -31,6 +32,7 @@ interface PluginSettingsData {
 	exportMode: "single-file" | "hierarchical";
 	rootFolderName: string;
 	deleteOrphanedFiles: boolean;
+	annotationTemplate: string;
 }
 
 export default class KavitaToObsidianPlugin extends Plugin {
@@ -337,6 +339,41 @@ class KavitaSettingTab extends PluginSettingTab {
 					.onChange(async (value) => {
 						this.plugin.settings.includeWikilinks = value;
 						await this.plugin.saveSettings();
+					}),
+			);
+
+		new Setting(containerEl)
+			.setName("Annotation template")
+			.setDesc(
+				"Customize how each annotation is formatted. Variables: {{blockquote}} (blockquoted text), {{selectedText}} (raw text), {{comment}}, {{pageNumber}}, {{chapterTitle}}, {{seriesName}}, {{createdUtc}}. Use {{#if variable}}...{{/if}} for conditionals.",
+			)
+			.addTextArea((text) => {
+				text
+					.setPlaceholder(DEFAULT_ANNOTATION_TEMPLATE)
+					.setValue(this.plugin.settings.annotationTemplate ?? "")
+					.onChange(async (value) => {
+						if (value.trim() !== "") {
+							const result = validateTemplate(value);
+							if (!result.valid) {
+								new Notice(`Template error: ${result.error}`);
+								return;
+							}
+						}
+						this.plugin.settings.annotationTemplate = value;
+						await this.plugin.saveSettings();
+					});
+				text.inputEl.rows = 8;
+				text.inputEl.cols = 40;
+			})
+			.addExtraButton((button) =>
+				button
+					.setIcon("reset")
+					.setTooltip("Reset to default template")
+					.onClick(async () => {
+						this.plugin.settings.annotationTemplate =
+							DEFAULT_ANNOTATION_TEMPLATE;
+						await this.plugin.saveSettings();
+						this.display();
 					}),
 			);
 	}
