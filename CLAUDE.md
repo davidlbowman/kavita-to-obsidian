@@ -45,34 +45,48 @@ test-integration/
 manifest.json                # Obsidian plugin manifest
 ```
 
-## Effect-TS Patterns
+## Effect-TS Patterns (v4)
 
 ### Services
 
-All services use `Effect.Service` with `accessors: true`:
+All services use `ServiceMap.Service` with explicit type shapes:
 
 ```typescript
-export class MyService extends Effect.Service<MyService>()("MyService", {
-  accessors: true,
-  effect: Effect.gen(function* () {
+export class MyService extends ServiceMap.Service<MyService, {
+  readonly method: Effect.Effect<string>
+}>()(\"MyService\") {
+  static readonly make = Effect.gen(function* () {
     const dep = yield* SomeDependency;
-    return { method: () => Effect.succeed("result") };
-  }),
-  dependencies: [SomeDependency.Default],
-}) {}
+    return MyService.of({ method: Effect.succeed("result") });
+  });
+
+  static readonly layer = Layer.effect(MyService, MyService.make).pipe(
+    Layer.provide(SomeDependency.layer),
+  );
+
+  static readonly layerNoDeps = Layer.effect(MyService, MyService.make);
+}
 ```
 
 ### Error Types
 
-Tagged errors using `Schema.TaggedError`:
+Tagged errors using `Schema.TaggedErrorClass`:
 
 ```typescript
-export class KavitaNetworkError extends Schema.TaggedError<KavitaNetworkError>()(
+export class KavitaNetworkError extends Schema.TaggedErrorClass<KavitaNetworkError>()(
   "KavitaNetworkError",
-  { url: Schema.String, cause: Schema.optionalWith(Schema.Defect, { as: "Option" }) }
+  { url: Schema.String, cause: Schema.optionalKey(Schema.Defect) }
 ) {
   get message(): string { return `Network error for ${this.url}`; }
 }
+```
+
+### HTTP Client
+
+HTTP modules are imported from `effect/unstable/http`:
+
+```typescript
+import { HttpClient, HttpClientRequest, HttpClientResponse } from "effect/unstable/http";
 ```
 
 ### Layer Composition
@@ -80,7 +94,7 @@ export class KavitaNetworkError extends Schema.TaggedError<KavitaNetworkError>()
 Services are composed via Layers for dependency injection:
 
 ```typescript
-const SyncerLayer = AnnotationSyncer.Default.pipe(
+const SyncerLayer = AnnotationSyncer.layerNoDeps.pipe(
   Layer.provide(KavitaClientLayer),
   Layer.provide(ObsidianAdapterLayer),
   Layer.provide(ConfigLayer),

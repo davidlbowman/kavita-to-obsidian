@@ -85,11 +85,11 @@ export default class KavitaToObsidianPlugin extends Plugin {
 		const ConfigLayer = PluginConfig.fromSettings(this.settings);
 		const ObsidianAppLayer = Layer.succeed(ObsidianApp, this.app);
 
-		const ObsidianAdapterLayer = ObsidianAdapter.Default.pipe(
+		const ObsidianAdapterLayer = ObsidianAdapter.layerNoDeps.pipe(
 			Layer.provide(ObsidianAppLayer),
 		);
 
-		const KavitaClientLayer = KavitaClient.DefaultWithoutDependencies.pipe(
+		const KavitaClientLayer = KavitaClient.layerNoDeps.pipe(
 			Layer.provide(ConfigLayer),
 			Layer.provide(ObsidianHttpClient),
 		);
@@ -100,7 +100,7 @@ export default class KavitaToObsidianPlugin extends Plugin {
 				return yield* syncer.syncAll;
 			});
 
-			const SyncerLayer = HierarchicalSyncer.Default.pipe(
+			const SyncerLayer = HierarchicalSyncer.layerNoDeps.pipe(
 				Layer.provide(KavitaClientLayer),
 				Layer.provide(ObsidianAdapterLayer),
 				Layer.provide(ConfigLayer),
@@ -130,7 +130,7 @@ export default class KavitaToObsidianPlugin extends Plugin {
 				return yield* syncer.syncToFile;
 			});
 
-			const SyncerLayer = AnnotationSyncer.Default.pipe(
+			const SyncerLayer = AnnotationSyncer.layerNoDeps.pipe(
 				Layer.provide(KavitaClientLayer),
 				Layer.provide(ObsidianAdapterLayer),
 				Layer.provide(ConfigLayer),

@@ -5,7 +5,8 @@
  */
 
 import { describe, it } from "@effect/vitest";
-import { type Context, Effect, Layer } from "effect";
+import { Effect, Layer } from "effect";
+import type { App } from "obsidian";
 import { expect } from "vitest";
 import { ObsidianApp } from "./ObsidianApp.js";
 
@@ -16,7 +17,7 @@ const mockApp = {
 			read: () => Promise.resolve(""),
 		},
 	},
-} as unknown as Context.Tag.Service<typeof ObsidianApp>;
+} as unknown as App;
 
 describe("ObsidianApp", () => {
 	it("is a valid Context.Tag", () => {

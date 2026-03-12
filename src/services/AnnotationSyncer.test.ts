@@ -124,19 +124,25 @@ const createMockObsidianAdapter = () => {
 const createMockConfig = (
 	overrides: Partial<typeof PluginConfig.Service> = {},
 ) =>
-	Layer.succeed(PluginConfig, {
-		kavitaUrl: new URL("http://localhost:5000"),
-		kavitaApiKey: Redacted.make("test-api-key"),
-		outputPath: "kavita-annotations.md",
-		matchThreshold: 0.7,
-		includeComments: true,
-		includeSpoilers: false,
-		includeTags: true,
-		tagPrefix: "",
-		includeWikilinks: true,
-		annotationTemplate: "",
-		...overrides,
-	} as unknown as typeof PluginConfig.Service);
+	Layer.succeed(
+		PluginConfig,
+		PluginConfig.of({
+			kavitaUrl: new URL("http://localhost:5000"),
+			kavitaApiKey: Redacted.make("test-api-key"),
+			outputPath: "kavita-annotations.md",
+			matchThreshold: 0.7,
+			includeComments: true,
+			includeSpoilers: false,
+			includeTags: true,
+			tagPrefix: "",
+			includeWikilinks: true,
+			exportMode: "hierarchical",
+			rootFolderName: "Kavita Annotations",
+			deleteOrphanedFiles: true,
+			annotationTemplate: "",
+			...overrides,
+		}),
+	);
 
 describe("AnnotationSyncer", () => {
 	describe("syncToFile", () => {
@@ -155,7 +161,7 @@ describe("AnnotationSyncer", () => {
 				expect(fileContent).toContain("First highlight");
 				expect(fileContent).toContain("Second highlight");
 			}).pipe(
-				Effect.provide(AnnotationSyncer.Default),
+				Effect.provide(AnnotationSyncer.layerNoDeps),
 				Effect.provide(
 					createMockKavitaClient([
 						createAnnotation({
@@ -182,7 +188,7 @@ describe("AnnotationSyncer", () => {
 
 				expect(result.count).toBe(0);
 			}).pipe(
-				Effect.provide(AnnotationSyncer.Default),
+				Effect.provide(AnnotationSyncer.layerNoDeps),
 				Effect.provide(createMockKavitaClient([])),
 				Effect.provide(createMockObsidianAdapter().layer),
 				Effect.provide(createMockConfig()),
@@ -196,7 +202,7 @@ describe("AnnotationSyncer", () => {
 
 				expect(result.outputPath).toBe("custom/path.md");
 			}).pipe(
-				Effect.provide(AnnotationSyncer.Default),
+				Effect.provide(AnnotationSyncer.layerNoDeps),
 				Effect.provide(createMockKavitaClient([createAnnotation()])),
 				Effect.provide(createMockObsidianAdapter().layer),
 				Effect.provide(createMockConfig({ outputPath: "custom/path.md" })),
@@ -214,7 +220,7 @@ describe("AnnotationSyncer", () => {
 				expect(fileContent).toContain("Normal");
 				expect(fileContent).not.toContain("Spoiler");
 			}).pipe(
-				Effect.provide(AnnotationSyncer.Default),
+				Effect.provide(AnnotationSyncer.layerNoDeps),
 				Effect.provide(
 					createMockKavitaClient([
 						createAnnotation({

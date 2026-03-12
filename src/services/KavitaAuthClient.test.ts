@@ -4,14 +4,14 @@
  * @module
  */
 
+import { describe, it } from "@effect/vitest";
+import { Effect, Layer } from "effect";
 import {
 	HttpClient,
 	HttpClientError,
 	HttpClientRequest,
 	HttpClientResponse,
-} from "@effect/platform";
-import { describe, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
+} from "effect/unstable/http";
 import { expect } from "vitest";
 import { KavitaNetworkError } from "../errors.js";
 import { UserDto } from "../schemas.js";
@@ -22,7 +22,7 @@ const createMockHttpClient = (
 ) =>
 	Layer.succeed(
 		HttpClient.HttpClient,
-		HttpClient.make((request) => {
+		HttpClient.make((request, _url, _signal, _fiber) => {
 			const { body, status } = handler(request.url, request.method);
 			return Effect.succeed(
 				HttpClientResponse.fromWeb(
@@ -39,12 +39,13 @@ const createMockHttpClient = (
 const createFailingHttpClient = () =>
 	Layer.succeed(
 		HttpClient.HttpClient,
-		HttpClient.make((request) =>
+		HttpClient.make((request, _url, _signal, _fiber) =>
 			Effect.fail(
-				new HttpClientError.RequestError({
-					request,
-					reason: "Transport",
-					cause: new Error("Network error"),
+				new HttpClientError.HttpClientError({
+					reason: new HttpClientError.TransportError({
+						request,
+						cause: new Error("Network error"),
+					}),
 				}),
 			),
 		),
@@ -84,13 +85,15 @@ const TestKavitaAuthClient = (httpLayer: Layer.Layer<HttpClient.HttpClient>) =>
 					Effect.gen(function* () {
 						const request = HttpClientRequest.post(
 							"/api/Account/register",
-						).pipe(HttpClientRequest.bodyUnsafeJson(dto));
+						).pipe(HttpClientRequest.bodyJsonUnsafe(dto));
 						yield* client.execute(request);
 					}).pipe(
 						Effect.scoped,
 						Effect.catchIf(
-							(e): e is HttpClientError.ResponseError =>
-								e._tag === "ResponseError" && e.response.status === 409,
+							(e) =>
+								"reason" in e &&
+								e.reason._tag === "StatusCodeError" &&
+								e.reason.response.status === 409,
 							() => Effect.void,
 						),
 						Effect.mapError(
@@ -105,7 +108,7 @@ const TestKavitaAuthClient = (httpLayer: Layer.Layer<HttpClient.HttpClient>) =>
 				const login = (dto: { username: string; password: string }) =>
 					Effect.gen(function* () {
 						const request = HttpClientRequest.post("/api/Account/login").pipe(
-							HttpClientRequest.bodyUnsafeJson(dto),
+							HttpClientRequest.bodyJsonUnsafe(dto),
 						);
 						const response = yield* client
 							.pipe(HttpClient.filterStatusOk)
@@ -148,7 +151,7 @@ const TestKavitaAuthClient = (httpLayer: Layer.Layer<HttpClient.HttpClient>) =>
 				return { healthCheck, register, login, resetApiKey };
 			};
 
-			return new KavitaAuthClient({ forUrl });
+			return KavitaAuthClient.of({ forUrl });
 		}),
 	).pipe(Layer.provide(httpLayer));
 
@@ -220,12 +223,14 @@ describe("KavitaAuthClient", () => {
 			Effect.gen(function* () {
 				const authClient = yield* KavitaAuthClient;
 				const client = authClient.forUrl("http://test.local");
-				const result = yield* client.healthCheck.pipe(Effect.either);
+				const result = yield* client.healthCheck.pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(KavitaNetworkError);
-					expect(result.left.url).toBe("/api/health");
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
+					expect((result.failure as KavitaNetworkError).url).toBe(
+						"/api/health",
+					);
 				}
 			}).pipe(Effect.provide(TestKavitaAuthClient(createFailingHttpClient()))),
 		);
@@ -261,12 +266,14 @@ describe("KavitaAuthClient", () => {
 						email: "admin@test.local",
 						password: "password123",
 					})
-					.pipe(Effect.either);
+					.pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(KavitaNetworkError);
-					expect(result.left.url).toBe("/api/Account/register");
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
+					expect((result.failure as KavitaNetworkError).url).toBe(
+						"/api/Account/register",
+					);
 				}
 			}).pipe(Effect.provide(TestKavitaAuthClient(createFailingHttpClient()))),
 		);
@@ -314,12 +321,14 @@ describe("KavitaAuthClient", () => {
 						username: "admin",
 						password: "wrongpassword",
 					})
-					.pipe(Effect.either);
+					.pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(KavitaNetworkError);
-					expect(result.left.url).toBe("/api/Account/login");
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
+					expect((result.failure as KavitaNetworkError).url).toBe(
+						"/api/Account/login",
+					);
 				}
 			}).pipe(
 				Effect.provide(
@@ -368,12 +377,14 @@ describe("KavitaAuthClient", () => {
 				const client = authClient.forUrl("http://test.local");
 				const result = yield* client
 					.resetApiKey("invalid-token")
-					.pipe(Effect.either);
+					.pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(KavitaNetworkError);
-					expect(result.left.url).toBe("/api/Account/reset-api-key");
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
+					expect((result.failure as KavitaNetworkError).url).toBe(
+						"/api/Account/reset-api-key",
+					);
 				}
 			}).pipe(
 				Effect.provide(

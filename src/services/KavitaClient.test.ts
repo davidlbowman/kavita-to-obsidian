@@ -4,9 +4,9 @@
  * @module
  */
 
-import { HttpClient, HttpClientResponse } from "@effect/platform";
 import { describe, it } from "@effect/vitest";
 import { Effect, Layer, Redacted } from "effect";
+import { HttpClient, HttpClientResponse } from "effect/unstable/http";
 import { expect } from "vitest";
 import { KavitaNetworkError } from "../errors.js";
 import { KavitaClient } from "./KavitaClient.js";
@@ -71,7 +71,7 @@ const mockAnnotations = [
 
 const MockPluginConfig = Layer.succeed(
 	PluginConfig,
-	new PluginConfig({
+	PluginConfig.of({
 		kavitaUrl: new URL("http://test-kavita.local"),
 		kavitaApiKey: Redacted.make("test-api-key"),
 		outputPath: "test.md",
@@ -93,7 +93,7 @@ const mockAuthResponse = { token: "mock-jwt-token" };
 const createMockHttpClient = (responseBody: unknown, status = 200) =>
 	Layer.succeed(
 		HttpClient.HttpClient,
-		HttpClient.make((request) => {
+		HttpClient.make((request, _url, _signal, _fiber) => {
 			const url = request.url;
 			const body = url.includes("/api/Plugin/authenticate")
 				? mockAuthResponse
@@ -116,7 +116,7 @@ const createRoutedMockHttpClient = (
 ) =>
 	Layer.succeed(
 		HttpClient.HttpClient,
-		HttpClient.make((request) => {
+		HttpClient.make((request, _url, _signal, _fiber) => {
 			const url = request.url;
 
 			if (url.includes("/api/Plugin/authenticate")) {
@@ -227,7 +227,7 @@ describe("KavitaClient", () => {
 				expect(annotations[1]?.id).toBe(2);
 				expect(annotations[1]?.containsSpoiler).toBe(true);
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(createMockHttpClient(mockAnnotations)),
 			),
@@ -240,7 +240,7 @@ describe("KavitaClient", () => {
 
 				expect(annotations).toHaveLength(0);
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(createMockHttpClient([])),
 			),
@@ -249,21 +249,22 @@ describe("KavitaClient", () => {
 		it.effect("maps HTTP errors to KavitaNetworkError", () =>
 			Effect.gen(function* () {
 				const client = yield* KavitaClient;
-				const result = yield* client.fetchAllAnnotations.pipe(Effect.either);
+				const result = yield* client.fetchAllAnnotations.pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(KavitaNetworkError);
-					expect(result.left.url).toBe("/api/Annotation/all-filtered");
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
+					expect((result.failure as KavitaNetworkError).url).toBe(
+						"/api/Annotation/all-filtered",
+					);
 				}
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					Layer.succeed(
 						HttpClient.HttpClient,
-						HttpClient.make((request) => {
-							// Auth endpoint succeeds, annotation endpoint fails
+						HttpClient.make((request, _url, _signal, _fiber) => {
 							const url = request.url;
 							if (url.includes("/api/Plugin/authenticate")) {
 								return Effect.succeed(
@@ -300,7 +301,7 @@ describe("KavitaClient", () => {
 
 				expect(annotations).toHaveLength(2);
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(createMockHttpClient(mockAnnotations)),
 			),
@@ -317,7 +318,7 @@ describe("KavitaClient", () => {
 				expect(libraries[0]?.name).toBe("Comics");
 				expect(libraries[1]?.name).toBe("Manga");
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -341,7 +342,7 @@ describe("KavitaClient", () => {
 					enableMetadata: true,
 				});
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -358,7 +359,7 @@ describe("KavitaClient", () => {
 				const client = yield* KavitaClient;
 				yield* client.scanAllLibraries;
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -375,7 +376,7 @@ describe("KavitaClient", () => {
 				const client = yield* KavitaClient;
 				yield* client.scanLibrary(1);
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -390,7 +391,7 @@ describe("KavitaClient", () => {
 				const client = yield* KavitaClient;
 				yield* client.scanLibrary(1, false);
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -410,7 +411,7 @@ describe("KavitaClient", () => {
 				expect(series).toHaveLength(1);
 				expect(series[0]?.name).toBe("Test Series");
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -428,7 +429,7 @@ describe("KavitaClient", () => {
 				expect(series).toHaveLength(1);
 				expect(series[0]?.name).toBe("Test Series");
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -449,7 +450,7 @@ describe("KavitaClient", () => {
 				expect(volumes[0]?.name).toBe("Volume 1");
 				expect(volumes[0]?.chapters).toHaveLength(1);
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -481,7 +482,7 @@ describe("KavitaClient", () => {
 				expect(annotation.id).toBe(1);
 				expect(annotation.selectedText).toBe("This is a highlight");
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -503,7 +504,7 @@ describe("KavitaClient", () => {
 				expect(metadata.genres).toHaveLength(1);
 				expect(metadata.writers).toHaveLength(1);
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -516,15 +517,17 @@ describe("KavitaClient", () => {
 		it.effect("maps HTTP errors to KavitaNetworkError", () =>
 			Effect.gen(function* () {
 				const client = yield* KavitaClient;
-				const result = yield* client.getSeriesMetadata(999).pipe(Effect.either);
+				const result = yield* client.getSeriesMetadata(999).pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(KavitaNetworkError);
-					expect(result.left.url).toContain("/api/Series/metadata");
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
+					expect((result.failure as KavitaNetworkError).url).toContain(
+						"/api/Series/metadata",
+					);
 				}
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -539,15 +542,17 @@ describe("KavitaClient", () => {
 		it.effect("maps HTTP errors to KavitaNetworkError", () =>
 			Effect.gen(function* () {
 				const client = yield* KavitaClient;
-				const result = yield* client.getVolumes(999).pipe(Effect.either);
+				const result = yield* client.getVolumes(999).pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(KavitaNetworkError);
-					expect(result.left.url).toBe("/api/Series/volumes");
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
+					expect((result.failure as KavitaNetworkError).url).toBe(
+						"/api/Series/volumes",
+					);
 				}
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({
@@ -576,15 +581,17 @@ describe("KavitaClient", () => {
 						selectedSlotIndex: 0,
 						containsSpoiler: false,
 					})
-					.pipe(Effect.either);
+					.pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(KavitaNetworkError);
-					expect(result.left.url).toBe("/api/Annotation/create");
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
+					expect((result.failure as KavitaNetworkError).url).toBe(
+						"/api/Annotation/create",
+					);
 				}
 			}).pipe(
-				Effect.provide(KavitaClient.Default),
+				Effect.provide(KavitaClient.layerNoDeps),
 				Effect.provide(MockPluginConfig),
 				Effect.provide(
 					createRoutedMockHttpClient({

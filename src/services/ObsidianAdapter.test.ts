@@ -101,7 +101,7 @@ describe("ObsidianAdapter", () => {
 				const content = yield* adapter.readFile("test.md");
 				expect(content).toBe("Hello World");
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer().layer),
 			),
 		);
@@ -115,7 +115,7 @@ describe("ObsidianAdapter", () => {
 				const content = yield* adapter.readFile("test.md");
 				expect(content).toBe("Updated");
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer().layer),
 			),
 		);
@@ -131,7 +131,7 @@ describe("ObsidianAdapter", () => {
 				const content = yield* adapter.readFile("test.md");
 				expect(content).toBe("Line 1\nLine 2\n");
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer().layer),
 			),
 		);
@@ -141,14 +141,14 @@ describe("ObsidianAdapter", () => {
 				const adapter = yield* ObsidianAdapter;
 				const result = yield* adapter
 					.appendToFile("nonexistent.md", "content")
-					.pipe(Effect.either);
+					.pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(ObsidianWriteError);
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(ObsidianWriteError);
 				}
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer().layer),
 			),
 		);
@@ -162,7 +162,7 @@ describe("ObsidianAdapter", () => {
 				const content = yield* adapter.readFile("existing.md");
 				expect(content).toBe("Existing content");
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(
 					createMockAppLayer({ "existing.md": "Existing content" }).layer,
 				),
@@ -174,14 +174,14 @@ describe("ObsidianAdapter", () => {
 				const adapter = yield* ObsidianAdapter;
 				const result = yield* adapter
 					.readFile("nonexistent.md")
-					.pipe(Effect.either);
+					.pipe(Effect.result);
 
-				expect(result._tag).toBe("Left");
-				if (result._tag === "Left") {
-					expect(result.left).toBeInstanceOf(ObsidianFileNotFoundError);
+				expect(result._tag).toBe("Failure");
+				if (result._tag === "Failure") {
+					expect(result.failure).toBeInstanceOf(ObsidianFileNotFoundError);
 				}
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer().layer),
 			),
 		);
@@ -195,7 +195,7 @@ describe("ObsidianAdapter", () => {
 				const file = yield* adapter.getFile("existing.md");
 				expect(Option.isSome(file)).toBe(true);
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer({ "existing.md": "content" }).layer),
 			),
 		);
@@ -207,7 +207,7 @@ describe("ObsidianAdapter", () => {
 				const file = yield* adapter.getFile("nonexistent.md");
 				expect(Option.isNone(file)).toBe(true);
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer().layer),
 			),
 		);
@@ -221,7 +221,7 @@ describe("ObsidianAdapter", () => {
 				const files = yield* adapter.listMarkdownFiles;
 				expect(files).toHaveLength(2);
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(
 					createMockAppLayer({
 						"file1.md": "content1",
@@ -238,7 +238,7 @@ describe("ObsidianAdapter", () => {
 				const files = yield* adapter.listMarkdownFiles;
 				expect(files).toHaveLength(0);
 			}).pipe(
-				Effect.provide(ObsidianAdapter.Default),
+				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer().layer),
 			),
 		);

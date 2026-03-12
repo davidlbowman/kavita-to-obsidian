@@ -6,10 +6,10 @@
 import {
 	Array,
 	Number as EffectNumber,
-	Option,
 	Order,
 	pipe,
 	Record,
+	Result,
 } from "effect";
 import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
 import { decodeHtmlEntities, resolveComment } from "./sanitize.js";
@@ -107,9 +107,9 @@ export const makeWikilink = (value: string): string => `[[${value}]]`;
 export const formatAnnotation = (
 	annotation: typeof AnnotationDto.Type,
 	options: FormatOptions,
-): Option.Option<string> => {
+): Result.Result<string, void> => {
 	if (annotation.containsSpoiler && !options.includeSpoilers) {
-		return Option.none();
+		return Result.failVoid;
 	}
 
 	const rawText = decodeHtmlEntities(annotation.selectedText ?? "");
@@ -142,7 +142,7 @@ export const formatAnnotation = (
 	const template = options.annotationTemplate || DEFAULT_ANNOTATION_TEMPLATE;
 	const result = renderTemplate(template, context);
 
-	return result !== "" ? Option.some(result) : Option.none();
+	return result !== "" ? Result.succeed(result) : Result.failVoid;
 };
 
 /**
