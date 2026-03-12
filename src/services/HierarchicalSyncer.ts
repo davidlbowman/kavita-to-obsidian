@@ -273,6 +273,7 @@ export class HierarchicalSyncer extends Effect.Service<HierarchicalSyncer>()(
 								includeTags: config.includeTags,
 								tagPrefix: config.tagPrefix,
 								includeWikilinks: config.includeWikilinks,
+								annotationTemplate: config.annotationTemplate,
 							},
 						};
 

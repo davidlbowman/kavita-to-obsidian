@@ -164,6 +164,7 @@ export class AnnotationSyncer extends Effect.Service<AnnotationSyncer>()(
 						includeTags: config.includeTags,
 						tagPrefix: config.tagPrefix,
 						includeWikilinks: config.includeWikilinks,
+						annotationTemplate: config.annotationTemplate,
 					},
 					metadataMap,
 					chapterInfoMap,

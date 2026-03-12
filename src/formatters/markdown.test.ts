@@ -37,6 +37,7 @@ const defaultOptions: FormatOptions = {
 	includeTags: true,
 	tagPrefix: "",
 	includeWikilinks: true,
+	annotationTemplate: "",
 };
 
 const createAnnotation = (
@@ -383,7 +384,7 @@ describe("formatAnnotation", () => {
 		}
 	});
 
-	it("handles multi-paragraph text with blockquotes on each line", () => {
+	it("handles multi-paragraph text via template rendering", () => {
 		const annotation = createAnnotation({
 			selectedText: "First paragraph.\n\nSecond paragraph.",
 			pageNumber: 0,
@@ -392,9 +393,7 @@ describe("formatAnnotation", () => {
 
 		expect(Option.isSome(result)).toBe(true);
 		if (Option.isSome(result)) {
-			expect(result.value).toContain("> First paragraph.");
-			expect(result.value).toContain("> ");
-			expect(result.value).toContain("> Second paragraph.");
+			expect(result.value).toContain("> First paragraph.\n\nSecond paragraph.");
 		}
 	});
 
@@ -489,6 +488,57 @@ describe("formatAnnotation", () => {
 		expect(Option.isSome(result)).toBe(true);
 		if (Option.isSome(result)) {
 			expect(result.value).toContain("*Note:* HTML note");
+		}
+	});
+
+	it("renders with a custom annotation template", () => {
+		const annotation = createAnnotation({
+			selectedText: "Important passage",
+			pageNumber: 99,
+		});
+		const result = formatAnnotation(annotation, {
+			...defaultOptions,
+			annotationTemplate: "**{{selectedText}}** (p. {{pageNumber}})",
+		});
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toBe("**Important passage** (p. 99)");
+		}
+	});
+
+	it("falls back to default template when annotationTemplate is empty", () => {
+		const annotation = createAnnotation({
+			selectedText: "Hello world",
+			pageNumber: 5,
+		});
+		const result = formatAnnotation(annotation, {
+			...defaultOptions,
+			annotationTemplate: "",
+		});
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toContain("> Hello world");
+			expect(result.value).toContain("<small>Page 5</small>");
+		}
+	});
+
+	it("strips comment from template context when includeComments is false", () => {
+		const annotation = createAnnotation({
+			selectedText: "Highlight",
+			comment: "Secret note",
+		});
+		const result = formatAnnotation(annotation, {
+			...defaultOptions,
+			includeComments: false,
+			annotationTemplate:
+				"{{selectedText}}{{#if comment}} - {{comment}}{{/if}}",
+		});
+
+		expect(Option.isSome(result)).toBe(true);
+		if (Option.isSome(result)) {
+			expect(result.value).toBe("Highlight");
 		}
 	});
 });

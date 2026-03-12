@@ -134,6 +134,7 @@ const createMockConfig = (
 		includeTags: true,
 		tagPrefix: "",
 		includeWikilinks: true,
+		annotationTemplate: "",
 		...overrides,
 	} as unknown as typeof PluginConfig.Service);
 
