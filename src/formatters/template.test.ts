@@ -101,6 +101,7 @@ describe("renderTemplate", () => {
 		it("renders full context with blockquote, comment, and page", () => {
 			const result = renderTemplate(DEFAULT_ANNOTATION_TEMPLATE, {
 				selectedText: "This is highlighted text",
+				blockquote: "> This is highlighted text",
 				comment: "My note",
 				pageNumber: 42,
 			});
@@ -113,6 +114,7 @@ describe("renderTemplate", () => {
 		it("renders without comment when comment is empty", () => {
 			const result = renderTemplate(DEFAULT_ANNOTATION_TEMPLATE, {
 				selectedText: "This is highlighted text",
+				blockquote: "> This is highlighted text",
 				comment: "",
 				pageNumber: 42,
 			});
@@ -125,10 +127,22 @@ describe("renderTemplate", () => {
 		it("renders without pageNumber when pageNumber is missing", () => {
 			const result = renderTemplate(DEFAULT_ANNOTATION_TEMPLATE, {
 				selectedText: "This is highlighted text",
+				blockquote: "> This is highlighted text",
 				comment: "My note",
 			});
 
 			expect(result).toBe("> This is highlighted text\n\n*Note:* My note");
+		});
+
+		it("renders multi-line text as proper blockquote", () => {
+			const result = renderTemplate(DEFAULT_ANNOTATION_TEMPLATE, {
+				selectedText: "Line one\nLine two\nLine three",
+				blockquote: "> Line one\n> Line two\n> Line three",
+				comment: "",
+				pageNumber: 0,
+			});
+
+			expect(result).toBe("> Line one\n> Line two\n> Line three");
 		});
 	});
 });

@@ -345,7 +345,7 @@ class KavitaSettingTab extends PluginSettingTab {
 		new Setting(containerEl)
 			.setName("Annotation template")
 			.setDesc(
-				"Customize how each annotation is formatted. Available variables: {{selectedText}}, {{comment}}, {{pageNumber}}, {{chapterTitle}}, {{seriesName}}, {{createdUtc}}. Use {{#if variable}}...{{/if}} for conditionals.",
+				"Customize how each annotation is formatted. Variables: {{blockquote}} (blockquoted text), {{selectedText}} (raw text), {{comment}}, {{pageNumber}}, {{chapterTitle}}, {{seriesName}}, {{createdUtc}}. Use {{#if variable}}...{{/if}} for conditionals.",
 			)
 			.addTextArea((text) => {
 				text

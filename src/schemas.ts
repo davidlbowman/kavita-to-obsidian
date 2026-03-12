@@ -115,7 +115,7 @@ export const ExportMode = Schema.Literal("single-file", "hierarchical");
  * @since 1.2.0
  * @category Plugin Schemas
  */
-export const DEFAULT_ANNOTATION_TEMPLATE = `> {{selectedText}}
+export const DEFAULT_ANNOTATION_TEMPLATE = `{{blockquote}}
 {{#if comment}}
 
 *Note:* {{comment}}

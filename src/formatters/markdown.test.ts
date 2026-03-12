@@ -384,7 +384,7 @@ describe("formatAnnotation", () => {
 		}
 	});
 
-	it("handles multi-paragraph text via template rendering", () => {
+	it("handles multi-paragraph text with proper blockquoting", () => {
 		const annotation = createAnnotation({
 			selectedText: "First paragraph.\n\nSecond paragraph.",
 			pageNumber: 0,
@@ -393,7 +393,9 @@ describe("formatAnnotation", () => {
 
 		expect(Option.isSome(result)).toBe(true);
 		if (Option.isSome(result)) {
-			expect(result.value).toContain("> First paragraph.\n\nSecond paragraph.");
+			expect(result.value).toContain(
+				"> First paragraph.\n> \n> Second paragraph.",
+			);
 		}
 	});
 

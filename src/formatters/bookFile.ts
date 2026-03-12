@@ -6,12 +6,10 @@
  *
  * @module
  */
-import { Array, Option, pipe } from "effect";
+import { Array, type Option, pipe } from "effect";
 import type { AnnotationDto } from "../schemas.js";
 import type { FormatOptions } from "./markdown.js";
-import { toSlug } from "./markdown.js";
-import { formatAnnotation } from "./markdown.js";
-import { decodeHtmlEntities, resolveComment } from "./sanitize.js";
+import { formatAnnotation, toSlug } from "./markdown.js";
 
 /**
  * Options for formatting a book file.
