@@ -10,6 +10,7 @@ import { Array, Option, pipe } from "effect";
 import type { AnnotationDto } from "../schemas.js";
 import type { FormatOptions } from "./markdown.js";
 import { toSlug } from "./markdown.js";
+import { decodeHtmlEntities, resolveComment } from "./sanitize.js";
 
 /**
  * Options for formatting a book file.
@@ -126,21 +127,18 @@ export const formatBookAnnotation = (
 
 	const lines: string[] = [];
 
-	const content = annotation.selectedText ?? "";
+	const content = decodeHtmlEntities(annotation.selectedText ?? "");
 	const blockquote = content
 		.split("\n")
 		.map((line) => `> ${line}`)
 		.join("\n");
 	lines.push(blockquote);
 
-	const hasComment =
-		annotation.comment &&
-		annotation.comment.trim() !== "" &&
-		annotation.comment.trim() !== "{}";
+	const resolvedComment = resolveComment(annotation);
 
-	if (options.includeComments && hasComment) {
+	if (options.includeComments && resolvedComment !== null) {
 		lines.push("");
-		lines.push(`*Note:* ${annotation.comment}`);
+		lines.push(`*Note:* ${resolvedComment}`);
 	}
 
 	if (annotation.pageNumber !== undefined && annotation.pageNumber > 0) {

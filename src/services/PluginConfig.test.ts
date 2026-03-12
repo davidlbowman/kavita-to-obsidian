@@ -23,6 +23,7 @@ describe("PluginConfig", () => {
 				expect(config.includeTags).toBe(true);
 				expect(config.tagPrefix).toBe("");
 				expect(config.includeWikilinks).toBe(true);
+				expect(config.exportMode).toBe("hierarchical");
 			}).pipe(Effect.provide(PluginConfig.Default)),
 		);
 	});
@@ -109,6 +110,7 @@ describe("PluginConfig", () => {
 				expect(config.includeTags).toBe(true);
 				expect(config.tagPrefix).toBe("");
 				expect(config.includeWikilinks).toBe(true);
+				expect(config.exportMode).toBe("hierarchical");
 			}).pipe(
 				Effect.provide(PluginConfig.fromEnv),
 				Effect.withConfigProvider(ConfigProvider.fromMap(new Map())),

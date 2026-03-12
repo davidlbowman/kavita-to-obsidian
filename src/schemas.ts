@@ -166,7 +166,7 @@ export class PluginSettings extends Schema.Class<PluginSettings>(
 	 */
 	exportMode: Schema.optionalWith(ExportMode, {
 		exact: true,
-		default: () => "single-file" as const,
+		default: () => "hierarchical" as const,
 	}),
 	/**
 	 * Root folder name for hierarchical mode.
@@ -202,7 +202,7 @@ export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
 	includeTags: true,
 	tagPrefix: "",
 	includeWikilinks: true,
-	exportMode: "single-file",
+	exportMode: "hierarchical",
 	rootFolderName: "Kavita Annotations",
 	deleteOrphanedFiles: true,
 };

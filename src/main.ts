@@ -208,7 +208,7 @@ class KavitaSettingTab extends PluginSettingTab {
 				dropdown
 					.addOption("single-file", "Single file")
 					.addOption("hierarchical", "Hierarchical folders")
-					.setValue(this.plugin.settings.exportMode ?? "single-file")
+					.setValue(this.plugin.settings.exportMode ?? "hierarchical")
 					.onChange(async (value) => {
 						this.plugin.settings.exportMode = value as
 							| "single-file"
