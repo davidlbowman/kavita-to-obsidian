@@ -7,6 +7,7 @@ import { Effect, Layer } from "effect";
 import { type App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
 import { DEFAULT_SETTINGS } from "./schemas.js";
 import { AnnotationSyncer } from "./services/AnnotationSyncer.js";
+import { showErrorNotice } from "./services/ErrorHandler.js";
 import { HierarchicalSyncer } from "./services/HierarchicalSyncer.js";
 import { KavitaClient } from "./services/KavitaClient.js";
 import { ObsidianAdapter } from "./services/ObsidianAdapter.js";
@@ -103,19 +104,24 @@ export default class KavitaToObsidianPlugin extends Plugin {
 				Layer.provide(ConfigLayer),
 			);
 
-			const runnable = program.pipe(Effect.provide(SyncerLayer));
+			const runnable = program.pipe(
+				Effect.provide(SyncerLayer),
+				Effect.match({
+					onSuccess: (result) => {
+						new Notice(
+							`Synced ${result.totalAnnotations} annotations across ${result.seriesCount} series (${result.bookCount} books)`,
+						);
+					},
+					onFailure: (error) => {
+						showErrorNotice(error);
+					},
+				}),
+			);
 
-			Effect.runPromise(runnable)
-				.then((result) => {
-					new Notice(
-						`Synced ${result.totalAnnotations} annotations across ${result.seriesCount} series (${result.bookCount} books)`,
-					);
-				})
-				.catch((error: unknown) => {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					new Notice(`Sync failed: ${message}`);
-				});
+			Effect.runPromise(runnable).catch((defect: unknown) => {
+				console.error("Kavita sync defect:", defect);
+				new Notice("Sync failed unexpectedly. Check the developer console.");
+			});
 		} else {
 			const program = Effect.gen(function* () {
 				const syncer = yield* AnnotationSyncer;
@@ -128,19 +134,24 @@ export default class KavitaToObsidianPlugin extends Plugin {
 				Layer.provide(ConfigLayer),
 			);
 
-			const runnable = program.pipe(Effect.provide(SyncerLayer));
+			const runnable = program.pipe(
+				Effect.provide(SyncerLayer),
+				Effect.match({
+					onSuccess: (result) => {
+						new Notice(
+							`Synced ${result.count} annotations to ${result.outputPath}`,
+						);
+					},
+					onFailure: (error) => {
+						showErrorNotice(error);
+					},
+				}),
+			);
 
-			Effect.runPromise(runnable)
-				.then((result) => {
-					new Notice(
-						`Synced ${result.count} annotations to ${result.outputPath}`,
-					);
-				})
-				.catch((error: unknown) => {
-					const message =
-						error instanceof Error ? error.message : "Unknown error";
-					new Notice(`Sync failed: ${message}`);
-				});
+			Effect.runPromise(runnable).catch((defect: unknown) => {
+				console.error("Kavita sync defect:", defect);
+				new Notice("Sync failed unexpectedly. Check the developer console.");
+			});
 		}
 	}
 }
