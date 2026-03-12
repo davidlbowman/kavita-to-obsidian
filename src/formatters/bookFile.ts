@@ -6,7 +6,7 @@
  *
  * @module
  */
-import { Array, type Option, pipe } from "effect";
+import { Array, type Result, pipe } from "effect";
 import type { AnnotationDto } from "../schemas.js";
 import type { FormatOptions } from "./markdown.js";
 import { formatAnnotation, toSlug } from "./markdown.js";
@@ -119,7 +119,7 @@ export const generateBookHeader = (options: BookFileOptions): string => {
 export const formatBookAnnotation = (
 	annotation: typeof AnnotationDto.Type,
 	options: FormatOptions,
-): Option.Option<string> => formatAnnotation(annotation, options);
+): Result.Result<string, void> => formatAnnotation(annotation, options);
 
 /**
  * Generate the annotations section of a book file.

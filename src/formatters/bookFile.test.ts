@@ -4,7 +4,7 @@
  * @module
  */
 
-import { Option } from "effect";
+import { Result } from "effect";
 import { describe, expect, it } from "vitest";
 import type { AnnotationDto } from "../schemas.js";
 import {
@@ -174,11 +174,11 @@ describe("formatBookAnnotation", () => {
 		const annotation = createAnnotation();
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("> This is highlighted text");
-			expect(result.value).toContain("*Note:* My note");
-			expect(result.value).toContain("<small>Page 42</small>");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> This is highlighted text");
+			expect(result.success).toContain("*Note:* My note");
+			expect(result.success).toContain("<small>Page 42</small>");
 		}
 	});
 
@@ -187,9 +187,9 @@ describe("formatBookAnnotation", () => {
 		const options = { ...defaultFormatOptions, includeComments: false };
 		const result = formatBookAnnotation(annotation, options);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).not.toContain("*Note:*");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).not.toContain("*Note:*");
 		}
 	});
 
@@ -197,7 +197,7 @@ describe("formatBookAnnotation", () => {
 		const annotation = createAnnotation({ containsSpoiler: true });
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isNone(result)).toBe(true);
+		expect(Result.isFailure(result)).toBe(true);
 	});
 
 	it("includes spoilers when enabled", () => {
@@ -205,7 +205,7 @@ describe("formatBookAnnotation", () => {
 		const options = { ...defaultFormatOptions, includeSpoilers: true };
 		const result = formatBookAnnotation(annotation, options);
 
-		expect(Option.isSome(result)).toBe(true);
+		expect(Result.isSuccess(result)).toBe(true);
 	});
 
 	it("decodes HTML entities in selectedText", () => {
@@ -214,9 +214,9 @@ describe("formatBookAnnotation", () => {
 		});
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("> it's a test & more");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> it's a test & more");
 		}
 	});
 
@@ -228,9 +228,9 @@ describe("formatBookAnnotation", () => {
 		});
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("*Note:* My note");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* My note");
 		}
 	});
 
@@ -242,9 +242,9 @@ describe("formatBookAnnotation", () => {
 		});
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("*Note:* Plain text note");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* Plain text note");
 		}
 	});
 
@@ -256,9 +256,9 @@ describe("formatBookAnnotation", () => {
 		});
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("*Note:* HTML note");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("*Note:* HTML note");
 		}
 	});
 
@@ -268,9 +268,9 @@ describe("formatBookAnnotation", () => {
 		});
 		const result = formatBookAnnotation(annotation, defaultFormatOptions);
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("> Line one\n> Line two\n> Line three");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> Line one\n> Line two\n> Line three");
 		}
 	});
 
@@ -284,9 +284,9 @@ describe("formatBookAnnotation", () => {
 			annotationTemplate: "**{{selectedText}}** (p. {{pageNumber}})",
 		});
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toBe("**Key insight** (p. 7)");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toBe("**Key insight** (p. 7)");
 		}
 	});
 
@@ -300,10 +300,10 @@ describe("formatBookAnnotation", () => {
 			annotationTemplate: "",
 		});
 
-		expect(Option.isSome(result)).toBe(true);
-		if (Option.isSome(result)) {
-			expect(result.value).toContain("> Some text");
-			expect(result.value).toContain("<small>Page 42</small>");
+		expect(Result.isSuccess(result)).toBe(true);
+		if (Result.isSuccess(result)) {
+			expect(result.success).toContain("> Some text");
+			expect(result.success).toContain("<small>Page 42</small>");
 		}
 	});
 });
