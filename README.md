@@ -170,6 +170,15 @@ For detailed solutions to common issues, see the [Troubleshooting Guide](./TROUB
 | Connection refused | [Ensure Kavita is running](./TROUBLESHOOTING.md#connection-refused) |
 | No annotations synced | [Create highlights in Kavita first](./TROUBLESHOOTING.md#no-annotations-synced) |
 
+## Network & Privacy
+
+This plugin connects to your self-hosted Kavita server to sync annotations. Here's what it does:
+
+- **Connects to:** Your configured Kavita server URL only (no third-party services)
+- **Authentication:** Sends your API key via HTTP header to authenticate with Kavita
+- **Data fetched:** Annotation, series, and chapter data via Kavita's REST API
+- **No telemetry:** The plugin does not collect analytics, usage data, or send information to any external service
+
 ## Questions or Issues?
 
 - [Report a bug](https://github.com/davidlbowman/kavita-to-obsidian/issues/new?template=bug_report.md)

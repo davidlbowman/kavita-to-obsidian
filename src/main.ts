@@ -170,8 +170,6 @@ class KavitaSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		new Setting(containerEl).setName("Kavita to Obsidian").setHeading();
-
 		new Setting(containerEl)
 			.setName("Kavita URL")
 			.setDesc("The URL of your Kavita server (e.g., http://localhost:5000).")
