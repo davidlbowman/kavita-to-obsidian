@@ -2,12 +2,13 @@ name: CI
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, staging, dev]
   pull_request:
   workflow_dispatch:
 
 jobs:
-  test:
+  lint-typecheck-test:
+    name: Lint, typecheck & test
     runs-on: ubuntu-latest
 
     steps:
@@ -22,6 +23,9 @@ jobs:
 
       - name: Lint
         run: bun run lint
+
+      - name: Obsidian lint
+        run: bun run lint:obsidian
 
       - name: Type check
         run: bun run typecheck
