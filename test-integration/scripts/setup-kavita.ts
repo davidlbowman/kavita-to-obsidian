@@ -213,7 +213,7 @@ const setupData = Effect.gen(function* () {
 
 /**
  * Build the KavitaClient layer with a given API key.
- * Uses DefaultWithoutDependencies to override the built-in PluginConfig.Default.
+ * Uses layerNoDeps to provide PluginConfig without its default dependencies.
  */
 const makeKavitaClientLayer = (apiKey: string) =>
 	KavitaClient.layerNoDeps.pipe(
