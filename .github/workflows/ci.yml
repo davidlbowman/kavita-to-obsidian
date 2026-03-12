@@ -10,7 +10,7 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
-  test:
+  lint-typecheck-test:
     name: Lint, typecheck & test
     runs-on: ubuntu-latest
 
