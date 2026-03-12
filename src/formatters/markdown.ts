@@ -12,6 +12,7 @@ import {
 	Record,
 } from "effect";
 import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
+import { decodeHtmlEntities, resolveComment } from "./sanitize.js";
 
 /**
  * Map of seriesId to series metadata.
@@ -110,21 +111,18 @@ export const formatAnnotation = (
 
 	const lines: string[] = [];
 
-	const content = annotation.selectedText ?? "";
+	const content = decodeHtmlEntities(annotation.selectedText ?? "");
 	const blockquote = content
 		.split("\n")
 		.map((line) => `> ${line}`)
 		.join("\n");
 	lines.push(blockquote);
 
-	const hasComment =
-		annotation.comment &&
-		annotation.comment.trim() !== "" &&
-		annotation.comment.trim() !== "{}";
+	const resolvedComment = resolveComment(annotation);
 
-	if (options.includeComments && hasComment) {
+	if (options.includeComments && resolvedComment !== null) {
 		lines.push("");
-		lines.push(`*Note:* ${annotation.comment}`);
+		lines.push(`*Note:* ${resolvedComment}`);
 	}
 
 	if (annotation.pageNumber !== undefined && annotation.pageNumber > 0) {
