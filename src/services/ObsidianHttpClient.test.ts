@@ -7,9 +7,9 @@
  * @module
  */
 
-import { HttpBody, HttpClient, HttpClientRequest } from "@effect/platform";
 import { describe, it } from "@effect/vitest";
 import { Effect } from "effect";
+import { HttpBody, HttpClient, HttpClientRequest } from "effect/unstable/http";
 import { requestUrl } from "obsidian";
 import { beforeEach, expect, vi } from "vitest";
 import { ObsidianHttpClient } from "./ObsidianHttpClient.js";
@@ -63,7 +63,7 @@ describe("ObsidianHttpClient", () => {
 			const client = yield* HttpClient.HttpClient;
 			const request = HttpClientRequest.post(
 				"http://test.local/api/create",
-			).pipe(HttpClientRequest.bodyUnsafeJson({ name: "test" }));
+			).pipe(HttpClientRequest.bodyJsonUnsafe({ name: "test" }));
 			const response = yield* client.execute(request).pipe(Effect.scoped);
 
 			expect(response.status).toBe(201);
@@ -111,9 +111,9 @@ describe("ObsidianHttpClient", () => {
 			const request = HttpClientRequest.get("http://test.local/api/fail");
 			const result = yield* client
 				.execute(request)
-				.pipe(Effect.scoped, Effect.either);
+				.pipe(Effect.scoped, Effect.result);
 
-			expect(result._tag).toBe("Left");
+			expect(result._tag).toBe("Failure");
 		}).pipe(Effect.provide(ObsidianHttpClient)),
 	);
 
@@ -146,7 +146,7 @@ describe("ObsidianHttpClient", () => {
 			});
 
 			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.del("http://test.local/api/resource/1");
+			const request = HttpClientRequest.delete("http://test.local/api/resource/1");
 			const response = yield* client.execute(request).pipe(Effect.scoped);
 
 			expect(response.status).toBe(200);
