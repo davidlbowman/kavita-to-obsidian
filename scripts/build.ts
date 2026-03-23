@@ -1,18 +1,20 @@
 /**
- * Build script for Obsidian plugin using Bun's bundler.
+ * Build script for Obsidian plugin using esbuild.
  *
  * Usage:
  *   bun run scripts/build.ts              # Development build
  *   bun run scripts/build.ts --production # Production build (minified)
  */
 
+import esbuild from "esbuild";
+
 const isProduction = process.argv.includes("--production");
 
-const result = await Bun.build({
-	entrypoints: ["src/main.ts"],
-	outdir: ".",
-	naming: "main.js",
-	target: "node",
+await esbuild.build({
+	entryPoints: ["src/main.ts"],
+	bundle: true,
+	outfile: "main.js",
+	platform: "node",
 	format: "cjs",
 	external: [
 		"obsidian",
@@ -30,17 +32,7 @@ const result = await Bun.build({
 		"@lezer/lr",
 	],
 	minify: isProduction,
-	sourcemap: isProduction ? "none" : "inline",
+	sourcemap: isProduction ? false : "inline",
+	treeShaking: true,
+	logLevel: "info",
 });
-
-if (!result.success) {
-	console.error("Build failed:");
-	for (const log of result.logs) {
-		console.error(log);
-	}
-	process.exit(1);
-}
-
-console.log(
-	`Build complete: main.js (${isProduction ? "production" : "development"})`,
-);

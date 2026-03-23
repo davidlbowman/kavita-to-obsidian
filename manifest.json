@@ -1,7 +1,7 @@
 {
 	"id": "kavita-sync",
 	"name": "Kavita Sync",
-	"version": "1.2.0",
+	"version": "1.2.1",
 	"minAppVersion": "0.15.0",
 	"description": "Sync annotations and highlights from your Kavita server to your vault.",
 	"author": "David Bowman",
