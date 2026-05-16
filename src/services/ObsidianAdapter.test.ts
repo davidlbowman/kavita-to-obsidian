@@ -21,7 +21,6 @@ interface MockVault {
 	modify: (file: { path: string }, content: string) => Promise<void>;
 	append: (file: { path: string }, content: string) => Promise<void>;
 	read: (file: { path: string }) => Promise<string>;
-	getMarkdownFiles: () => MockFile[];
 }
 
 interface MockApp {
@@ -68,12 +67,6 @@ const createMockApp = (initialFiles: Record<string, string> = {}): MockApp => {
 		read: (file: { path: string }) => {
 			const existing = files.get(file.path);
 			return Promise.resolve(existing?.content ?? "");
-		},
-		getMarkdownFiles: () => {
-			return Array.from(files.values()).map((f) => ({
-				path: f.path,
-				extension: "md",
-			}));
 		},
 	};
 
@@ -206,37 +199,6 @@ describe("ObsidianAdapter", () => {
 
 				const file = yield* adapter.getFile("nonexistent.md");
 				expect(Option.isNone(file)).toBe(true);
-			}).pipe(
-				Effect.provide(ObsidianAdapter.layerNoDeps),
-				Effect.provide(createMockAppLayer().layer),
-			),
-		);
-	});
-
-	describe("listMarkdownFiles", () => {
-		it.effect("lists all markdown files", () =>
-			Effect.gen(function* () {
-				const adapter = yield* ObsidianAdapter;
-
-				const files = yield* adapter.listMarkdownFiles;
-				expect(files).toHaveLength(2);
-			}).pipe(
-				Effect.provide(ObsidianAdapter.layerNoDeps),
-				Effect.provide(
-					createMockAppLayer({
-						"file1.md": "content1",
-						"file2.md": "content2",
-					}).layer,
-				),
-			),
-		);
-
-		it.effect("returns empty array when no files", () =>
-			Effect.gen(function* () {
-				const adapter = yield* ObsidianAdapter;
-
-				const files = yield* adapter.listMarkdownFiles;
-				expect(files).toHaveLength(0);
 			}).pipe(
 				Effect.provide(ObsidianAdapter.layerNoDeps),
 				Effect.provide(createMockAppLayer().layer),

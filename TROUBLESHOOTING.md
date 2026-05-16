@@ -29,7 +29,7 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 2. Click your user avatar in the top-right corner and select **User Settings**.
 3. Navigate to the **3rd Party Clients** section.
 4. Copy your existing API key, or click **Reset Key** to generate a new one.
-5. In Obsidian, open **Settings > Kavita to Obsidian**.
+5. In Obsidian, open **Settings > Kavita Sync**.
 6. Paste the API key into the **API Key** field.
 7. Run the sync again.
 

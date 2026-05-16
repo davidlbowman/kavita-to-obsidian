@@ -1,4 +1,4 @@
-# Kavita to Obsidian
+# Kavita Sync
 
 Sync your reading highlights and notes from [Kavita](https://www.kavitareader.com/) to your Obsidian vault.
 
@@ -89,11 +89,11 @@ updated: 2025-12-06T10:30:00Z
 3. In your vault, create the folder `.obsidian/plugins/kavita-to-obsidian/`
 4. Copy both downloaded files into that folder
 5. Restart Obsidian
-6. Go to Settings → Community Plugins and enable "Kavita to Obsidian"
+6. Go to Settings → Community Plugins and enable "Kavita Sync"
 
-### From Community Plugins (Coming Soon)
+### From Community Plugins
 
-Once approved, you'll be able to install directly from Obsidian's community plugins browser.
+Once accepted into Obsidian's Community Plugins directory, install via: Settings → Community Plugins → Browse → search for "Kavita Sync" → click Install → click Enable.
 
 ## Setup
 
@@ -106,7 +106,7 @@ Once approved, you'll be able to install directly from Obsidian's community plug
 
 ### 2. Configure the Plugin
 
-1. In Obsidian, go to Settings → **Kavita to Obsidian**
+1. In Obsidian, go to Settings → **Kavita Sync**
 2. Enter your Kavita server URL (e.g., `http://localhost:5000` or `https://kavita.example.com`)
 3. Paste your API key
 4. Adjust other settings as desired

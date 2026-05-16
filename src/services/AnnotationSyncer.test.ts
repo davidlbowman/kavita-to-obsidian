@@ -109,7 +109,6 @@ const createMockObsidianAdapter = () => {
 				return files.get(path) ?? "";
 			}),
 		getFile: (_path: string) => Effect.succeed(Option.none()),
-		listMarkdownFiles: Effect.succeed([]),
 	};
 
 	return {

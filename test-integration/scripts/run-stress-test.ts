@@ -60,7 +60,6 @@ const createMockObsidianAdapter = () => {
 		appendToFile: () => Effect.void,
 		readFile: () => Effect.succeed(""),
 		getFile: () => Effect.succeed(Option.none()),
-		listMarkdownFiles: Effect.succeed([]),
 	};
 
 	return {

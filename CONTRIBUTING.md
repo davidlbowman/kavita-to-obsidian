@@ -1,4 +1,4 @@
-# Contributing to Kavita to Obsidian
+# Contributing to Kavita Sync
 
 Thank you for your interest in contributing! This guide covers the development environment setup, code conventions, and PR process.
 
