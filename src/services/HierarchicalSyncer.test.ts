@@ -141,7 +141,6 @@ const createMockObsidianAdapter = () => {
 					? Option.some({ path })
 					: Option.none(),
 			),
-		listMarkdownFiles: Effect.succeed([]),
 		ensureFolderExists: (path: string) =>
 			Effect.sync(() => {
 				folders.add(path);

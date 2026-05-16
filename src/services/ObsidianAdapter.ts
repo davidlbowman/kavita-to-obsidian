@@ -51,7 +51,6 @@ export class ObsidianAdapter extends ServiceMap.Service<
 		): Effect.Effect<void, ObsidianWriteError>;
 		readFile(path: string): Effect.Effect<string, ObsidianFileNotFoundError>;
 		readonly getFile: (path: string) => Effect.Effect<Option.Option<TFile>>;
-		readonly listMarkdownFiles: Effect.Effect<TFile[]>;
 		ensureFolderExists(path: string): Effect.Effect<void, ObsidianFolderError>;
 		deleteFile(path: string): Effect.Effect<void, ObsidianWriteError>;
 		listFilesInFolder(path: string): Effect.Effect<string[]>;
@@ -127,13 +126,6 @@ export class ObsidianAdapter extends ServiceMap.Service<
 				const file = vault.getAbstractFileByPath(path);
 				return isTFile(file) ? Option.some(file) : Option.none();
 			});
-
-		/**
-		 * List all markdown files in the vault.
-		 *
-		 * @since 0.0.1
-		 */
-		const listMarkdownFiles = Effect.sync(() => vault.getMarkdownFiles());
 
 		/**
 		 * Ensure a folder exists, creating it and parent folders if needed.
@@ -230,7 +222,6 @@ export class ObsidianAdapter extends ServiceMap.Service<
 			appendToFile,
 			readFile,
 			getFile,
-			listMarkdownFiles,
 			ensureFolderExists,
 			deleteFile,
 			listFilesInFolder,
