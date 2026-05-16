@@ -1,5 +1,5 @@
 /**
- * Kavita to Obsidian plugin entry point.
+ * Kavita Sync plugin entry point.
  *
  * @module
  */

@@ -1,5 +1,5 @@
 /**
- * Kavita to Obsidian plugin - public API exports.
+ * Kavita Sync plugin - public API exports.
  *
  * @module
  */
