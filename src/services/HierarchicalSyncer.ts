@@ -4,7 +4,7 @@
  * @module
  */
 
-import { Array, Effect, Layer, Record, ServiceMap } from "effect";
+import { Array as Arr, Effect, Layer, Record, ServiceMap } from "effect";
 import { normalizePath } from "obsidian";
 import type {
 	KavitaAuthError,
@@ -61,8 +61,8 @@ interface BookInfo {
  */
 const groupBySeriesId = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
-	Array.groupBy(annotations, (a) => String(a.seriesId));
+): Record.ReadonlyRecord<string, Array<typeof AnnotationDto.Type>> =>
+	Arr.groupBy(annotations, (a) => String(a.seriesId));
 
 /**
  * Group annotations by chapter ID within a series.
@@ -72,8 +72,8 @@ const groupBySeriesId = (
  */
 const groupByChapterId = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
-	Array.groupBy(annotations, (a) => String(a.chapterId));
+): Record.ReadonlyRecord<string, Array<typeof AnnotationDto.Type>> =>
+	Arr.groupBy(annotations, (a) => String(a.chapterId));
 
 /**
  * Hierarchical syncer service.
