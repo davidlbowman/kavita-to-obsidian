@@ -63,6 +63,15 @@ export const decodeHtmlEntities = (text: string): string =>
 export const stripHtmlTags = (text: string): string =>
 	text.replace(/<[^>]*>/g, "");
 
+const isQuillDelta = (
+	value: unknown,
+): value is { ops: ReadonlyArray<{ insert?: unknown }> } => {
+	if (typeof value !== "object" || value === null || !("ops" in value)) {
+		return false;
+	}
+	return Array.isArray(value.ops);
+};
+
 /**
  * Extract plain text from a Quill delta JSON string.
  *
@@ -76,15 +85,6 @@ export const stripHtmlTags = (text: string): string =>
  * @since 1.2.0
  * @category Sanitize
  */
-const isQuillDelta = (
-	value: unknown,
-): value is { ops: ReadonlyArray<{ insert?: unknown }> } => {
-	if (typeof value !== "object" || value === null || !("ops" in value)) {
-		return false;
-	}
-	return Array.isArray(value.ops);
-};
-
 export const extractTextFromQuillDelta = (text: string): string => {
 	try {
 		const parsed: unknown = JSON.parse(text);
