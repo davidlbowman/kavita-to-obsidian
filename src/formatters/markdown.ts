@@ -4,7 +4,7 @@
  * @module
  */
 import {
-	Array,
+	Array as Arr,
 	Number as EffectNumber,
 	Order,
 	pipe,
@@ -227,8 +227,8 @@ export const getBookGenres = (
  */
 export const groupBySeriesId = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
-	Array.groupBy(annotations, (a) => String(a.seriesId));
+): Record.ReadonlyRecord<string, Array<typeof AnnotationDto.Type>> =>
+	Arr.groupBy(annotations, (a) => String(a.seriesId));
 
 /**
  * Group annotations by chapterId.
@@ -238,8 +238,8 @@ export const groupBySeriesId = (
  */
 export const groupByChapterId = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
-	Array.groupBy(annotations, (a) => String(a.chapterId));
+): Record.ReadonlyRecord<string, Array<typeof AnnotationDto.Type>> =>
+	Arr.groupBy(annotations, (a) => String(a.chapterId));
 
 /**
  * Group annotations by book title.
@@ -250,8 +250,8 @@ export const groupByChapterId = (
 export const groupByBookTitle = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
 	chapterInfoMap?: ChapterInfoMap,
-): Record.ReadonlyRecord<string, globalThis.Array<typeof AnnotationDto.Type>> =>
-	Array.groupBy(annotations, (a) => getBookTitle(a, chapterInfoMap));
+): Record.ReadonlyRecord<string, Array<typeof AnnotationDto.Type>> =>
+	Arr.groupBy(annotations, (a) => getBookTitle(a, chapterInfoMap));
 
 /**
  * Get the sort order for a book title from the chapter info map.
@@ -279,14 +279,14 @@ export const getBookSortOrder = (
 export const getSortedBookGroups = (
 	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
 	chapterInfoMap?: ChapterInfoMap,
-): globalThis.Array<[string, globalThis.Array<typeof AnnotationDto.Type>]> => {
+): Array<[string, Array<typeof AnnotationDto.Type>]> => {
 	const groups = groupByBookTitle(annotations, chapterInfoMap);
 	const bookOrder = Order.mapInput(
 		EffectNumber.Order,
-		(entry: [string, globalThis.Array<typeof AnnotationDto.Type>]) =>
+		(entry: [string, Array<typeof AnnotationDto.Type>]) =>
 			getBookSortOrder(entry[0], entry[1], chapterInfoMap),
 	);
-	return pipe(Record.toEntries(groups), Array.sort(bookOrder));
+	return pipe(Record.toEntries(groups), Arr.sort(bookOrder));
 };
 
 /**
@@ -422,7 +422,7 @@ export const toMarkdown = (
 
 	const content = pipe(
 		Record.toEntries(seriesGroups),
-		Array.flatMap(([seriesId, seriesAnnotations]) => {
+		Arr.flatMap(([seriesId, seriesAnnotations]) => {
 			const firstAnnotation = seriesAnnotations[0];
 			if (!firstAnnotation) return [];
 
@@ -437,7 +437,7 @@ export const toMarkdown = (
 				"",
 				...pipe(
 					sortedBookGroups,
-					Array.flatMap(([bookTitle, bookAnnotations]) => {
+					Arr.flatMap(([bookTitle, bookAnnotations]) => {
 						const chapterGroups = groupByChapterId(bookAnnotations);
 						const bookAuthors = getBookAuthors(bookAnnotations, chapterInfoMap);
 						const bookGenres = getBookGenres(bookAnnotations, chapterInfoMap);
@@ -452,7 +452,7 @@ export const toMarkdown = (
 							"",
 							...pipe(
 								Record.toEntries(chapterGroups),
-								Array.flatMap(([_chapterId, chapterAnnotations]) => {
+								Arr.flatMap(([_chapterId, chapterAnnotations]) => {
 									const firstChapterAnnotation = chapterAnnotations[0];
 									const chapterTitle = firstChapterAnnotation
 										? getChapterTitle(firstChapterAnnotation)
@@ -463,8 +463,8 @@ export const toMarkdown = (
 										"",
 										...pipe(
 											chapterAnnotations,
-											Array.filterMap((a) => formatAnnotation(a, options)),
-											Array.flatMap((formatted) => [formatted, "", "---", ""]),
+											Arr.filterMap((a) => formatAnnotation(a, options)),
+											Arr.flatMap((formatted) => [formatted, "", "---", ""]),
 										),
 									];
 								}),

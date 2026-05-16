@@ -76,20 +76,24 @@ export const stripHtmlTags = (text: string): string =>
  * @since 1.2.0
  * @category Sanitize
  */
+const isQuillDelta = (
+	value: unknown,
+): value is { ops: ReadonlyArray<{ insert?: unknown }> } => {
+	if (typeof value !== "object" || value === null || !("ops" in value)) {
+		return false;
+	}
+	return Array.isArray(value.ops);
+};
+
 export const extractTextFromQuillDelta = (text: string): string => {
 	try {
 		const parsed: unknown = JSON.parse(text);
 
-		if (
-			typeof parsed !== "object" ||
-			parsed === null ||
-			!("ops" in parsed) ||
-			!globalThis.Array.isArray((parsed as { ops: unknown }).ops)
-		) {
+		if (!isQuillDelta(parsed)) {
 			return text;
 		}
 
-		const ops = (parsed as { ops: ReadonlyArray<{ insert?: unknown }> }).ops;
+		const ops = parsed.ops;
 		const result = ops
 			.filter((op): op is { insert: string } => typeof op.insert === "string")
 			.map((op) => op.insert)
