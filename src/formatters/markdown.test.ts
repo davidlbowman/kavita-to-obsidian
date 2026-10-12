@@ -391,7 +391,7 @@ describe("toMarkdown", () => {
 			expect(doc).toContain("## One\n**Library:**");
 			expect(doc).toContain("## Two\n**Library:**");
 			expect(doc).toContain("### One\n");
-			expect(doc).not.toContain("[[");
+			expect(doc).not.toMatch(/^\*\*(Series|Book):\*\* /m);
 		},
 	);
 });
