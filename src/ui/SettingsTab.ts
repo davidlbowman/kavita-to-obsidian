@@ -272,12 +272,12 @@ export class KavitaSettingTab extends PluginSettingTab {
 				items: [
 					{
 						name: "Sync when Obsidian starts",
-						desc: "Quietly fetch new highlights each time this vault opens.",
+						desc: "Quietly check for new highlights each time this vault opens.",
 						control: { type: "toggle", key: "syncOnStartup" },
 					},
 					{
 						name: "Sync automatically",
-						desc: "Fetch new highlights in the background while Obsidian is open.",
+						desc: "Check for new highlights in the background while Obsidian is open.",
 						aliases: ["interval", "schedule"],
 						control: {
 							type: "dropdown",

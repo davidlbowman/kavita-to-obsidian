@@ -133,11 +133,6 @@ export const makeFakeApp = (): FakeApp => {
 	const app: ObsidianApp["Service"] = {
 		vault: {
 			getAbstractFileByPath: lookup,
-			getMarkdownFiles: () =>
-				[...index.values()].filter(
-					(node): node is TFile =>
-						node instanceof TFile && node.extension === "md",
-				),
 			read: async (file) => {
 				const content = contents.get(file.path);
 				if (content === undefined) throw new Error("File does not exist.");

@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.1] - 2026-10-12
+
+### Changed
+
+- **The plugin only looks inside its own folder.** Book notes are found by scanning the plugin's notes folder instead of listing every file in the vault. Renaming a note or moving it anywhere inside that folder is still followed; a note moved out of the folder is left alone and a fresh copy is written.
+- The bundle no longer includes unused base64 helpers from the HTTP library (smaller `main.js`, no `atob`/`btoa`).
+- The README's network section lists exactly what the plugin contacts.
+
 ## [1.3.0] - 2026-10-12
 
 ### Added
@@ -15,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Library view.** An optional base shows every book as a cover card, plus a table view grouped by series.
 - **Bases-friendly properties:** title, author, series, series index, genres, cover, highlight count, last highlighted, and a link to the book in Kavita.
 - **Your edits are kept.** Each note ends with a **My notes** heading; everything you write under it, and your own properties, survive every sync.
-- **Rename-safe.** Notes are found by their Kavita ID, so renaming or moving a book note doesn't create a duplicate.
+- **Rename-safe.** Notes are found by their Kavita ID, so renaming or moving a book note within the notes folder doesn't create a duplicate.
 - **Live progress and summaries.** One notice shows progress, then a summary like "12 highlights from 4 books · 2 new" with a link to open your notes. Unchanged notes aren't rewritten.
 - **Status bar** (desktop) showing when you last synced; select it to sync.
 - **Automatic sync** when Obsidian starts and/or on an interval, quiet unless something new arrives.

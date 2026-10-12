@@ -136,7 +136,7 @@ describe("ObsidianVault", () => {
 			}),
 	);
 
-	it.effect("bookNotes finds every book note in the vault by chapter id", () =>
+	it.effect("bookNotes finds book notes anywhere inside the folder only", () =>
 		Effect.gen(function* () {
 			const fake = makeFakeApp();
 			fake.seed("Root/Series/book.md", managed(1));
@@ -151,7 +151,11 @@ describe("ObsidianVault", () => {
 				"Root/full.md",
 				"---\ntitle: Embers\nkavita_chapter_id: 6\nkavita_added: 2026-01-02T03:04:05\nkavita_url: http://kavita.test/library/1/series/1/book/6\n---\n",
 			);
-			const notes = yield* withVault(fake.app, (v) => v.bookNotes);
+			const notes = yield* withVault(fake.app, (v) => v.bookNotes("Root"));
+			assert.deepStrictEqual(
+				yield* withVault(fake.app, (v) => v.bookNotes("Missing")),
+				[],
+			);
 			assert.sameDeepMembers(
 				[...notes],
 				[
@@ -159,7 +163,6 @@ describe("ObsidianVault", () => {
 						{ path: "Root/Series/book.md", chapterId: 1 },
 						{ path: "Root/Series/Deep/nested.md", chapterId: 3 },
 						{ path: "Root/quoted.md", chapterId: 4 },
-						{ path: "Moved/elsewhere.md", chapterId: 5 },
 					].map((ref) => ({
 						...ref,
 						added: undefined,

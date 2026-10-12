@@ -13,7 +13,7 @@ import { parse } from "yaml";
 import { requestUrl } from "../src/__mocks__/obsidian.js";
 import { MY_NOTES_HEADING } from "../src/formatters/note.js";
 import { DEFAULT_SETTINGS, type PluginSettings } from "../src/schemas.js";
-import { fetchChapterInfo } from "../src/services/ChapterCatalog.js";
+import { loadChapterInfo } from "../src/services/ChapterCatalog.js";
 import { KavitaClient } from "../src/services/KavitaClient.js";
 import { ObsidianHttpClient } from "../src/services/ObsidianHttpClient.js";
 import { PluginConfig } from "../src/services/PluginConfig.js";
@@ -135,7 +135,7 @@ layer(LiveKavita.layer, {
 			Effect.gen(function* () {
 				const live = yield* LiveKavita;
 				const client = yield* liveClient;
-				const catalog = yield* fetchChapterInfo(
+				const catalog = yield* loadChapterInfo(
 					client,
 					live.books.map((b) => b.seriesId),
 				);
@@ -332,18 +332,18 @@ layer(LiveKavita.layer, {
 			}),
 		);
 
-		it.effect("follows a note that was renamed or moved", () =>
+		it.effect("follows a note renamed or moved within the folder", () =>
 			Effect.gen(function* () {
 				const fake = makeFakeApp();
 				const settings = yield* settingsFor();
 				yield* sync(settings, fake);
-				fake.move(EMBERS, "Reading/Embers (my copy).md");
+				fake.move(EMBERS, `${ROOT}/Favorites/Embers (my copy).md`);
 
 				const summary = yield* sync(settings, fake);
 				assert.strictEqual(summary.notesCreated, 0);
 				assert.isUndefined(fake.read(EMBERS));
 				assert.include(
-					read(fake, "Reading/Embers (my copy).md"),
+					read(fake, `${ROOT}/Favorites/Embers (my copy).md`),
 					"> Every fire begins as a single spark",
 				);
 			}),

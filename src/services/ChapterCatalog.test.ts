@@ -12,7 +12,7 @@ import {
 	KavitaParseError,
 } from "../errors.js";
 import { Annotation, ChapterInfo, Volume, Volumes } from "../schemas.js";
-import { fetchChapterInfo, toBooks, toChapterInfo } from "./ChapterCatalog.js";
+import { loadChapterInfo, toBooks, toChapterInfo } from "./ChapterCatalog.js";
 import { KavitaClient } from "./KavitaClient.js";
 
 const present = (value: string | null | undefined): value is string =>
@@ -130,7 +130,7 @@ describe("toChapterInfo", () => {
 	);
 });
 
-describe("fetchChapterInfo", () => {
+describe("loadChapterInfo", () => {
 	it.effect("merges chapters from every series and dedupes series ids", () =>
 		Effect.gen(function* () {
 			const ids = yield* distinctPositiveInts(2);
@@ -147,7 +147,7 @@ describe("fetchChapterInfo", () => {
 				return Effect.succeed(bySeries.get(seriesId) ?? []);
 			});
 
-			const catalog = yield* fetchChapterInfo(kavita, [first, second, first]);
+			const catalog = yield* loadChapterInfo(kavita, [first, second, first]);
 
 			assert.sameMembers(calls, [first, second]);
 			for (const info of toChapterInfo([a, b])) {
@@ -178,7 +178,7 @@ describe("fetchChapterInfo", () => {
 							: Effect.succeed(seriesId === ok ? [volume] : []),
 				);
 
-				const catalog = yield* fetchChapterInfo(kavita, [ok, network, parse]);
+				const catalog = yield* loadChapterInfo(kavita, [ok, network, parse]);
 
 				assert.deepStrictEqual(
 					[...catalog.values()],
@@ -202,7 +202,7 @@ describe("fetchChapterInfo", () => {
 					}),
 				),
 			);
-			const error = yield* Effect.flip(fetchChapterInfo(kavita, [seriesId]));
+			const error = yield* Effect.flip(loadChapterInfo(kavita, [seriesId]));
 			assert.strictEqual(error._tag, "KavitaAuthError");
 		}),
 	);
