@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.3.8/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.5.15/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -9,8 +9,14 @@
 		"ignoreUnknown": false,
 		"includes": [
 			"src/**",
-			"test-integration/scripts/**",
-			"test-integration/*.ts"
+			"test-support/**",
+			"test-integration/**",
+			"scripts/**",
+			"*.ts",
+			"*.json",
+			"!package.json",
+			"!manifest.json",
+			"!versions.json"
 		]
 	},
 	"formatter": {
@@ -20,10 +26,7 @@
 	"linter": {
 		"enabled": true,
 		"rules": {
-			"recommended": true,
-			"suspicious": {
-				"noShadowRestrictedNames": "off"
-			}
+			"preset": "recommended"
 		}
 	},
 	"javascript": {

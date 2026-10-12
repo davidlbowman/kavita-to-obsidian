@@ -1,277 +1,189 @@
 /**
- * Tests for ObsidianHttpClient layer.
- *
- * This module tests the ObsidianHttpClient layer which adapts Obsidian's
- * requestUrl to the Effect HttpClient interface.
+ * Tests for the `requestUrl`-backed HttpClient.
  *
  * @module
  */
+import { assert, beforeEach, describe, it } from "@effect/vitest";
+import { Effect, Schema, Stream } from "effect";
+import {
+	HttpBody,
+	HttpClient,
+	HttpClientRequest,
+	HttpClientResponse,
+} from "effect/http";
+import type { RequestUrlParam } from "obsidian";
+import { requestUrl } from "../__mocks__/obsidian.js";
+import { ObsidianHttpClient, toRequestUrlParam } from "./ObsidianHttpClient.js";
 
-import { describe, it } from "@effect/vitest";
-import { Effect } from "effect";
-import { HttpBody, HttpClient, HttpClientRequest } from "effect/unstable/http";
-import { requestUrl } from "obsidian";
-import { beforeEach, expect, vi } from "vitest";
-import { ObsidianHttpClient } from "./ObsidianHttpClient.js";
+const KAVITA = new URL("http://kavita.test/api/thing?apiKey=k&pluginName=p");
 
-const mockRequestUrl = vi.mocked(requestUrl);
+const respond = (status: number, body: string, headers = {}) => ({
+	status,
+	headers,
+	arrayBuffer: new TextEncoder().encode(body).buffer,
+});
+
+const execute = (request: HttpClientRequest.HttpClientRequest) =>
+	Effect.gen(function* () {
+		const client = yield* HttpClient.HttpClient;
+		return yield* client.execute(request);
+	}).pipe(Effect.provide(ObsidianHttpClient));
+
+const lastParam = (): RequestUrlParam => {
+	const call = requestUrl.mock.lastCall;
+	assert.isDefined(call);
+	return call?.[0];
+};
+
+describe("toRequestUrlParam", () => {
+	it.effect("sends JSON bodies as strings with a content type", () =>
+		Effect.gen(function* () {
+			const request = HttpClientRequest.post(KAVITA).pipe(
+				HttpClientRequest.setHeader("x-custom", "yes"),
+				HttpClientRequest.setHeader("content-length", "99"),
+				HttpClientRequest.bodyJsonUnsafe({ a: 1 }),
+			);
+			const param = yield* toRequestUrlParam(request, KAVITA);
+			assert.strictEqual(param.url, KAVITA.href);
+			assert.strictEqual(param.method, "POST");
+			assert.strictEqual(param.body, '{"a":1}');
+			assert.strictEqual(param.contentType, "application/json");
+			assert.strictEqual(param.throw, false);
+			assert.deepStrictEqual(param.headers, { "x-custom": "yes" });
+		}),
+	);
+
+	it.effect("omits body and content type for empty bodies", () =>
+		Effect.gen(function* () {
+			const request = HttpClientRequest.get(KAVITA).pipe(
+				HttpClientRequest.setHeader("content-type", "text/plain"),
+			);
+			const param = yield* toRequestUrlParam(request, KAVITA);
+			assert.strictEqual(param.method, "GET");
+			assert.isFalse("body" in param);
+			assert.isFalse("contentType" in param);
+			assert.deepStrictEqual(param.headers, {});
+		}),
+	);
+
+	it.effect("passes raw string, Uint8Array, and ArrayBuffer bodies", () =>
+		Effect.gen(function* () {
+			const buffer = new TextEncoder().encode("abc").buffer;
+			const withBody = (body: unknown, contentType?: string) =>
+				toRequestUrlParam(
+					HttpClientRequest.post(KAVITA).pipe(
+						HttpClientRequest.setBody(HttpBody.raw(body, { contentType })),
+					),
+					KAVITA,
+				);
+			const text = yield* withBody("hello", "text/plain");
+			assert.strictEqual(text.body, "hello");
+			assert.strictEqual(text.contentType, "text/plain");
+			const bytes = yield* withBody(new TextEncoder().encode("bytes"));
+			assert.strictEqual(bytes.body, "bytes");
+			const array = yield* withBody(buffer);
+			assert.strictEqual(array.body, buffer);
+		}),
+	);
+
+	it.effect("falls back to the content-type header for raw bodies", () =>
+		Effect.gen(function* () {
+			const param = yield* toRequestUrlParam(
+				HttpClientRequest.post(KAVITA).pipe(
+					HttpClientRequest.setBody(HttpBody.raw("a,b")),
+					HttpClientRequest.setHeader("content-type", "text/csv"),
+				),
+				KAVITA,
+			);
+			assert.strictEqual(param.contentType, "text/csv");
+			assert.deepStrictEqual(param.headers, {});
+		}),
+	);
+
+	it.effect.each<{ readonly name: string; readonly body: HttpBody.HttpBody }>([
+		{ name: "raw non-binary", body: HttpBody.raw(42) },
+		{ name: "form data", body: HttpBody.formData(new FormData()) },
+		{ name: "stream", body: HttpBody.stream(Stream.empty) },
+	])("fails with a TransportError for $name bodies", ({ body }) =>
+		Effect.gen(function* () {
+			const request = HttpClientRequest.post(KAVITA).pipe(
+				HttpClientRequest.setBody(body),
+			);
+			const error = yield* Effect.flip(toRequestUrlParam(request, KAVITA));
+			assert.strictEqual(error.reason._tag, "TransportError");
+		}),
+	);
+});
 
 describe("ObsidianHttpClient", () => {
 	beforeEach(() => {
-		mockRequestUrl.mockReset();
+		requestUrl.mockReset();
 	});
 
-	it("exports a Layer", () => {
-		expect(ObsidianHttpClient).toBeDefined();
-	});
-
-	it.effect("makes GET request via requestUrl", () =>
+	it.effect("sends the full URL including query params", () =>
 		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 200,
-				headers: { "content-type": "application/json" },
-				text: '{"message": "success"}',
-				arrayBuffer: new ArrayBuffer(0),
-				json: { message: "success" },
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.get("http://test.local/api/test");
-			const response = yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(response.status).toBe(200);
-			expect(mockRequestUrl).toHaveBeenCalledWith(
-				expect.objectContaining({
-					url: "http://test.local/api/test",
-					method: "GET",
-					throw: false,
-				}),
-			);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("makes POST request with JSON body", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 201,
-				headers: { "content-type": "application/json" },
-				text: '{"id": 1}',
-				arrayBuffer: new ArrayBuffer(0),
-				json: { id: 1 },
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.post(
-				"http://test.local/api/create",
-			).pipe(HttpClientRequest.bodyJsonUnsafe({ name: "test" }));
-			const response = yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(response.status).toBe(201);
-			expect(mockRequestUrl).toHaveBeenCalledWith(
-				expect.objectContaining({
-					url: "http://test.local/api/create",
-					method: "POST",
-				}),
-			);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("includes custom headers (lowercase normalized)", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 200,
-				headers: {},
-				text: "OK",
-				arrayBuffer: new ArrayBuffer(0),
-				json: null,
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.get("http://test.local/api/auth").pipe(
-				HttpClientRequest.setHeader("Authorization", "Bearer token123"),
-				HttpClientRequest.setHeader("x-api-key", "api-key-456"),
-			);
-			yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(mockRequestUrl).toHaveBeenCalledWith(
-				expect.objectContaining({
-					headers: expect.objectContaining({
-						"x-api-key": "api-key-456",
-					}),
-				}),
-			);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("handles network errors", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockRejectedValueOnce(new Error("Network error"));
-
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.get("http://test.local/api/fail");
-			const result = yield* client
-				.execute(request)
-				.pipe(Effect.scoped, Effect.result);
-
-			expect(result._tag).toBe("Failure");
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("handles non-200 status codes", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 404,
-				headers: {},
-				text: "Not Found",
-				arrayBuffer: new ArrayBuffer(0),
-				json: null,
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.get("http://test.local/api/missing");
-			const response = yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(response.status).toBe(404);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("handles empty response body", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 200,
-				headers: {},
-				text: "",
-				arrayBuffer: new ArrayBuffer(0),
-				json: null,
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.delete(
-				"http://test.local/api/resource/1",
-			);
-			const response = yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(response.status).toBe(200);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("handles Raw body with string", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 200,
-				headers: {},
-				text: "OK",
-				arrayBuffer: new ArrayBuffer(0),
-				json: null,
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.post("http://test.local/api/raw").pipe(
-				HttpClientRequest.setBody(HttpBody.raw("raw string body")),
-			);
-			yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(mockRequestUrl).toHaveBeenCalledWith(
-				expect.objectContaining({
-					body: "raw string body",
-				}),
-			);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("handles Raw body with Uint8Array", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 200,
-				headers: {},
-				text: "OK",
-				arrayBuffer: new ArrayBuffer(0),
-				json: null,
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const uint8Body = new TextEncoder().encode("uint8 body");
-			const request = HttpClientRequest.post("http://test.local/api/raw").pipe(
-				HttpClientRequest.setBody(HttpBody.raw(uint8Body)),
-			);
-			yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(mockRequestUrl).toHaveBeenCalledWith(
-				expect.objectContaining({
-					body: "uint8 body",
-				}),
-			);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("handles Raw body with ArrayBuffer", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 200,
-				headers: {},
-				text: "OK",
-				arrayBuffer: new ArrayBuffer(0),
-				json: null,
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const arrayBuffer = new TextEncoder().encode("arraybuffer body").buffer;
-			const request = HttpClientRequest.post("http://test.local/api/raw").pipe(
-				HttpClientRequest.setBody(HttpBody.raw(arrayBuffer)),
-			);
-			yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(mockRequestUrl).toHaveBeenCalledWith(
-				expect.objectContaining({
-					body: arrayBuffer,
-				}),
-			);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
-	);
-
-	it.effect("handles Uint8Array body type", () =>
-		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 200,
-				headers: {},
-				text: "OK",
-				arrayBuffer: new ArrayBuffer(0),
-				json: null,
-			});
-
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.post("http://test.local/api/raw").pipe(
-				HttpClientRequest.setBody(
-					HttpBody.uint8Array(new TextEncoder().encode("uint8 typed body")),
+			requestUrl.mockResolvedValue(respond(200, "{}"));
+			yield* execute(
+				HttpClientRequest.post(
+					"http://kavita.test/api/Plugin/authenticate",
+				).pipe(
+					HttpClientRequest.setUrlParams({ apiKey: "k", pluginName: "p" }),
 				),
 			);
-			yield* client.execute(request).pipe(Effect.scoped);
-
-			expect(mockRequestUrl).toHaveBeenCalledWith(
-				expect.objectContaining({
-					body: "uint8 typed body",
-				}),
+			assert.strictEqual(
+				lastParam().url,
+				"http://kavita.test/api/Plugin/authenticate?apiKey=k&pluginName=p",
 			);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
+		}),
 	);
 
-	it.effect("handles response.text throwing", () =>
+	it.effect("propagates status, headers, and JSON bodies", () =>
 		Effect.gen(function* () {
-			mockRequestUrl.mockResolvedValueOnce({
-				status: 200,
-				headers: {},
-				get text(): string {
-					throw new Error("Cannot get text");
-				},
-				arrayBuffer: new ArrayBuffer(0),
-				json: null,
-			});
+			requestUrl.mockResolvedValue(
+				respond(201, '{"token":"abc"}', {
+					"content-type": "application/json",
+					"x-trace": "t",
+				}),
+			);
+			const response = yield* execute(HttpClientRequest.get(KAVITA));
+			assert.strictEqual(response.status, 201);
+			assert.strictEqual(response.headers["x-trace"], "t");
+			const body = yield* HttpClientResponse.schemaBodyJson(
+				Schema.Struct({ token: Schema.String }),
+			)(response);
+			assert.deepStrictEqual(body, { token: "abc" });
+		}),
+	);
 
-			const client = yield* HttpClient.HttpClient;
-			const request = HttpClientRequest.get("http://test.local/api/broken");
-			const response = yield* client.execute(request).pipe(Effect.scoped);
+	it.effect.each([204, 304])("accepts a %i response with no body", (status) =>
+		Effect.gen(function* () {
+			requestUrl.mockResolvedValue(respond(status, "ignored"));
+			const response = yield* execute(HttpClientRequest.get(KAVITA));
+			assert.strictEqual(response.status, status);
+			assert.strictEqual(yield* response.text, "");
+		}),
+	);
 
-			expect(response.status).toBe(200);
-		}).pipe(Effect.provide(ObsidianHttpClient)),
+	it.effect("maps a rejected requestUrl to a TransportError", () =>
+		Effect.gen(function* () {
+			requestUrl.mockRejectedValue(new Error("ECONNREFUSED"));
+			const error = yield* Effect.flip(execute(HttpClientRequest.get(KAVITA)));
+			assert.strictEqual(error._tag, "HttpClientError");
+			assert.strictEqual(error.reason._tag, "TransportError");
+		}),
+	);
+
+	it.effect("fails before calling requestUrl for unsupported bodies", () =>
+		Effect.gen(function* () {
+			const error = yield* Effect.flip(
+				execute(
+					HttpClientRequest.post(KAVITA).pipe(
+						HttpClientRequest.setBody(HttpBody.formData(new FormData())),
+					),
+				),
+			);
+			assert.strictEqual(error.reason._tag, "TransportError");
+			assert.strictEqual(requestUrl.mock.calls.length, 0);
+		}),
 	);
 });

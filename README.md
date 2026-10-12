@@ -28,66 +28,74 @@ Kavita Annotations/
 ---
 tags:
   - kavita
-  - fiction
-  - classic
+  - series/the-great-gatsby
+  - author/f-scott-fitzgerald
+  - genre/fiction
 kavita_series_id: 42
 kavita_chapter_id: 123
-updated: 2025-12-19T10:30:00Z
+updated: 2026-10-12T10:30:00.000Z
 ---
 
 # The Great Gatsby
 
 **Series:** [[The Great Gatsby]]
 **Author:** [[F. Scott Fitzgerald]]
+**Genres:** Fiction
+
+---
 
 ## Annotations
-
-#### Chapter: One
 
 > In my younger and more vulnerable years my father gave me some advice...
 
 *Note:* This opening is iconic
 
-Page 3
+<small>Page 3</small>
 
 ---
-
-> So we beat on, boats against the current...
-
-Page 180
 ```
 
 ### Single File
 
-All annotations in one markdown file, grouped by series and chapter.
+All annotations in one markdown file, grouped by series, book, and chapter.
 
 ```markdown
 ---
+title: Kavita Annotations
 tags:
-  - kavita
   - annotations
-updated: 2025-12-06T10:30:00Z
+  - kavita
+updated: 2026-10-12T10:30:00.000Z
 ---
 
 # Kavita Annotations
 
 ## The Great Gatsby
+**Series:** [[The Great Gatsby]]
+**Library:** Books
 
+### The Great Gatsby
 **Author:** [[F. Scott Fitzgerald]]
+**Book:** [[The Great Gatsby]]
 
-### Chapter 1
+#### Chapter: One
 
 > In my younger and more vulnerable years...
 ```
+
+## Requirements
+
+- Kavita **0.8.8 or newer** (the first release with annotations). Tested against 0.8.8 and the latest stable release on every change.
+- Obsidian 1.6.6 or newer, desktop or mobile.
 
 ## Installation
 
 ### From GitHub Release
 
 1. Go to the [Releases](https://github.com/davidlbowman/kavita-to-obsidian/releases) page
-2. Download `main.js` and `manifest.json` from the latest release
-3. In your vault, create the folder `.obsidian/plugins/kavita-to-obsidian/`
-4. Copy both downloaded files into that folder
+2. Download `main.js`, `manifest.json`, and `styles.css` from the latest release
+3. In your vault, create the folder `.obsidian/plugins/kavita-sync/`
+4. Copy the downloaded files into that folder
 5. Restart Obsidian
 6. Go to Settings → Community Plugins and enable "Kavita Sync"
 
@@ -97,35 +105,38 @@ Once accepted into Obsidian's Community Plugins directory, install via: Settings
 
 ## Setup
 
-### 1. Get Your Kavita API Key
+### 1. Get a Kavita auth key
 
-1. Open Kavita and log in
-2. Click your profile icon → **User Settings**
-3. Go to **3rd Party Clients**
-4. Copy your API key (or generate one if you don't have one)
+- **Kavita 0.9+:** open your profile → **User Settings** → **Manage Auth Keys** and create a key (e.g. "Obsidian").
+- **Kavita 0.8.x:** open **User Settings** → **3rd Party Clients** and copy your API key.
 
-### 2. Configure the Plugin
+See [How to Find Your Kavita API Key](./TROUBLESHOOTING.md#how-to-find-your-kavita-api-key) for details.
+
+### 2. Configure the plugin
 
 1. In Obsidian, go to Settings → **Kavita Sync**
 2. Enter your Kavita server URL (e.g., `http://localhost:5000` or `https://kavita.example.com`)
-3. Paste your API key
+3. Paste your auth key
 4. Adjust other settings as desired
 
 ## Settings
 
 | Setting | What it does | Default |
 |---------|--------------|---------|
-| **Kavita URL** | Your Kavita server address | - |
-| **API Key** | Your Kavita API key for authentication | - |
-| **Export Mode** | Choose between "Single file" or "Hierarchical folders" | Hierarchical folders |
-| **Output Path** | Where to save annotations (single file mode only) | `kavita-annotations.md` |
-| **Root Folder** | Root folder for book files (hierarchical mode only) | `Kavita Annotations` |
-| **Delete Orphaned Files** | Remove files when annotations are deleted | Yes |
-| **Include Comments** | Include your personal notes with highlights | Yes |
-| **Include Spoilers** | Include highlights marked as spoilers | No |
-| **Include Tags** | Generate Obsidian tags from genres | Yes |
-| **Tag Prefix** | Prefix for generated tags (empty for no prefix) | (empty) |
-| **Include Wikilinks** | Create links to author/series notes | Yes |
+| **Kavita URL** | Your Kavita server address (http or https) | - |
+| **Kavita auth key** | Auth key (Kavita 0.9+) or API key (0.8.x) | - |
+| **Export mode** | "Single file" or "Hierarchical folders" | Hierarchical folders |
+| **Output path** | Where to save annotations (single file mode); missing folders are created | `kavita-annotations.md` |
+| **Root folder** | Root folder for book notes (hierarchical mode) | `Kavita Annotations` |
+| **Delete orphaned files** | Move book notes to the trash once their annotations are gone from Kavita. Only notes the plugin created (with `kavita_chapter_id` in frontmatter) are ever touched, and nothing is removed if Kavita returns no annotations at all | On |
+| **Include comments** | Include your personal notes with highlights | On |
+| **Include spoilers** | Include highlights marked as spoilers | Off |
+| **Include tags** | Generate Obsidian tags from genres | On |
+| **Tag prefix** | Prefix for generated genre tags (empty uses `genre/` in book notes) | (empty) |
+| **Include wikilinks** | Create links to author/series notes | On |
+| **Annotation template** | How each annotation is rendered; see the setting's description for variables | Blockquote, note, page |
+
+Only annotations you own are synced. Highlights that other Kavita users share with you are never written to your vault.
 
 ## How to Use
 
@@ -133,7 +144,7 @@ Once accepted into Obsidian's Community Plugins directory, install via: Settings
 
 **Option 1:** Click the book icon in the left sidebar
 
-**Option 2:** Press `Ctrl/Cmd + P` to open the command palette, then search for "Sync Kavita Annotations"
+**Option 2:** Press `Ctrl/Cmd + P` to open the command palette, then run "Kavita Sync: Sync annotations"
 
 In **hierarchical mode**, each book becomes its own file in a folder structure. In **single file mode**, all annotations are saved to one file.
 
@@ -165,8 +176,8 @@ For detailed solutions to common issues, see the [Troubleshooting Guide](./TROUB
 
 | Error | Solution |
 |-------|----------|
-| Authentication failed | [Regenerate your API key](./TROUBLESHOOTING.md#authentication-failed) |
-| Network error (404) | [Check your Kavita URL](./TROUBLESHOOTING.md#network-error-status-404) |
+| Kavita rejected your auth key | [Create a new auth key](./TROUBLESHOOTING.md#authentication-failed) |
+| Kavita endpoint not found (404) | [Check your Kavita URL](./TROUBLESHOOTING.md#network-error-status-404) |
 | Connection refused | [Ensure Kavita is running](./TROUBLESHOOTING.md#connection-refused) |
 | No annotations synced | [Create highlights in Kavita first](./TROUBLESHOOTING.md#no-annotations-synced) |
 
@@ -175,8 +186,8 @@ For detailed solutions to common issues, see the [Troubleshooting Guide](./TROUB
 This plugin connects to your self-hosted Kavita server to sync annotations. Here's what it does:
 
 - **Connects to:** Your configured Kavita server URL only (no third-party services)
-- **Authentication:** Sends your API key via HTTP header to authenticate with Kavita
-- **Data fetched:** Annotation, series, and chapter data via Kavita's REST API
+- **Authentication:** Exchanges your auth key for a short-lived session token through Kavita's plugin authentication endpoint (`/api/Plugin/authenticate`), then uses that token for every other request
+- **Data fetched:** Your account, your annotations, and volume/chapter metadata via Kavita's REST API (read-only; the plugin never modifies anything in Kavita)
 - **No telemetry:** The plugin does not collect analytics, usage data, or send information to any external service
 
 ## Questions or Issues?

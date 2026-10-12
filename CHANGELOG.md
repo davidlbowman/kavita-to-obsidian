@@ -5,6 +5,53 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - Unreleased
+
+### Fixed
+
+- **Other users' annotations no longer sync.** On Kavita servers where other users share their annotations, the plugin used to write their highlights into your vault. It now syncs only annotations owned by the auth key's user.
+- **"Delete orphaned files" now works.** The setting existed but did nothing. Book notes whose annotations are gone from Kavita are moved to the trash (respecting your trash preference), along with series folders left empty. Only notes the plugin created (frontmatter `kavita_chapter_id`) are touched, and nothing is removed when Kavita returns no annotations at all.
+- An invalid server URL now shows a clear settings error instead of "Sync failed unexpectedly".
+- Unexpected responses from Kavita now show the "unsupported server version" message; they were previously reported as network errors.
+- A corrupt or hand-edited `data.json` no longer prevents the plugin from loading; bad values fall back to their defaults.
+- Single-file mode creates missing folders in the output path instead of failing.
+- Null author, genre, or chapter lists from Kavita no longer fail the whole sync.
+- Server responses with no body (204/304) no longer crash the HTTP client.
+
+### Changed
+
+- Supports Kavita 0.8.8 through 0.9.x, including Kavita 0.9's auth keys. Settings and docs now say "auth key".
+- Settings changed by another device (e.g. through Obsidian Sync) are reloaded automatically.
+- Starting a sync while one is running shows a notice instead of running twice, and a running sync is cancelled when the plugin unloads.
+- Error notices are reworded; the troubleshooting guide matches them.
+
+### Technical
+
+- Upgraded to Effect 4.0.3 (stable), TypeScript 6, Vitest 5, Biome 2.5, Obsidian API 1.14, and esbuild 0.28.
+- Rewrote the services on `Context.Service`, `Schema.TaggedError`, and `effect/http`, with every type derived from a schema.
+- New test suites: schema-driven property tests (157 unit tests, ~99.8% coverage), plus live integration tests that run the real plugin against Kavita 0.8.8 and 0.9.1 in Docker on every PR, and against Kavita `latest`/`nightly` daily.
+- Added a `staging` branch: features merge to `staging`, and merging `staging` into `main` publishes a release automatically.
+- Removed admin-only Kavita calls, the unused series-metadata fetch, and the stress-test scripts from the plugin.
+
+## [1.2.3] - 2026-05-16
+
+### Fixed
+
+- Addressed Obsidian community review warnings.
+
+## [1.2.2] - 2026-05-16
+
+### Fixed
+
+- Passed the Obsidian community automated review.
+
+## [1.2.1] - 2026-03-23
+
+### Fixed
+
+- Switched the bundler from Bun to esbuild so the plugin loads in Obsidian.
+- Resolved Obsidian plugin lint violations.
+
 ## [1.2.0] - 2026-03-12
 
 ### Added

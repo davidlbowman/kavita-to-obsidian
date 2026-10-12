@@ -1,314 +1,182 @@
 /**
- * Hierarchical syncer service for organizing annotations by series/book folders.
+ * Hierarchical export: one note per book under `Root / Series / Book.md`.
  *
  * @module
  */
-
-import { Array as Arr, Effect, Layer, Record, ServiceMap } from "effect";
+import {
+	Array as Arr,
+	Context,
+	DateTime,
+	Effect,
+	Layer,
+	pipe,
+	Record,
+} from "effect";
 import { normalizePath } from "obsidian";
 import type {
-	KavitaAuthError,
-	KavitaNetworkError,
-	KavitaParseError,
+	KavitaError,
 	ObsidianFolderError,
 	ObsidianWriteError,
 } from "../errors.js";
-import {
-	type BookFileOptions,
-	formatBookFile,
-} from "../formatters/bookFile.js";
+import { formatBookFile } from "../formatters/bookFile.js";
+import { type ChapterInfoMap, getSeriesName } from "../formatters/markdown.js";
 import { buildSeriesPath, buildUniqueBookPath } from "../formatters/paths.js";
-import type { AnnotationDto } from "../schemas.js";
+import type {
+	Annotation,
+	BookFile,
+	HierarchicalSyncResult,
+} from "../schemas.js";
+import { fetchChapterInfo } from "./ChapterCatalog.js";
 import { KavitaClient } from "./KavitaClient.js";
-import { ObsidianAdapter } from "./ObsidianAdapter.js";
+import { ObsidianVault } from "./ObsidianVault.js";
 import { PluginConfig } from "./PluginConfig.js";
 
-/**
- * Result of a hierarchical sync operation.
- *
- * @since 1.1.0
- * @category Syncer
- */
-export interface HierarchicalSyncResult {
-	readonly totalAnnotations: number;
-	readonly seriesCount: number;
-	readonly bookCount: number;
-	readonly filesCreated: number;
-	readonly filesUpdated: number;
-}
+const entriesBy = (
+	annotations: ReadonlyArray<Annotation>,
+	key: (annotation: Annotation) => number,
+): Array<Arr.NonEmptyArray<Annotation>> =>
+	Record.values(Arr.groupBy(annotations, (a) => String(key(a))));
 
 /**
- * Book info extracted from annotations and metadata.
+ * Group annotations into one {@link BookFile} per chapter.
  *
- * @since 1.1.0
+ * @since 2.0.0
  * @category Syncer
  */
-interface BookInfo {
-	readonly bookTitle: string;
-	readonly seriesName: string;
-	readonly seriesId: number;
-	readonly chapterId: number;
-	readonly authors: ReadonlyArray<string>;
-	readonly genres: ReadonlyArray<string>;
-	readonly annotations: ReadonlyArray<typeof AnnotationDto.Type>;
-}
+export const toBookFiles = (
+	annotations: ReadonlyArray<Annotation>,
+	chapterInfo: ChapterInfoMap,
+): Array<Array<BookFile>> =>
+	entriesBy(annotations, (a) => a.seriesId).map((series) =>
+		entriesBy(series, (a) => a.chapterId).map((chapter): BookFile => {
+			const first = chapter[0];
+			const info = chapterInfo.get(first.chapterId);
+			return {
+				bookTitle:
+					info?.bookTitle ?? first.chapterTitle ?? `Chapter ${first.chapterId}`,
+				seriesName: getSeriesName(first),
+				seriesId: first.seriesId,
+				chapterId: first.chapterId,
+				authors: info?.authors ?? [],
+				genres: info?.genres ?? [],
+				annotations: chapter,
+			};
+		}),
+	);
+
+const parentFolder = (path: string): string =>
+	path.split("/").slice(0, -1).join("/");
 
 /**
- * Group annotations by series ID.
- *
- * @since 1.1.0
- * @category Syncer
- */
-const groupBySeriesId = (
-	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-): Record.ReadonlyRecord<string, Array<typeof AnnotationDto.Type>> =>
-	Arr.groupBy(annotations, (a) => String(a.seriesId));
-
-/**
- * Group annotations by chapter ID within a series.
- *
- * @since 1.1.0
- * @category Syncer
- */
-const groupByChapterId = (
-	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-): Record.ReadonlyRecord<string, Array<typeof AnnotationDto.Type>> =>
-	Arr.groupBy(annotations, (a) => String(a.chapterId));
-
-/**
- * Hierarchical syncer service.
- *
- * Syncs annotations to a folder structure: Root / Series / Book.md
+ * Writes one note per book and optionally trashes notes whose annotations
+ * no longer exist.
  *
  * @since 1.1.0
  * @category Services
  */
-export class HierarchicalSyncer extends ServiceMap.Service<
+export class HierarchicalSyncer extends Context.Service<
 	HierarchicalSyncer,
 	{
-		readonly syncAll: Effect.Effect<
+		readonly sync: Effect.Effect<
 			HierarchicalSyncResult,
-			| KavitaAuthError
-			| KavitaNetworkError
-			| KavitaParseError
-			| ObsidianWriteError
-			| ObsidianFolderError
+			KavitaError | ObsidianWriteError | ObsidianFolderError
 		>;
 	}
->()("HierarchicalSyncer") {
-	static readonly make = Effect.gen(function* () {
-		const kavita = yield* KavitaClient;
-		const obsidian = yield* ObsidianAdapter;
-		const config = yield* PluginConfig;
-
-		/**
-		 * Extract book info from a chapter's annotations.
-		 *
-		 * @since 1.1.0
-		 */
-		const extractBookInfo = (
-			chapterId: number,
-			annotations: ReadonlyArray<typeof AnnotationDto.Type>,
-			volumeInfo: Map<
-				number,
-				{
-					bookTitle: string;
-					authors: string[];
-					genres: string[];
-				}
-			>,
-		): BookInfo => {
-			const firstAnnotation = annotations[0];
-			if (!firstAnnotation) {
-				return {
-					bookTitle: `Chapter ${chapterId}`,
-					seriesName: "Unknown Series",
-					seriesId: 0,
-					chapterId,
-					authors: [],
-					genres: [],
-					annotations,
-				};
-			}
-
-			const info = volumeInfo.get(chapterId);
-			const bookTitle =
-				info?.bookTitle ??
-				firstAnnotation.chapterTitle ??
-				`Chapter ${chapterId}`;
-			const seriesName =
-				firstAnnotation.seriesName ?? `Series ${firstAnnotation.seriesId}`;
-
-			return {
-				bookTitle,
-				seriesName,
-				seriesId: firstAnnotation.seriesId,
-				chapterId,
-				authors: info?.authors ?? [],
-				genres: info?.genres ?? [],
-				annotations,
-			};
-		};
-
-		/**
-		 * Fetch chapter/volume metadata for book titles and authors.
-		 *
-		 * @since 1.1.0
-		 */
-		const fetchVolumeInfo = (
-			seriesIds: ReadonlyArray<number>,
-		): Effect.Effect<
-			Map<
-				number,
-				{
-					bookTitle: string;
-					authors: string[];
-					genres: string[];
-				}
-			>,
-			KavitaAuthError | KavitaNetworkError | KavitaParseError
-		> =>
-			Effect.gen(function* () {
-				const infoMap = new Map<
-					number,
-					{ bookTitle: string; authors: string[]; genres: string[] }
-				>();
-
-				for (const seriesId of seriesIds) {
-					const volumes = yield* kavita
-						.getVolumes(seriesId)
-						.pipe(Effect.option);
-					if (volumes._tag === "Some") {
-						for (const volume of volumes.value) {
-							for (const chapter of volume.chapters) {
-								const bookTitle =
-									chapter.titleName ?? volume.name ?? `Volume ${volume.number}`;
-								const authors = (chapter.writers ?? []).map((w) => w.name);
-								const genres = (chapter.genres ?? []).map((g) => g.title);
-								infoMap.set(chapter.id, { bookTitle, authors, genres });
-							}
-						}
-					}
-				}
-
-				return infoMap;
-			});
-
-		/**
-		 * Sync all annotations to hierarchical folder structure.
-		 *
-		 * @since 1.1.0
-		 */
-		const syncAll: Effect.Effect<
-			HierarchicalSyncResult,
-			| KavitaAuthError
-			| KavitaNetworkError
-			| KavitaParseError
-			| ObsidianWriteError
-			| ObsidianFolderError
-		> = Effect.gen(function* () {
-			const annotations = yield* kavita.fetchAllAnnotations;
-
-			if (annotations.length === 0) {
-				return {
-					totalAnnotations: 0,
-					seriesCount: 0,
-					bookCount: 0,
-					filesCreated: 0,
-					filesUpdated: 0,
-				};
-			}
-
-			const uniqueSeriesIds = [...new Set(annotations.map((a) => a.seriesId))];
-			const volumeInfo = yield* fetchVolumeInfo(uniqueSeriesIds);
-
-			yield* obsidian.ensureFolderExists(normalizePath(config.rootFolderName));
-
-			const seriesGroups = groupBySeriesId(annotations);
-			const seriesEntries = Record.toEntries(seriesGroups);
-
-			let filesCreated = 0;
-			let filesUpdated = 0;
-			let bookCount = 0;
-			const usedPaths = new Set<string>();
-
-			for (const [, seriesAnnotations] of seriesEntries) {
-				const firstAnnotation = seriesAnnotations[0];
-				if (!firstAnnotation) continue;
-
-				const seriesName =
-					firstAnnotation.seriesName ?? `Series ${firstAnnotation.seriesId}`;
-				const seriesPath = buildSeriesPath(config.rootFolderName, seriesName);
-
-				yield* obsidian.ensureFolderExists(seriesPath);
-
-				const chapterGroups = groupByChapterId(seriesAnnotations);
-				const chapterEntries = Record.toEntries(chapterGroups);
-
-				for (const [chapterIdStr, chapterAnnotations] of chapterEntries) {
-					const chapterId = Number.parseInt(chapterIdStr, 10);
-					const bookInfo = extractBookInfo(
-						chapterId,
-						chapterAnnotations,
-						volumeInfo,
-					);
-
-					const bookPath = buildUniqueBookPath(
-						config.rootFolderName,
-						bookInfo.seriesName,
-						bookInfo.bookTitle,
-						chapterId,
-						usedPaths,
-					);
-					usedPaths.add(bookPath);
-
-					const bookOptions: BookFileOptions = {
-						bookTitle: bookInfo.bookTitle,
-						seriesName: bookInfo.seriesName,
-						seriesId: bookInfo.seriesId,
-						chapterId: bookInfo.chapterId,
-						authors: bookInfo.authors,
-						genres: bookInfo.genres,
-						annotations: bookInfo.annotations,
-						formatOptions: {
-							includeComments: config.includeComments,
-							includeSpoilers: config.includeSpoilers,
-							includeTags: config.includeTags,
-							tagPrefix: config.tagPrefix,
-							includeWikilinks: config.includeWikilinks,
-							annotationTemplate: config.annotationTemplate,
-						},
-					};
-
-					const content = formatBookFile(bookOptions);
-
-					const existingFile = yield* obsidian.getFile(bookPath);
-					if (existingFile._tag === "Some") {
-						filesUpdated++;
-					} else {
-						filesCreated++;
-					}
-
-					yield* obsidian.writeFile(bookPath, content);
-					bookCount++;
-				}
-			}
-
-			return {
-				totalAnnotations: annotations.length,
-				seriesCount: seriesEntries.length,
-				bookCount,
-				filesCreated,
-				filesUpdated,
-			};
-		});
-
-		return HierarchicalSyncer.of({ syncAll });
-	});
-
-	static readonly layer = Layer.effect(
+>()("kavita-to-obsidian/HierarchicalSyncer") {
+	/**
+	 * Requires `KavitaClient`, `ObsidianVault`, and `PluginConfig`.
+	 *
+	 * @since 1.1.0
+	 * @category Layers
+	 */
+	static readonly layerNoDeps = Layer.effect(
 		HierarchicalSyncer,
-		HierarchicalSyncer.make,
+		Effect.gen(function* () {
+			const kavita = yield* KavitaClient;
+			const vault = yield* ObsidianVault;
+			const config = yield* PluginConfig;
+			const root = normalizePath(config.rootFolderName);
+
+			const trashOrphans = Effect.fn("HierarchicalSyncer.trashOrphans")(
+				function* (written: ReadonlySet<string>) {
+					const orphans = (yield* vault.managedNotes(root)).filter(
+						(path) => !written.has(path),
+					);
+					yield* Effect.forEach(orphans, (path) => vault.trashFile(path), {
+						discard: true,
+					});
+					const emptied = pipe(
+						orphans.map(parentFolder),
+						Arr.dedupe,
+						Arr.filter((folder) => folder !== root && folder !== ""),
+					);
+					yield* Effect.forEach(
+						emptied,
+						(folder) => vault.trashFolderIfEmpty(folder),
+						{
+							discard: true,
+						},
+					);
+					return orphans.length;
+				},
+			);
+
+			const sync = Effect.gen(function* () {
+				const annotations = yield* kavita.annotations;
+				const chapterInfo = yield* fetchChapterInfo(
+					kavita,
+					annotations.map((a) => a.seriesId),
+				);
+				const updated = DateTime.formatIso(yield* DateTime.now);
+				const series = toBookFiles(annotations, chapterInfo);
+
+				yield* vault.ensureFolder(root);
+				const written = new Set<string>();
+				let filesCreated = 0;
+				let filesUpdated = 0;
+
+				const seriesFolders = new Set<string>();
+
+				for (const books of series) {
+					for (const book of books) {
+						const folder = buildSeriesPath(root, book.seriesName);
+						if (!seriesFolders.has(folder)) {
+							yield* vault.ensureFolder(folder);
+							seriesFolders.add(folder);
+						}
+						const path = buildUniqueBookPath(
+							root,
+							book.seriesName,
+							book.bookTitle,
+							book.chapterId,
+							written,
+						);
+						written.add(path);
+						const outcome = yield* vault.writeFile(
+							path,
+							formatBookFile(book, config, updated),
+						);
+						if (outcome === "created") filesCreated++;
+						else filesUpdated++;
+					}
+				}
+
+				const filesDeleted =
+					config.deleteOrphanedFiles && annotations.length > 0
+						? yield* trashOrphans(written)
+						: 0;
+
+				return {
+					annotationCount: annotations.length,
+					seriesCount: series.length,
+					bookCount: written.size,
+					filesCreated,
+					filesUpdated,
+					filesDeleted,
+				};
+			}).pipe(Effect.withSpan("HierarchicalSyncer.sync"));
+
+			return HierarchicalSyncer.of({ sync });
+		}),
 	);
-	static readonly layerNoDeps = HierarchicalSyncer.layer;
 }

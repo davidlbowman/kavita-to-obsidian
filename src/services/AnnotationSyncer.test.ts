@@ -1,242 +1,147 @@
 /**
- * Tests for AnnotationSyncer service.
+ * Tests for the single-file syncer over an in-memory vault.
  *
  * @module
  */
-import { describe, it } from "@effect/vitest";
-import { Effect, Layer, Option, Redacted } from "effect";
-import { expect } from "vitest";
-import type { AnnotationDto } from "../schemas.js";
+import { assert, describe, it } from "@effect/vitest";
+import { Arbitrary, Effect, Layer } from "effect";
+import { makeFakeApp } from "../../test-support/FakeApp.js";
+import { KavitaNetworkError } from "../errors.js";
+import { toMarkdown } from "../formatters/markdown.js";
+import {
+	Annotation,
+	DEFAULT_SETTINGS,
+	type PluginSettings,
+	Volume,
+} from "../schemas.js";
 import { AnnotationSyncer } from "./AnnotationSyncer.js";
+import { fetchChapterInfo } from "./ChapterCatalog.js";
 import { KavitaClient } from "./KavitaClient.js";
-import { ObsidianAdapter } from "./ObsidianAdapter.js";
+import type { ObsidianApp } from "./ObsidianApp.js";
+import { ObsidianVault } from "./ObsidianVault.js";
 import { PluginConfig } from "./PluginConfig.js";
 
-const createAnnotation = (
-	overrides: Partial<typeof AnnotationDto.Type> = {},
-): typeof AnnotationDto.Type => ({
-	id: 1,
-	xPath: "/html/body/p[1]",
-	endingXPath: null,
-	selectedText: "Test highlight",
-	comment: null,
-	commentHtml: null,
-	commentPlainText: null,
-	chapterTitle: null,
-	context: null,
-	highlightCount: 14,
-	containsSpoiler: false,
-	pageNumber: 1,
-	selectedSlotIndex: 0,
-	likes: [],
-	seriesName: null,
-	libraryName: null,
-	chapterId: 1,
-	volumeId: 1,
-	seriesId: 1,
-	libraryId: 1,
-	ownerUserId: 1,
-	ownerUsername: null,
-	ageRating: 0,
-	createdUtc: "2025-01-01T00:00:00Z",
-	lastModifiedUtc: "2025-01-01T00:00:00Z",
-	...overrides,
+const EPOCH = "1970-01-01T00:00:00.000Z";
+
+const fixture = Effect.gen(function* () {
+	const annotations = yield* Arbitrary.sampleEffect(
+		Arbitrary.schema(Annotation),
+		{ count: 12 },
+	);
+	const volumes = yield* Arbitrary.sampleEffect(Arbitrary.schema(Volume), {
+		count: 3,
+	});
+	const kavita = KavitaClient.of({
+		annotations: Effect.succeed(annotations),
+		volumes: () => Effect.succeed(volumes),
+	});
+	return { annotations, kavita };
 });
 
-const createMockKavitaClient = (
-	annotations: Array<typeof AnnotationDto.Type>,
+const syncerLayer = (
+	kavita: KavitaClient["Service"],
+	app: ObsidianApp["Service"],
+	overrides: Partial<PluginSettings>,
 ) =>
-	Layer.succeed(KavitaClient, {
-		fetchAllAnnotations: Effect.succeed(annotations),
-		fetchAnnotationsFiltered: () => Effect.succeed(annotations),
-		getSeriesMetadata: () =>
-			Effect.succeed({
-				id: 1,
-				seriesId: 1,
-				summary: null,
-				releaseYear: 2020,
-				language: null,
-				genres: [],
-				tags: [],
-				writers: [],
-				coverArtists: [],
-				publishers: [],
-				characters: [],
-				pencillers: [],
-				inkers: [],
-				colorists: [],
-				letterers: [],
-				editors: [],
-				translators: [],
-			}),
-		getVolumes: () =>
-			Effect.succeed([
-				{
-					id: 1,
-					number: 1,
-					name: "Volume 1",
-					chapters: [
-						{
-							id: 1,
-							number: "1",
-							title: "Chapter 1",
-							pages: 10,
-							titleName: "Test Book",
-							sortOrder: 1,
-							writers: [{ id: 1, name: "Test Author", description: null }],
-							genres: [{ id: 1, title: "Fantasy" }],
-						},
-					],
-				},
-			]),
-	} as unknown as typeof KavitaClient.Service);
-
-const createMockObsidianAdapter = () => {
-	const files = new Map<string, string>();
-
-	const adapter = {
-		writeFile: (path: string, content: string) =>
-			Effect.sync(() => {
-				files.set(path, content);
-			}),
-		appendToFile: (path: string, content: string) =>
-			Effect.sync(() => {
-				const existing = files.get(path) ?? "";
-				files.set(path, existing + content);
-			}),
-		readFile: (path: string) =>
-			Effect.sync(() => {
-				return files.get(path) ?? "";
-			}),
-		getFile: (_path: string) => Effect.succeed(Option.none()),
-	};
-
-	return {
-		layer: Layer.succeed(
-			ObsidianAdapter,
-			adapter as unknown as typeof ObsidianAdapter.Service,
+	AnnotationSyncer.layerNoDeps.pipe(
+		Layer.provide(
+			Layer.mergeAll(
+				Layer.succeed(KavitaClient, kavita),
+				ObsidianVault.layer(app),
+			),
 		),
-		files,
-	};
-};
+		Layer.provideMerge(
+			PluginConfig.fromSettings({
+				...DEFAULT_SETTINGS,
+				kavitaUrl: "http://kavita.test",
+				kavitaApiKey: "key",
+				exportMode: "single-file",
+				...overrides,
+			}),
+		),
+	);
 
-const createMockConfig = (
-	overrides: Partial<typeof PluginConfig.Service> = {},
-) =>
-	Layer.succeed(
-		PluginConfig,
-		PluginConfig.of({
-			kavitaUrl: new URL("http://localhost:5000"),
-			kavitaApiKey: Redacted.make("test-api-key"),
-			outputPath: "kavita-annotations.md",
-			matchThreshold: 0.7,
-			includeComments: true,
-			includeSpoilers: false,
-			includeTags: true,
-			tagPrefix: "",
-			includeWikilinks: true,
-			exportMode: "hierarchical",
-			rootFolderName: "Kavita Annotations",
-			deleteOrphanedFiles: true,
-			annotationTemplate: "",
-			...overrides,
+const runSync = Effect.gen(function* () {
+	return yield* (yield* AnnotationSyncer).sync;
+});
+
+describe("AnnotationSyncer", () => {
+	it.effect("writes every annotation to the output note", () =>
+		Effect.gen(function* () {
+			const { annotations, kavita } = yield* fixture;
+			const fake = makeFakeApp();
+			const layer = syncerLayer(kavita, fake.app, {
+				outputPath: "kavita-annotations.md",
+			});
+
+			const { result, expected } = yield* Effect.gen(function* () {
+				const result = yield* runSync;
+				const config = yield* PluginConfig;
+				const chapterInfo = yield* fetchChapterInfo(
+					kavita,
+					annotations.map((a) => a.seriesId),
+				);
+				return {
+					result,
+					expected: toMarkdown(annotations, config, chapterInfo, EPOCH),
+				};
+			}).pipe(Effect.provide(layer));
+
+			assert.deepStrictEqual(result, {
+				annotationCount: annotations.length,
+				outputPath: "kavita-annotations.md",
+			});
+			assert.strictEqual(fake.read("kavita-annotations.md"), expected);
+			assert.include(expected, `updated: ${EPOCH}`);
 		}),
 	);
 
-describe("AnnotationSyncer", () => {
-	describe("syncToFile", () => {
-		it.effect("syncs annotations to file", () => {
-			const mockObsidian = createMockObsidianAdapter();
-
-			return Effect.gen(function* () {
-				const syncer = yield* AnnotationSyncer;
-				const result = yield* syncer.syncToFile;
-
-				expect(result.count).toBe(2);
-				expect(result.outputPath).toBe("kavita-annotations.md");
-
-				const fileContent = mockObsidian.files.get("kavita-annotations.md");
-				expect(fileContent).toBeDefined();
-				expect(fileContent).toContain("First highlight");
-				expect(fileContent).toContain("Second highlight");
-			}).pipe(
-				Effect.provide(AnnotationSyncer.layerNoDeps),
+	it.effect("normalizes the output path and creates missing folders", () =>
+		Effect.gen(function* () {
+			const { kavita } = yield* fixture;
+			const fake = makeFakeApp();
+			const result = yield* runSync.pipe(
 				Effect.provide(
-					createMockKavitaClient([
-						createAnnotation({
-							id: 1,
-							seriesId: 1,
-							selectedText: "First highlight",
-						}),
-						createAnnotation({
-							id: 2,
-							seriesId: 1,
-							selectedText: "Second highlight",
-						}),
-					]),
+					syncerLayer(kavita, fake.app, {
+						outputPath: "/Reading//Kavita/all.md",
+					}),
 				),
-				Effect.provide(mockObsidian.layer),
-				Effect.provide(createMockConfig()),
 			);
-		});
+			assert.strictEqual(result.outputPath, "Reading/Kavita/all.md");
+			assert.sameMembers([...fake.folders()], ["Reading", "Reading/Kavita"]);
+			assert.isDefined(fake.read("Reading/Kavita/all.md"));
+		}),
+	);
 
-		it.effect("returns zero count for empty annotations", () =>
-			Effect.gen(function* () {
-				const syncer = yield* AnnotationSyncer;
-				const result = yield* syncer.syncToFile;
+	it.effect("overwrites the note on later syncs", () =>
+		Effect.gen(function* () {
+			const { kavita } = yield* fixture;
+			const fake = makeFakeApp();
+			fake.seed("kavita-annotations.md", "stale");
+			yield* runSync.pipe(Effect.provide(syncerLayer(kavita, fake.app, {})));
+			assert.notStrictEqual(fake.read("kavita-annotations.md"), "stale");
+			assert.strictEqual(fake.files().size, 1);
+		}),
+	);
 
-				expect(result.count).toBe(0);
-			}).pipe(
-				Effect.provide(AnnotationSyncer.layerNoDeps),
-				Effect.provide(createMockKavitaClient([])),
-				Effect.provide(createMockObsidianAdapter().layer),
-				Effect.provide(createMockConfig()),
-			),
-		);
-
-		it.effect("uses custom output path from config", () =>
-			Effect.gen(function* () {
-				const syncer = yield* AnnotationSyncer;
-				const result = yield* syncer.syncToFile;
-
-				expect(result.outputPath).toBe("custom/path.md");
-			}).pipe(
-				Effect.provide(AnnotationSyncer.layerNoDeps),
-				Effect.provide(createMockKavitaClient([createAnnotation()])),
-				Effect.provide(createMockObsidianAdapter().layer),
-				Effect.provide(createMockConfig({ outputPath: "custom/path.md" })),
-			),
-		);
-
-		it.effect("respects includeSpoilers option", () => {
-			const mockObsidian = createMockObsidianAdapter();
-
-			return Effect.gen(function* () {
-				const syncer = yield* AnnotationSyncer;
-				yield* syncer.syncToFile;
-
-				const fileContent = mockObsidian.files.get("kavita-annotations.md");
-				expect(fileContent).toContain("Normal");
-				expect(fileContent).not.toContain("Spoiler");
-			}).pipe(
-				Effect.provide(AnnotationSyncer.layerNoDeps),
-				Effect.provide(
-					createMockKavitaClient([
-						createAnnotation({
-							id: 1,
-							selectedText: "Normal",
-							containsSpoiler: false,
-						}),
-						createAnnotation({
-							id: 2,
-							selectedText: "Spoiler",
-							containsSpoiler: true,
-						}),
-					]),
+	it.effect("writes nothing when Kavita fails", () =>
+		Effect.gen(function* () {
+			const { kavita } = yield* fixture;
+			const fake = makeFakeApp();
+			const failing = KavitaClient.of({
+				...kavita,
+				annotations: Effect.fail(
+					new KavitaNetworkError({
+						endpoint: "/api/Annotation/all-filtered",
+						statusCode: 500,
+					}),
 				),
-				Effect.provide(mockObsidian.layer),
-				Effect.provide(createMockConfig({ includeSpoilers: false })),
+			});
+			const error = yield* Effect.flip(
+				runSync.pipe(Effect.provide(syncerLayer(failing, fake.app, {}))),
 			);
-		});
-	});
+			assert.strictEqual(error._tag, "KavitaNetworkError");
+			assert.strictEqual(fake.files().size, 0);
+		}),
+	);
 });

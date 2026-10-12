@@ -1,190 +1,70 @@
 /**
- * Annotation syncer service for syncing Kavita annotations to Obsidian.
+ * Single-file export: every annotation in one markdown note.
  *
  * @module
  */
-
-import { Effect, Layer, ServiceMap } from "effect";
+import { Context, DateTime, Effect, Layer } from "effect";
 import { normalizePath } from "obsidian";
 import type {
-	KavitaAuthError,
-	KavitaNetworkError,
-	KavitaParseError,
+	KavitaError,
+	ObsidianFolderError,
 	ObsidianWriteError,
 } from "../errors.js";
-import {
-	type ChapterInfoMap,
-	type SeriesMetadataMap,
-	toMarkdown,
-} from "../formatters/markdown.js";
-import type { SeriesMetadataDto } from "../schemas.js";
+import { toMarkdown } from "../formatters/markdown.js";
+import type { SingleFileSyncResult } from "../schemas.js";
+import { fetchChapterInfo } from "./ChapterCatalog.js";
 import { KavitaClient } from "./KavitaClient.js";
-import { ObsidianAdapter } from "./ObsidianAdapter.js";
+import { ObsidianVault } from "./ObsidianVault.js";
 import { PluginConfig } from "./PluginConfig.js";
 
 /**
- * Result of a sync operation.
- *
- * @since 0.0.1
- * @category Syncer
- */
-export interface SyncResult {
-	readonly count: number;
-	readonly outputPath: string;
-}
-
-/**
- * Annotation syncer service.
- *
- * Orchestrates fetching annotations from Kavita and writing them to Obsidian.
- * Used for single-file export mode.
+ * Writes all annotations to the configured output note.
  *
  * @since 0.0.1
  * @category Services
  */
-export class AnnotationSyncer extends ServiceMap.Service<
+export class AnnotationSyncer extends Context.Service<
 	AnnotationSyncer,
 	{
-		readonly syncToFile: Effect.Effect<
-			SyncResult,
-			| KavitaAuthError
-			| KavitaNetworkError
-			| KavitaParseError
-			| ObsidianWriteError
+		readonly sync: Effect.Effect<
+			SingleFileSyncResult,
+			KavitaError | ObsidianWriteError | ObsidianFolderError
 		>;
 	}
->()("AnnotationSyncer") {
-	static readonly make = Effect.gen(function* () {
-		const kavita = yield* KavitaClient;
-		const obsidian = yield* ObsidianAdapter;
-		const config = yield* PluginConfig;
+>()("kavita-to-obsidian/AnnotationSyncer") {
+	/**
+	 * Requires `KavitaClient`, `ObsidianVault`, and `PluginConfig`.
+	 *
+	 * @since 0.0.1
+	 * @category Layers
+	 */
+	static readonly layerNoDeps = Layer.effect(
+		AnnotationSyncer,
+		Effect.gen(function* () {
+			const kavita = yield* KavitaClient;
+			const vault = yield* ObsidianVault;
+			const config = yield* PluginConfig;
 
-		/**
-		 * Fetch metadata for all unique series in the annotations.
-		 *
-		 * @since 0.0.2
-		 */
-		const fetchSeriesMetadata = (
-			seriesIds: ReadonlyArray<number>,
-		): Effect.Effect<
-			SeriesMetadataMap,
-			KavitaAuthError | KavitaNetworkError | KavitaParseError
-		> =>
-			Effect.gen(function* () {
-				const metadataEntries: Array<[number, typeof SeriesMetadataDto.Type]> =
-					[];
-
-				for (const seriesId of seriesIds) {
-					const metadata = yield* kavita
-						.getSeriesMetadata(seriesId)
-						.pipe(Effect.option);
-					if (metadata._tag === "Some") {
-						metadataEntries.push([seriesId, metadata.value]);
-					}
+			const sync = Effect.gen(function* () {
+				const annotations = yield* kavita.annotations;
+				const chapterInfo = yield* fetchChapterInfo(
+					kavita,
+					annotations.map((a) => a.seriesId),
+				);
+				const updated = DateTime.formatIso(yield* DateTime.now);
+				const outputPath = normalizePath(config.outputPath);
+				const parent = outputPath.split("/").slice(0, -1).join("/");
+				if (parent !== "") {
+					yield* vault.ensureFolder(parent);
 				}
+				yield* vault.writeFile(
+					outputPath,
+					toMarkdown(annotations, config, chapterInfo, updated),
+				);
+				return { annotationCount: annotations.length, outputPath };
+			}).pipe(Effect.withSpan("AnnotationSyncer.sync"));
 
-				return new Map(metadataEntries);
-			});
-
-		/**
-		 * Fetch chapter info (book titles, authors, genres) for all unique series.
-		 *
-		 * @since 0.0.2
-		 */
-		const fetchChapterInfo = (
-			seriesIds: ReadonlyArray<number>,
-		): Effect.Effect<
-			ChapterInfoMap,
-			KavitaAuthError | KavitaNetworkError | KavitaParseError
-		> =>
-			Effect.gen(function* () {
-				const chapterEntries: Array<
-					[
-						number,
-						{
-							chapterId: number;
-							bookTitle: string;
-							sortOrder: number;
-							authors: string[];
-							genres: string[];
-						},
-					]
-				> = [];
-
-				for (const seriesId of seriesIds) {
-					const volumes = yield* kavita
-						.getVolumes(seriesId)
-						.pipe(Effect.option);
-					if (volumes._tag === "Some") {
-						for (const volume of volumes.value) {
-							for (const chapter of volume.chapters) {
-								const bookTitle =
-									chapter.titleName ?? volume.name ?? `Volume ${volume.number}`;
-								const sortOrder = volume.number;
-								const authors = (chapter.writers ?? []).map((w) => w.name);
-								const genres = (chapter.genres ?? []).map((g) => g.title);
-								chapterEntries.push([
-									chapter.id,
-									{
-										chapterId: chapter.id,
-										bookTitle,
-										sortOrder,
-										authors,
-										genres,
-									},
-								]);
-							}
-						}
-					}
-				}
-
-				return new Map(chapterEntries);
-			});
-
-		/**
-		 * Sync all annotations to a single file.
-		 *
-		 * @since 0.0.1
-		 */
-		const syncToFile: Effect.Effect<
-			SyncResult,
-			| KavitaAuthError
-			| KavitaNetworkError
-			| KavitaParseError
-			| ObsidianWriteError
-		> = Effect.gen(function* () {
-			const annotations = yield* kavita.fetchAllAnnotations;
-
-			const uniqueSeriesIds = [...new Set(annotations.map((a) => a.seriesId))];
-			const metadataMap = yield* fetchSeriesMetadata(uniqueSeriesIds);
-			const chapterInfoMap = yield* fetchChapterInfo(uniqueSeriesIds);
-
-			const markdown = toMarkdown(
-				annotations,
-				{
-					includeComments: config.includeComments,
-					includeSpoilers: config.includeSpoilers,
-					includeTags: config.includeTags,
-					tagPrefix: config.tagPrefix,
-					includeWikilinks: config.includeWikilinks,
-					annotationTemplate: config.annotationTemplate,
-				},
-				metadataMap,
-				chapterInfoMap,
-			);
-
-			const normalizedPath = normalizePath(config.outputPath);
-			yield* obsidian.writeFile(normalizedPath, markdown);
-
-			return {
-				count: annotations.length,
-				outputPath: normalizedPath,
-			};
-		});
-
-		return AnnotationSyncer.of({ syncToFile });
-	});
-
-	static readonly layer = Layer.effect(AnnotationSyncer, AnnotationSyncer.make);
-	static readonly layerNoDeps = AnnotationSyncer.layer;
+			return AnnotationSyncer.of({ sync });
+		}),
+	);
 }

@@ -10,7 +10,7 @@ export default defineConfig([
 			"dist/**",
 			"**/*.test.ts",
 			"test-integration/**",
-			"__mocks__/**",
+			"**/__mocks__/**",
 			"scripts/**",
 			"coverage/**",
 			"main.js",

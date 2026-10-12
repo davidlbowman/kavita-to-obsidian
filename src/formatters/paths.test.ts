@@ -1,9 +1,10 @@
 /**
- * Tests for path sanitization utilities.
+ * Tests for vault path sanitization.
  *
  * @module
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
+import { Schema } from "effect";
 import {
 	buildBookPath,
 	buildSeriesPath,
@@ -11,119 +12,90 @@ import {
 	sanitizePathSegment,
 } from "./paths.js";
 
+const WINDOWS_RESERVED = [
+	"CON",
+	"prn",
+	"Aux",
+	"NUL",
+	"COM1",
+	"com9",
+	"LPT1",
+	"lpt9",
+];
+
 describe("sanitizePathSegment", () => {
-	it("replaces invalid characters with dashes", () => {
-		expect(sanitizePathSegment("Book: Part 1")).toBe("Book- Part 1");
-		expect(sanitizePathSegment("A/B\\C")).toBe("A-B-C");
-		expect(sanitizePathSegment("What?")).toBe("What-");
-		expect(sanitizePathSegment('Say "Hello"')).toBe("Say -Hello-");
-		expect(sanitizePathSegment("File<>Name")).toBe("File--Name");
-		expect(sanitizePathSegment("Pipe|Here")).toBe("Pipe-Here");
-		expect(sanitizePathSegment("Star*Path")).toBe("Star-Path");
+	it.prop(
+		"never yields forbidden characters, empty names, or over-long names",
+		[Schema.String],
+		([name]) => {
+			const result = sanitizePathSegment(name);
+			expect(result).not.toMatch(/[<>:"/\\|?*]/);
+			expect(result.length).toBeGreaterThan(0);
+			expect(result.length).toBeLessThanOrEqual(201);
+			expect(result).not.toMatch(/\s{2,}/);
+		},
+	);
+
+	it("replaces each forbidden character with a dash", () => {
+		expect(sanitizePathSegment('a<b>c:d"e/f\\g|h?i*j')).toBe(
+			"a-b-c-d-e-f-g-h-i-j",
+		);
 	});
 
-	it("normalizes whitespace", () => {
-		expect(sanitizePathSegment("Too   Many   Spaces")).toBe("Too Many Spaces");
-		expect(sanitizePathSegment("  Leading")).toBe("Leading");
-		expect(sanitizePathSegment("Trailing  ")).toBe("Trailing");
-		expect(sanitizePathSegment("Tab\there")).toBe("Tab here");
+	it("collapses and trims whitespace", () => {
+		expect(sanitizePathSegment("  a \t\n b  ")).toBe("a b");
 	});
 
-	it("truncates long names", () => {
-		const longName = "A".repeat(250);
-		const result = sanitizePathSegment(longName);
-		expect(result.length).toBe(200);
+	it("truncates to 200 characters", () => {
+		expect(sanitizePathSegment("x".repeat(500))).toHaveLength(200);
 	});
 
-	it("handles empty strings", () => {
+	it("names blank input Untitled", () => {
 		expect(sanitizePathSegment("")).toBe("Untitled");
 		expect(sanitizePathSegment("   ")).toBe("Untitled");
 	});
 
-	it("handles Windows reserved names", () => {
-		expect(sanitizePathSegment("CON")).toBe("CON_");
-		expect(sanitizePathSegment("con")).toBe("con_");
-		expect(sanitizePathSegment("PRN")).toBe("PRN_");
-		expect(sanitizePathSegment("AUX")).toBe("AUX_");
-		expect(sanitizePathSegment("NUL")).toBe("NUL_");
-		expect(sanitizePathSegment("COM1")).toBe("COM1_");
-		expect(sanitizePathSegment("LPT9")).toBe("LPT9_");
-	});
-
-	it("leaves normal names unchanged", () => {
-		expect(sanitizePathSegment("The Last Wish")).toBe("The Last Wish");
-		expect(sanitizePathSegment("Book-1")).toBe("Book-1");
-		expect(sanitizePathSegment("Chapter_One")).toBe("Chapter_One");
+	it("suffixes Windows reserved names", () => {
+		for (const name of WINDOWS_RESERVED) {
+			expect(sanitizePathSegment(name)).toBe(`${name}_`);
+		}
+		expect(sanitizePathSegment("CONSOLE")).toBe("CONSOLE");
 	});
 });
 
-describe("buildBookPath", () => {
-	it("builds correct path from components", () => {
-		const result = buildBookPath(
-			"Kavita Annotations",
-			"The Witcher",
-			"The Last Wish",
+describe("buildBookPath / buildSeriesPath", () => {
+	it("joins sanitized segments under the root", () => {
+		expect(buildBookPath("Root", "What If?", "Q: One")).toBe(
+			"Root/What If-/Q- One.md",
 		);
-		expect(result).toBe("Kavita Annotations/The Witcher/The Last Wish.md");
+		expect(buildSeriesPath("Root/", "A|B")).toBe("Root/A-B");
 	});
 
-	it("sanitizes series and book names", () => {
-		const result = buildBookPath(
-			"Kavita Annotations",
-			"Series: Part 1",
-			"Book/Chapter 1",
-		);
-		expect(result).toBe("Kavita Annotations/Series- Part 1/Book-Chapter 1.md");
-	});
-});
-
-describe("buildSeriesPath", () => {
-	it("builds correct series folder path", () => {
-		const result = buildSeriesPath("Kavita Annotations", "The Witcher");
-		expect(result).toBe("Kavita Annotations/The Witcher");
-	});
-
-	it("sanitizes series name", () => {
-		const result = buildSeriesPath("Root", "Series: Special");
-		expect(result).toBe("Root/Series- Special");
-	});
+	it.prop(
+		"book paths sit inside their series folder",
+		[Schema.String, Schema.String],
+		([series, book]) => {
+			const seriesPath = buildSeriesPath("Root", series);
+			const bookPath = buildBookPath("Root", series, book);
+			expect(bookPath.startsWith(`${seriesPath}/`)).toBe(true);
+			expect(bookPath.endsWith(".md")).toBe(true);
+			expect(bookPath.split("/")).toHaveLength(3);
+		},
+	);
 });
 
 describe("buildUniqueBookPath", () => {
-	it("returns base path when no conflict", () => {
-		const existing = new Set<string>();
-		const result = buildUniqueBookPath("Root", "Series", "Book", 123, existing);
-		expect(result).toBe("Root/Series/Book.md");
-	});
-
-	it("appends chapter ID when path exists", () => {
-		const existing = new Set(["Root/Series/Book.md"]);
-		const result = buildUniqueBookPath("Root", "Series", "Book", 123, existing);
-		expect(result).toBe("Root/Series/Book (ch-123).md");
-	});
-
-	it("handles multiple duplicates", () => {
-		const existing = new Set([
-			"Root/Series/Introduction.md",
-			"Root/Series/Introduction (ch-100).md",
-		]);
-
-		const result1 = buildUniqueBookPath(
-			"Root",
-			"Series",
-			"Introduction",
-			100,
-			existing,
-		);
-		expect(result1).toBe("Root/Series/Introduction (ch-100).md");
-
-		const result2 = buildUniqueBookPath(
-			"Root",
-			"Series",
-			"Introduction",
-			200,
-			existing,
-		);
-		expect(result2).toBe("Root/Series/Introduction (ch-200).md");
-	});
+	it.prop(
+		"returns the base path when unused and appends the chapter id on collision",
+		[Schema.String, Schema.String, Schema.Int],
+		([series, book, chapterId]) => {
+			const base = buildBookPath("Root", series, book);
+			expect(
+				buildUniqueBookPath("Root", series, book, chapterId, new Set()),
+			).toBe(base);
+			expect(
+				buildUniqueBookPath("Root", series, book, chapterId, new Set([base])),
+			).toBe(`${base.slice(0, -".md".length)} (ch-${chapterId}).md`);
+		},
+	);
 });
