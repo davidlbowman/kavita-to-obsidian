@@ -39,9 +39,12 @@ feature branch ──PR──▶ staging ──PR──▶ main ──▶ GitHub
 ```
 
 1. Branch from `staging` (`feat/…`, `fix/…`, `chore/…`) and open a PR **into `staging`**. Reference issues with `Refs #N`.
-2. CI must be green: the `check` job and the live Kavita jobs (0.8.8 and 0.9.1).
-3. When `staging` is ready to ship, bump the version (below) and open a PR **from `staging` into `main`**, with `Closes #N` for the issues it delivers. CI rejects PRs into `main` from any other branch.
-4. Merging into `main` publishes the release automatically: the `Release` workflow builds, attests, and creates a GitHub release tagged with the manifest version (Obsidian requires the tag to equal the version, no `v` prefix). If that version is already released, the workflow does nothing.
+2. Feature PRs are **squash-merged** into `staging` (the only merge method GitHub allows there).
+3. CI must be green: the `check` job and the live Kavita jobs (0.8.8 and 0.9.1).
+4. When `staging` is ready to ship, bump the version (below) and open a PR **from `staging` into `main`**, with `Closes #N` for the issues it delivers. CI rejects PRs into `main` from any other branch, and they land as a **merge commit** (the only method allowed on `main`).
+5. Merging into `main` publishes the release automatically: the `Release` workflow builds, attests, and creates a GitHub release tagged with the manifest version (Obsidian requires the tag to equal the version, no `v` prefix). If that version is already released, the workflow does nothing.
+
+Both branches are protected by rulesets: changes land only through PRs, and force-pushes and deletion are blocked.
 
 ### Bumping the version
 
