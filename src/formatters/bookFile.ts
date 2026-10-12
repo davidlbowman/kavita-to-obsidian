@@ -1,167 +1,126 @@
 /**
- * Book file formatter for hierarchical folder structure.
- *
- * Generates markdown files for individual books with rich frontmatter
- * and wikilinks for Obsidian integration.
+ * Render one book's annotations as a standalone note for hierarchical mode.
  *
  * @module
  */
-import { Array, pipe, type Result } from "effect";
-import type { AnnotationDto } from "../schemas.js";
-import type { FormatOptions } from "./markdown.js";
-import { formatAnnotation, toSlug } from "./markdown.js";
+import { Array as Arr, pipe } from "effect";
+import type { Annotation, BookFile, FormatOptions } from "../schemas.js";
+import { formatAnnotation, makeWikilink, toSlug } from "./markdown.js";
 
 /**
- * Options for formatting a book file.
+ * Frontmatter key that marks a note as written by this plugin.
+ *
+ * Orphan cleanup only ever trashes notes carrying this key.
+ *
+ * @since 2.0.0
+ * @category Book File
+ */
+export const MANAGED_NOTE_KEY = "kavita_chapter_id";
+
+/**
+ * YAML frontmatter with tags and Kavita IDs.
  *
  * @since 1.1.0
  * @category Book File
  */
-export interface BookFileOptions {
-	readonly bookTitle: string;
-	readonly seriesName: string;
-	readonly seriesId: number;
-	readonly chapterId: number;
-	readonly authors: ReadonlyArray<string>;
-	readonly genres: ReadonlyArray<string>;
-	readonly annotations: ReadonlyArray<typeof AnnotationDto.Type>;
-	readonly formatOptions: FormatOptions;
-}
-
-/**
- * Generate YAML frontmatter for a book file.
- *
- * @since 1.1.0
- * @category Book File
- */
-export const generateBookFrontmatter = (options: BookFileOptions): string => {
-	const lines: string[] = ["---"];
-
-	const tags: string[] = ["kavita"];
-
-	const seriesSlug = toSlug(options.seriesName);
+export const generateBookFrontmatter = (
+	book: BookFile,
+	options: FormatOptions,
+	updated: string,
+): string => {
+	const tags = ["kavita"];
+	const seriesSlug = toSlug(book.seriesName);
 	if (seriesSlug) {
 		tags.push(`series/${seriesSlug}`);
 	}
-
-	for (const author of options.authors) {
-		const authorSlug = toSlug(author);
-		if (authorSlug) {
-			tags.push(`author/${authorSlug}`);
+	for (const author of book.authors) {
+		const slug = toSlug(author);
+		if (slug) {
+			tags.push(`author/${slug}`);
 		}
 	}
-
-	for (const genre of options.genres) {
-		const genreSlug = toSlug(genre);
-		if (genreSlug && options.formatOptions.tagPrefix) {
-			tags.push(`${options.formatOptions.tagPrefix}${genreSlug}`);
-		} else if (genreSlug) {
-			tags.push(`genre/${genreSlug}`);
+	for (const genre of book.genres) {
+		const slug = toSlug(genre);
+		if (slug) {
+			tags.push(`${options.tagPrefix || "genre/"}${slug}`);
 		}
 	}
-
-	if (tags.length > 0) {
-		lines.push("tags:");
-		for (const tag of tags) {
-			lines.push(`  - ${tag}`);
-		}
-	}
-
-	lines.push(`kavita_series_id: ${options.seriesId}`);
-	lines.push(`kavita_chapter_id: ${options.chapterId}`);
-	lines.push(`updated: ${new Date().toISOString()}`);
-	lines.push("---");
-
-	return lines.join("\n");
+	return [
+		"---",
+		"tags:",
+		...tags.map((tag) => `  - ${tag}`),
+		`kavita_series_id: ${book.seriesId}`,
+		`${MANAGED_NOTE_KEY}: ${book.chapterId}`,
+		`updated: ${updated}`,
+		"---",
+	].join("\n");
 };
 
 /**
- * Generate the header section with metadata and wikilinks.
+ * Title, series, author, and genre lines.
  *
  * @since 1.1.0
  * @category Book File
  */
-export const generateBookHeader = (options: BookFileOptions): string => {
-	const lines: string[] = [`# ${options.bookTitle}`, ""];
-
-	if (options.formatOptions.includeWikilinks) {
-		lines.push(`**Series:** [[${options.seriesName}]]`);
-	} else {
-		lines.push(`**Series:** ${options.seriesName}`);
-	}
-
-	if (options.authors.length > 0) {
-		if (options.formatOptions.includeWikilinks) {
-			const authorLinks = options.authors.map((a) => `[[${a}]]`).join(", ");
-			lines.push(`**Author:** ${authorLinks}`);
-		} else {
-			lines.push(`**Author:** ${options.authors.join(", ")}`);
-		}
-	}
-
-	if (options.genres.length > 0) {
-		lines.push(`**Genres:** ${options.genres.join(", ")}`);
-	}
-
-	lines.push("");
-	lines.push("---");
-	lines.push("");
-
-	return lines.join("\n");
-};
-
-/**
- * Format a single annotation for a book file.
- *
- * @since 1.1.0
- * @category Book File
- */
-export const formatBookAnnotation = (
-	annotation: typeof AnnotationDto.Type,
+export const generateBookHeader = (
+	book: BookFile,
 	options: FormatOptions,
-): Result.Result<string, void> => formatAnnotation(annotation, options);
+): string => {
+	const link = (value: string) =>
+		options.includeWikilinks ? makeWikilink(value) : value;
+	const lines = [
+		`# ${book.bookTitle}`,
+		"",
+		`**Series:** ${link(book.seriesName)}`,
+	];
+	if (book.authors.length > 0) {
+		lines.push(`**Author:** ${book.authors.map(link).join(", ")}`);
+	}
+	if (book.genres.length > 0) {
+		lines.push(`**Genres:** ${book.genres.join(", ")}`);
+	}
+	lines.push("", "---", "");
+	return lines.join("\n");
+};
 
 /**
- * Generate the annotations section of a book file.
+ * The `## Annotations` section.
  *
  * @since 1.1.0
  * @category Book File
  */
 export const generateAnnotationsSection = (
-	annotations: ReadonlyArray<typeof AnnotationDto.Type>,
+	annotations: ReadonlyArray<Annotation>,
 	options: FormatOptions,
 ): string => {
-	const lines: string[] = ["## Annotations", ""];
-
 	if (annotations.length === 0) {
-		lines.push("*No annotations yet.*");
-		return lines.join("\n");
+		return ["## Annotations", "", "*No annotations yet.*"].join("\n");
 	}
-
-	const formattedAnnotations = pipe(
-		annotations,
-		Array.filterMap((a) => formatBookAnnotation(a, options)),
-		Array.flatMap((formatted) => [formatted, "", "---", ""]),
-	);
-
-	lines.push(...formattedAnnotations);
-
-	return lines.join("\n");
+	return [
+		"## Annotations",
+		"",
+		...pipe(
+			annotations,
+			Arr.filterMap((a) => formatAnnotation(a, options)),
+			Arr.flatMap((formatted) => [formatted, "", "---", ""]),
+		),
+	].join("\n");
 };
 
 /**
- * Format a complete book file with frontmatter, header, and annotations.
+ * The complete note for one book.
  *
  * @since 1.1.0
  * @category Book File
  */
-export const formatBookFile = (options: BookFileOptions): string => {
-	const frontmatter = generateBookFrontmatter(options);
-	const header = generateBookHeader(options);
-	const annotations = generateAnnotationsSection(
-		options.annotations,
-		options.formatOptions,
-	);
-
-	return [frontmatter, "", header, annotations].join("\n");
-};
+export const formatBookFile = (
+	book: BookFile,
+	options: FormatOptions,
+	updated: string,
+): string =>
+	[
+		generateBookFrontmatter(book, options, updated),
+		"",
+		generateBookHeader(book, options),
+		generateAnnotationsSection(book.annotations, options),
+	].join("\n");

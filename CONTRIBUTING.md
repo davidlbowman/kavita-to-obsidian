@@ -1,339 +1,147 @@
 # Contributing to Kavita Sync
 
-Thank you for your interest in contributing! This guide covers the development environment setup, code conventions, and PR process.
+This guide covers the development setup, branch and release flow, code conventions, and tests.
 
-## Development Environment
+## Prerequisites
 
-### Prerequisites
+- [Bun](https://bun.sh/) 1.3+ (the exact version is pinned in `package.json` → `packageManager`)
+- Node.js 24 (Vitest runs on Node)
+- [Docker](https://www.docker.com/) for the live Kavita integration tests
 
-- [Bun](https://bun.sh/) v1.0+
-- [Docker](https://www.docker.com/) (for integration tests)
-- A text editor with TypeScript support
-
-### Setup
+## Setup
 
 ```bash
-# Clone and install
 git clone https://github.com/davidlbowman/kavita-to-obsidian.git
 cd kavita-to-obsidian
 bun install
-
-# Run type checking
-bun run typecheck
-
-# Run tests
-bun run test
-
-# Build the plugin
-bun run build
+bun run check
 ```
 
-### Development Workflow
+`bun run check` is the same gate CI runs: oxlint (type-aware) and oxfmt, the Obsidian ESLint rules, `tsc` (TypeScript 7), unit tests with coverage thresholds, and a production build.
 
-1. Create a feature branch from `main`
-2. Make your changes
-3. Run lint, typecheck, and tests
-4. Submit a PR
+| Command                                                            | What it does                                                            |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `bun run dev`                                                      | Development build with inline source maps                               |
+| `bun run build`                                                    | Minified production build (`main.js`)                                   |
+| `bun run lint` / `lint:fix`                                        | oxlint (type-aware) + oxfmt check / auto-fix                            |
+| `bun run format`                                                   | Format with oxfmt                                                       |
+| `bun run dev:vault`                                                | Build, start a seeded Kavita, and open a ready-made Obsidian test vault |
+| `bun run lint:obsidian`                                            | Obsidian plugin review rules (must pass before release)                 |
+| `bun run typecheck`                                                | `tsc --noEmit`                                                          |
+| `bun run test` / `test:watch` / `test:coverage`                    | Unit tests                                                              |
+| `bun run integration`                                              | Fresh Kavita container + live integration tests                         |
+| `bun run integration:up` / `integration:test` / `integration:down` | The same, step by step                                                  |
+
+## Branches and releases
+
+```
+feature branch ──PR──▶ staging ──PR──▶ main ──▶ GitHub release
+```
+
+1. Branch from `staging` (`feat/…`, `fix/…`, `chore/…`) and open a PR **into `staging`**. Reference issues with `Refs #N`.
+2. CI must be green: the `check` job and the live Kavita jobs (0.8.8 and 0.9.1).
+3. When `staging` is ready to ship, bump the version (below) and open a PR **from `staging` into `main`**, with `Closes #N` for the issues it delivers. CI rejects PRs into `main` from any other branch.
+4. Merging into `main` publishes the release automatically: the `Release` workflow builds, attests, and creates a GitHub release tagged with the manifest version (Obsidian requires the tag to equal the version, no `v` prefix). If that version is already released, the workflow does nothing.
+
+### Bumping the version
+
+Update all three files together; CI fails if they disagree (`bun run scripts/check-version.ts`):
+
+- `package.json` → `version`
+- `manifest.json` → `version` (and `minAppVersion` if it changes)
+- `versions.json` → add `"<version>": "<minAppVersion>"`
+
+Then add a `CHANGELOG.md` entry.
+
+## Architecture
+
+```
+src/
+  main.ts                    Plugin entry: settings load/save, ribbon, command, runs syncs
+  sync.ts                    Wires layers together and turns results into notices
+  schemas.ts                 Every data type: Kavita payloads, settings, sync results
+  errors.ts                  Tagged errors (Schema.TaggedError)
+  services/
+    PluginConfig.ts          Validates settings into a SyncConfig (URL, redacted key)
+    KavitaClient.ts          Auth-key exchange, current user, annotations, volumes
+    ChapterCatalog.ts        Book titles, authors, genres per chapter
+    AnnotationSyncer.ts      Single-file export
+    HierarchicalSyncer.ts    Root/Series/Book.md export + orphan cleanup
+    ObsidianVault.ts         Vault file operations
+    ObsidianApp.ts           The narrow slice of Obsidian's App the plugin uses
+    ObsidianHttpClient.ts    HttpClient over Obsidian's requestUrl (bypasses CORS)
+  formatters/                Pure functions: markdown, book notes, paths, templates, sanitizing
+  ui/                        Settings tab and error notices
+test-support/FakeApp.ts      In-memory vault used by unit and integration tests
+test-integration/            Live Kavita harness (fixtures, seeding, tests, docker-compose)
+```
+
+The plugin talks to Kavita with: `POST /api/Plugin/authenticate` (auth key → JWT), `GET /api/Account` (current user id), `POST /api/Annotation/all-filtered` (filtered to the current owner, and re-checked client-side), and `GET /api/Series/volumes`.
+
+## Code conventions
+
+### Effect 4
+
+- Services extend `Context.Service<Self, Shape>()("kavita-to-obsidian/Name")` and expose `layerNoDeps` (requires its dependencies) and, where useful, a `layer` that provides them.
+- Errors are `Schema.TaggedError` classes. Map external failures to them at the boundary (see `toKavitaError`).
+- Use `Effect.fn("Name.method")` for traced service methods and `Effect.fnUntraced` for helpers.
+- Use `DateTime.now` instead of `new Date()` so tests control time.
+- Use `Predicate` helpers and `Schema` decoding instead of hand-written type guards or parsing.
+
+### Types
+
+- Every data type is derived from a schema in `schemas.ts` (`type X = typeof X.Type`). Do not write parallel interfaces.
+- No `as` casts (including `as const`) and no `!` non-null assertions.
+
+### Style
+
+- JSDoc only: no `//` or `/* */` comments.
+- oxfmt formats and oxlint lints (it enforces no `as`, no `!`, and no floating promises); run `bun run lint:fix`.
+- ESLint only runs Obsidian's review rules (`eslint-plugin-obsidianmd`), which bundle their own TypeScript. Installs are isolated (`bunfig.toml`) so that doesn't clash with the project's TypeScript 7.
+- Follow [Obsidian's plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines): use `app.vault` and `fileManager` rather than the adapter, `normalizePath` on constructed paths, sentence case in UI text, and no default hotkeys.
+
+## Tests
+
+### Unit tests
+
+`src/**/*.test.ts` run under `@effect/vitest`, with `obsidian` aliased to `src/__mocks__/obsidian.ts`.
+
+- **Test data comes from schemas.** Use `it.prop` / `it.effect.prop` with schemas, or `Arbitrary.schema(Schema)` with `Arbitrary.sampleEffect`, and spread overrides for the fields a test cares about. Literal strings are fine for curated vectors (HTML entities, unsafe path characters, template syntax).
+- **Use the real services.** Syncer tests run the real `ObsidianVault` over `makeFakeApp()`, and `KavitaClient` tests run against a routed fake `HttpClient`.
+- Coverage thresholds (enforced): 95% lines, statements, and functions; 90% branches.
+
+### Live integration tests
+
+`test-integration/live.test.ts` runs the plugin's real services, including `ObsidianHttpClient` (with `requestUrl` backed by `fetch`), against a real Kavita container.
+
+Building the `LiveKavita` layer:
+
+1. Generates fixture EPUBs (`test-integration/fixtures`), with no `zip` binary needed.
+2. Waits for Kavita, registers an admin, creates and scans a library.
+3. Creates a second user who shares annotations, so tests prove other users' highlights never sync.
+4. Resets every annotation to the fixture set, so re-runs against the same container are safe.
 
 ```bash
-# Ensure code quality before committing
-bun run lint:fix && bun run lint:obsidian && bun run typecheck && bun run test
+bun run integration                     # Kavita 0.9.1 (default)
+KAVITA_VERSION=0.8.8 bun run integration # any jvmilazz0/kavita tag
+KAVITA_PORT=5056 bun run integration     # if 5055 is taken
 ```
 
-## Code Style
+CI runs the live suite against 0.8.8 (the minimum supported version) and 0.9.1 on every PR. The `Kavita compatibility` workflow runs it daily against `latest` and `nightly`.
 
-### Linting & Formatting
-
-This project uses [Biome](https://biomejs.dev/) for linting and formatting, plus the official [Obsidian ESLint plugin](https://github.com/obsidianmd/eslint-plugin) for plugin-specific rules:
+## Trying it in Obsidian
 
 ```bash
-bun run lint           # Check for Biome issues
-bun run lint:fix       # Auto-fix Biome issues
-bun run lint:obsidian  # Check Obsidian plugin rules (REQUIRED before release)
-bun run format         # Format code
+bun run dev:vault
 ```
 
-**Important:** Before any release, `bun run lint:obsidian` must pass. This validates against Obsidian's plugin submission requirements.
+This builds the plugin, starts and seeds Kavita, and opens a throwaway **Kavita Test Vault** in Obsidian with the plugin installed, configured, and hot-reloading. Re-run it after changes. Do this before every `staging` → `main` release.
 
-### Comments
+## Pull request checklist
 
-**Use JSDoc only.** No inline comments (`// ...`) or block comments (`/* ... */`).
-
-```typescript
-// Good
-/**
- * Fetches all annotations from Kavita.
- * @since 0.0.1
- * @category API
- */
-const fetchAllAnnotations = Effect.gen(function* () {
-  // ...
-});
-
-// Bad
-// Fetch all annotations from Kavita
-const fetchAllAnnotations = Effect.gen(function* () {
-  /* implementation */ // inline comment
-});
-```
-
-### TypeScript
-
-- Enable strict mode
-- Prefer `const` over `let`
-- Use `readonly` for immutable properties
-- Avoid `any` - use `unknown` with type guards
-
-### Obsidian Plugin Guidelines
-
-Follow [Obsidian's plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines) to avoid CI/CD rejections:
-
-**Security:**
-- Never use `innerHTML`, `outerHTML`, or `insertAdjacentHTML` with user input
-- Use DOM API or Obsidian helpers: `createEl()`, `createDiv()`, `createSpan()`
-
-**Vault Operations:**
-- Use `app.vault` methods, not `app.vault.adapter` (vault has caching and safety)
-- Use `Vault.process()` for atomic file modifications (not `Vault.modify()`)
-- Use `FileManager.processFrontMatter()` for YAML frontmatter
-- Use `normalizePath()` on user-defined or constructed paths
-- Use `getFileByPath()` instead of iterating all files
-
-**Resource Management:**
-- Clean up resources in `onunload()`
-- Use `registerEvent()` and `addCommand()` for automatic cleanup
-- Don't store references to custom views directly
-
-**UI:**
-- Use `this.app` not the global `app` object
-- Use CSS classes and Obsidian CSS variables (not hardcoded styles)
-- Use Sentence case for settings text
-- Don't set default hotkeys for commands
-
-## Effect-TS Patterns
-
-This project uses [Effect-TS](https://effect.website/) for functional programming patterns.
-
-### Services
-
-All services use `Effect.Service` with the following conventions:
-
-```typescript
-import { Effect } from "effect";
-
-/**
- * Description of the service.
- * @since 0.0.1
- * @category Services
- */
-export class MyService extends Effect.Service<MyService>()("MyService", {
-  accessors: true,
-  effect: Effect.gen(function* () {
-    // Dependency injection
-    const config = yield* PluginConfig;
-
-    // Define methods
-    const doSomething = Effect.gen(function* () {
-      // Implementation
-    });
-
-    return { doSomething };
-  }),
-  dependencies: [PluginConfig.Default],
-}) {}
-```
-
-Key points:
-- Always include `accessors: true` (except for config services using `sync`)
-- Include JSDoc with `@since` and `@category` tags
-- Declare dependencies explicitly
-
-### Error Types
-
-Use `Schema.TaggedError` for type-safe error handling:
-
-```typescript
-import { Schema } from "effect";
-
-/**
- * Error when network request fails.
- * @since 0.0.1
- * @category Errors
- */
-export class NetworkError extends Schema.TaggedError<NetworkError>()(
-  "NetworkError",
-  {
-    url: Schema.String,
-    statusCode: Schema.optionalWith(Schema.Number, { as: "Option" }),
-    cause: Schema.optionalWith(Schema.Defect, { as: "Option" }),
-  }
-) {
-  get message(): string {
-    return `Network error for ${this.url}`;
-  }
-}
-```
-
-### Layer Composition
-
-Compose services using Layers:
-
-```typescript
-const FullLayer = Layer.mergeAll(
-  ServiceA.Default,
-  ServiceB.Default,
-).pipe(
-  Layer.provide(ConfigLayer),
-  Layer.provide(HttpClient.layer),
-);
-```
-
-### Pure Functions
-
-For utilities without dependencies, use pure modules:
-
-```typescript
-// formatters/markdown.ts
-import { Option } from "effect";
-
-export const formatAnnotation = (
-  annotation: Annotation,
-  options: FormatOptions
-): Option.Option<string> => {
-  if (annotation.spoiler && !options.includeSpoilers) {
-    return Option.none();
-  }
-  return Option.some(`> ${annotation.content}`);
-};
-```
-
-## Testing
-
-### Running Tests
-
-```bash
-bun run test           # Run all tests
-bun run test:watch     # Run in watch mode
-```
-
-### Coverage Requirements
-
-This project enforces coverage thresholds:
-
-| Metric | Minimum |
-|--------|---------|
-| Lines | 80% |
-| Statements | 80% |
-| Functions | 70% |
-| Branches | 60% |
-
-Run coverage report:
-
-```bash
-bun run test --coverage
-```
-
-### Unit Tests
-
-Use `@effect/vitest` for Effect-aware testing:
-
-```typescript
-import { describe, it } from "@effect/vitest";
-import { Effect, Layer } from "effect";
-import { expect } from "vitest";
-
-describe("MyService", () => {
-  it.effect("does something", () =>
-    Effect.gen(function* () {
-      const service = yield* MyService;
-      const result = yield* service.doSomething();
-      expect(result).toBe(expected);
-    }).pipe(
-      Effect.provide(MyService.Default),
-      Effect.provide(MockDependencyLayer),
-    )
-  );
-});
-```
-
-### Integration Tests
-
-Integration tests run against a real Kavita instance:
-
-```bash
-# Full integration test cycle
-bun run integration
-
-# Individual steps
-bun run integration:up      # Start Docker container
-bun run integration:setup   # Set up test data
-bun run integration:down    # Stop container
-bun run integration:clean   # Clean up everything
-```
-
-The integration test environment:
-1. Starts a Kavita Docker container
-2. Creates a test library with sample EPUBs
-3. Registers an admin user
-4. Creates sample annotations
-5. Runs tests against the live API
-
-## Project Structure
-
-```
-kavita-to-obsidian/
-├── src/
-│   ├── main.ts              # Obsidian plugin entry point
-│   ├── schemas.ts           # Effect Schema definitions
-│   ├── errors.ts            # Tagged error types
-│   ├── index.ts             # Public module exports
-│   ├── services/
-│   │   ├── PluginConfig.ts      # Configuration service
-│   │   ├── KavitaClient.ts      # Main Kavita API client
-│   │   ├── KavitaAuthClient.ts  # Auth/bootstrap client
-│   │   ├── ObsidianAdapter.ts   # Vault file operations
-│   │   ├── ObsidianApp.ts       # Obsidian App context tag
-│   │   ├── ObsidianHttpClient.ts # CORS-bypassing HTTP
-│   │   └── AnnotationSyncer.ts  # Sync orchestration
-│   └── formatters/
-│       └── markdown.ts      # Annotation formatting
-├── test-integration/
-│   ├── scripts/             # Setup scripts
-│   └── docker-compose.yml   # Kavita container
-├── scripts/
-│   └── build.ts             # Bun build script
-└── manifest.json            # Obsidian manifest
-```
-
-## Pull Request Process
-
-1. **Branch naming**: Use descriptive names like `feat/fuzzy-matching` or `fix/auth-error`
-
-2. **Commit messages**: Use conventional commit format:
-   - `feat: add fuzzy file matching`
-   - `fix: handle empty annotation response`
-   - `refactor: extract formatting logic`
-   - `docs: update README installation`
-   - `test: add integration tests for sync`
-
-3. **PR checklist**:
-   - [ ] Code passes `bun run lint`
-   - [ ] Code passes `bun run lint:obsidian`
-   - [ ] Code passes `bun run typecheck`
-   - [ ] All tests pass `bun run test`
-   - [ ] JSDoc comments for public APIs
-   - [ ] No inline/block comments (JSDoc only)
-
-4. **Review process**: PRs require one approval before merging
-
-## Versioning
-
-This project follows [Semantic Versioning](https://semver.org/):
-
-- **MAJOR**: Breaking changes to plugin settings or behavior
-- **MINOR**: New features, backward compatible
-- **PATCH**: Bug fixes, backward compatible
-
-## Questions?
-
-Open an issue or discussion on GitHub.
+- [ ] Targets `staging` (or is the `staging` → `main` release PR)
+- [ ] `bun run check` passes
+- [ ] `bun run integration` passes if you touched Kavita calls, syncing, or the vault
+- [ ] Tried it by hand with `bun run dev:vault` before releasing
+- [ ] New behaviour has tests; new data types are schemas
+- [ ] `CHANGELOG.md` updated for user-visible changes

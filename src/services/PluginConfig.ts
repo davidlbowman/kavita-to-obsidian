@@ -1,144 +1,83 @@
 /**
- * Plugin configuration service with environment and settings layers.
+ * Validated sync configuration derived from the stored plugin settings.
  *
  * @module
  */
-import { Config, Effect, Layer, Redacted, ServiceMap } from "effect";
-import type { PluginSettings } from "../schemas.js";
-import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
+import { Context, Effect, Layer, Schema } from "effect";
+import { InvalidSettingsError } from "../errors.js";
+import { KavitaUrl, PluginSettings } from "../schemas.js";
 
 /**
- * Export mode type.
+ * Settings with the Kavita URL parsed and the auth key redacted.
  *
- * @since 1.1.0
+ * @since 2.0.0
  * @category Config
  */
-export type ExportModeType = "single-file" | "hierarchical";
+export const SyncConfig = PluginSettings.mapFields((fields) => ({
+	...fields,
+	kavitaUrl: KavitaUrl,
+	kavitaApiKey: Schema.RedactedFromValue(Schema.String),
+}));
 
 /**
- * Shape of plugin configuration values.
- *
- * @since 0.0.1
+ * @since 2.0.0
  * @category Config
  */
-export interface PluginConfigShape {
-	readonly kavitaUrl: URL;
-	readonly kavitaApiKey: Redacted.Redacted<string>;
-	readonly outputPath: string;
-	readonly matchThreshold: number;
-	readonly includeComments: boolean;
-	readonly includeSpoilers: boolean;
-	/** @since 0.0.2 */
-	readonly includeTags: boolean;
-	/** @since 0.0.2 */
-	readonly tagPrefix: string;
-	/** @since 0.0.2 */
-	readonly includeWikilinks: boolean;
-	/** @since 1.1.0 */
-	readonly exportMode: ExportModeType;
-	/** @since 1.1.0 */
-	readonly rootFolderName: string;
-	/** @since 1.1.0 */
-	readonly deleteOrphanedFiles: boolean;
-	/** @since 1.2.0 */
-	readonly annotationTemplate: string;
-}
+export type SyncConfig = typeof SyncConfig.Type;
 
 /**
- * Environment variable configuration for dev/test.
+ * Parse and validate stored settings into a {@link SyncConfig}.
  *
- * @since 0.0.1
+ * @since 2.0.0
  * @category Config
  */
-const EnvConfig = Config.all({
-	kavitaUrl: Config.string("KAVITA_URL").pipe(
-		Config.map((s) => new URL(s)),
-		Config.withDefault(new URL("http://localhost:5000")),
-	),
-	kavitaApiKey: Config.redacted("KAVITA_API_KEY").pipe(
-		Config.withDefault(Redacted.make("")),
-	),
-	outputPath: Config.string("OUTPUT_PATH").pipe(
-		Config.withDefault("kavita-annotations.md"),
-	),
-	matchThreshold: Config.number("MATCH_THRESHOLD").pipe(
-		Config.withDefault(0.7),
-	),
-	includeComments: Config.boolean("INCLUDE_COMMENTS").pipe(
-		Config.withDefault(true),
-	),
-	includeSpoilers: Config.boolean("INCLUDE_SPOILERS").pipe(
-		Config.withDefault(false),
-	),
-	includeTags: Config.boolean("INCLUDE_TAGS").pipe(Config.withDefault(true)),
-	tagPrefix: Config.string("TAG_PREFIX").pipe(Config.withDefault("")),
-	includeWikilinks: Config.boolean("INCLUDE_WIKILINKS").pipe(
-		Config.withDefault(true),
-	),
-	exportMode: Config.string("EXPORT_MODE").pipe(
-		Config.withDefault("hierarchical" as ExportModeType),
-	) as Config.Config<ExportModeType>,
-	rootFolderName: Config.string("ROOT_FOLDER_NAME").pipe(
-		Config.withDefault("Kavita Annotations"),
-	),
-	deleteOrphanedFiles: Config.boolean("DELETE_ORPHANED_FILES").pipe(
-		Config.withDefault(true),
-	),
-	annotationTemplate: Config.string("ANNOTATION_TEMPLATE").pipe(
-		Config.withDefault(DEFAULT_ANNOTATION_TEMPLATE),
-	),
+export const toSyncConfig = Effect.fnUntraced(function* (
+	settings: PluginSettings,
+) {
+	if (settings.kavitaUrl.trim() === "") {
+		return yield* new InvalidSettingsError({
+			setting: "kavitaUrl",
+			reason: "Set your Kavita server URL in the plugin settings.",
+		});
+	}
+	if (settings.kavitaApiKey.trim() === "") {
+		return yield* new InvalidSettingsError({
+			setting: "kavitaApiKey",
+			reason: "Set your Kavita auth key in the plugin settings.",
+		});
+	}
+	return yield* Schema.decodeUnknownEffect(SyncConfig)({
+		...settings,
+		kavitaUrl: settings.kavitaUrl.trim(),
+		kavitaApiKey: settings.kavitaApiKey.trim(),
+	}).pipe(
+		Effect.mapError(
+			() =>
+				new InvalidSettingsError({
+					setting: "kavitaUrl",
+					reason: `"${settings.kavitaUrl}" is not a valid http:// or https:// URL.`,
+				}),
+		),
+	);
 });
 
 /**
- * Plugin configuration service.
- *
- * Provides configuration values from either Obsidian settings or environment variables.
+ * The configuration for the current sync.
  *
  * @since 0.0.1
  * @category Services
  */
-export class PluginConfig extends ServiceMap.Service<
-	PluginConfig,
-	PluginConfigShape
->()("PluginConfig") {
+export class PluginConfig extends Context.Service<PluginConfig, SyncConfig>()(
+	"kavita-to-obsidian/PluginConfig",
+) {
 	/**
-	 * Create config layer from Obsidian plugin settings.
+	 * Build the config from stored settings, failing on invalid values.
 	 *
 	 * @since 0.0.1
 	 * @category Layers
 	 */
-	static fromSettings(settings: typeof PluginSettings.Type) {
-		return Layer.succeed(
-			PluginConfig,
-			PluginConfig.of({
-				kavitaUrl: new URL(settings.kavitaUrl),
-				kavitaApiKey: Redacted.make(settings.kavitaApiKey),
-				outputPath: settings.outputPath,
-				matchThreshold: settings.matchThreshold,
-				includeComments: settings.includeComments,
-				includeSpoilers: settings.includeSpoilers,
-				includeTags: settings.includeTags,
-				tagPrefix: settings.tagPrefix,
-				includeWikilinks: settings.includeWikilinks,
-				exportMode: settings.exportMode,
-				rootFolderName: settings.rootFolderName,
-				deleteOrphanedFiles: settings.deleteOrphanedFiles,
-				annotationTemplate: settings.annotationTemplate,
-			}),
-		);
-	}
-
-	/**
-	 * Create config layer from environment variables.
-	 *
-	 * @since 0.0.1
-	 * @category Layers
-	 */
-	static fromEnv = Layer.effect(
-		PluginConfig,
-		Effect.gen(function* () {
-			const config = yield* EnvConfig;
-			return PluginConfig.of(config);
-		}),
-	);
+	static readonly fromSettings = (
+		settings: PluginSettings,
+	): Layer.Layer<PluginConfig, InvalidSettingsError> =>
+		Layer.effect(PluginConfig, toSyncConfig(settings));
 }

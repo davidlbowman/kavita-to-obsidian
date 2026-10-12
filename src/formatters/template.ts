@@ -3,9 +3,7 @@
  *
  * @module
  */
-import { DEFAULT_ANNOTATION_TEMPLATE } from "../schemas.js";
-
-export { DEFAULT_ANNOTATION_TEMPLATE };
+import { Result } from "effect";
 
 /**
  * Validate template syntax by checking that all `{{#if}}` blocks have matching `{{/if}}` closers.
@@ -15,7 +13,7 @@ export { DEFAULT_ANNOTATION_TEMPLATE };
  */
 export const validateTemplate = (
 	template: string,
-): { readonly valid: boolean; readonly error?: string } => {
+): Result.Result<void, string> => {
 	let depth = 0;
 	const ifPattern = /\{\{#if\s+\w+\}\}/g;
 	const endIfPattern = /\{\{\/if\}\}/g;
@@ -44,27 +42,22 @@ export const validateTemplate = (
 			depth--;
 		}
 		if (depth < 0) {
-			return {
-				valid: false,
-				error: "Unexpected {{/if}} without matching {{#if}}",
-			};
+			return Result.fail("Unexpected {{/if}} without matching {{#if}}");
 		}
 	}
 
 	if (depth > 0) {
 		const unclosed = opens.length - closes.length;
-		return {
-			valid: false,
-			error: `Unclosed {{#if}} block: ${unclosed} opening tag(s) without matching {{/if}}`,
-		};
+		return Result.fail(
+			`Unclosed {{#if}} block: ${unclosed} opening tag(s) without matching {{/if}}`,
+		);
 	}
 
-	return { valid: true };
+	return Result.void;
 };
 
 /**
- * Process a single `{{#if var}}...{{/if}}` block, handling nested blocks recursively.
- * Returns the processed string with conditional blocks resolved.
+ * Resolve `{{#if var}}...{{/if}}` blocks, recursing into nested blocks.
  */
 const processConditionals = (
 	template: string,
@@ -129,8 +122,8 @@ const processConditionals = (
  * Render a Mustache-like template with the given context.
  *
  * Supports `{{variable}}` interpolation and `{{#if variable}}...{{/if}}` conditional blocks.
- * Missing variables are replaced with empty strings. Malformed templates return empty string
- * with a console warning.
+ * Missing variables are replaced with empty strings. Malformed templates render as an
+ * empty string.
  *
  * @since 1.2.0
  * @category Template
@@ -139,8 +132,7 @@ export const renderTemplate = (
 	template: string,
 	context: Record<string, string | number>,
 ): string => {
-	const validation = validateTemplate(template);
-	if (!validation.valid) {
+	if (Result.isFailure(validateTemplate(template))) {
 		return "";
 	}
 

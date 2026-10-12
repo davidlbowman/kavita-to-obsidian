@@ -1,68 +1,87 @@
 /**
- * Tagged error types for Kavita and Obsidian operations.
+ * Tagged error types for settings, Kavita, and Obsidian operations.
  *
  * @module
  */
 import { Schema } from "effect";
 
 /**
- * Network error when calling Kavita API.
+ * A plugin setting is missing or malformed.
  *
- * @since 0.0.1
- * @category Kavita Errors
+ * @since 2.0.0
+ * @category Settings Errors
  */
-export class KavitaNetworkError extends Schema.TaggedErrorClass<KavitaNetworkError>()(
-	"KavitaNetworkError",
+export class InvalidSettingsError extends Schema.TaggedError<InvalidSettingsError>()(
+	"InvalidSettingsError",
 	{
-		url: Schema.String,
-		statusCode: Schema.optionalKey(Schema.Number),
-		cause: Schema.optionalKey(Schema.Defect),
-	},
-) {
-	override get message(): string {
-		const status =
-			this.statusCode !== undefined ? ` (status ${this.statusCode})` : "";
-		return `Network error calling ${this.url}${status}`;
-	}
-}
-
-/**
- * Authentication error when calling Kavita API.
- *
- * @since 0.0.1
- * @category Kavita Errors
- */
-export class KavitaAuthError extends Schema.TaggedErrorClass<KavitaAuthError>()(
-	"KavitaAuthError",
-	{
+		setting: Schema.Literals(["kavitaUrl", "kavitaApiKey"]),
 		reason: Schema.String,
 	},
 ) {
 	override get message(): string {
-		return `Authentication failed: ${this.reason}`;
+		return this.reason;
 	}
 }
 
 /**
- * Parse error when decoding Kavita API response.
+ * Transport failure or unexpected HTTP status from the Kavita API.
  *
  * @since 0.0.1
  * @category Kavita Errors
  */
-export class KavitaParseError extends Schema.TaggedErrorClass<KavitaParseError>()(
-	"KavitaParseError",
+export class KavitaNetworkError extends Schema.TaggedError<KavitaNetworkError>()(
+	"KavitaNetworkError",
 	{
-		expected: Schema.String,
-		actual: Schema.optionalKey(Schema.Unknown),
+		endpoint: Schema.String,
+		statusCode: Schema.optionalKey(Schema.Int),
+		cause: Schema.optionalKey(Schema.Defect()),
 	},
 ) {
 	override get message(): string {
-		return `Failed to parse response: expected ${this.expected}`;
+		const status =
+			this.statusCode === undefined ? "" : ` (status ${this.statusCode})`;
+		return `Network error calling ${this.endpoint}${status}`;
 	}
 }
 
 /**
- * Union of all Kavita API errors.
+ * Kavita rejected the configured auth key.
+ *
+ * @since 0.0.1
+ * @category Kavita Errors
+ */
+export class KavitaAuthError extends Schema.TaggedError<KavitaAuthError>()(
+	"KavitaAuthError",
+	{
+		endpoint: Schema.String,
+		statusCode: Schema.Int,
+	},
+) {
+	override get message(): string {
+		return `Authentication failed for ${this.endpoint} (status ${this.statusCode})`;
+	}
+}
+
+/**
+ * A Kavita response did not match the expected schema.
+ *
+ * @since 0.0.1
+ * @category Kavita Errors
+ */
+export class KavitaParseError extends Schema.TaggedError<KavitaParseError>()(
+	"KavitaParseError",
+	{
+		endpoint: Schema.String,
+		cause: Schema.Defect(),
+	},
+) {
+	override get message(): string {
+		return `Unexpected response from ${this.endpoint}`;
+	}
+}
+
+/**
+ * Any failure talking to Kavita.
  *
  * @since 0.0.1
  * @category Kavita Errors
@@ -73,33 +92,16 @@ export type KavitaError =
 	| KavitaParseError;
 
 /**
- * File not found in Obsidian vault.
+ * Failure writing or trashing a file in the vault.
  *
  * @since 0.0.1
  * @category Obsidian Errors
  */
-export class ObsidianFileNotFoundError extends Schema.TaggedErrorClass<ObsidianFileNotFoundError>()(
-	"ObsidianFileNotFoundError",
-	{
-		path: Schema.String,
-	},
-) {
-	override get message(): string {
-		return `File not found: ${this.path}`;
-	}
-}
-
-/**
- * Error writing to Obsidian vault.
- *
- * @since 0.0.1
- * @category Obsidian Errors
- */
-export class ObsidianWriteError extends Schema.TaggedErrorClass<ObsidianWriteError>()(
+export class ObsidianWriteError extends Schema.TaggedError<ObsidianWriteError>()(
 	"ObsidianWriteError",
 	{
 		path: Schema.String,
-		cause: Schema.optionalKey(Schema.Defect),
+		cause: Schema.optionalKey(Schema.Defect()),
 	},
 ) {
 	override get message(): string {
@@ -108,17 +110,17 @@ export class ObsidianWriteError extends Schema.TaggedErrorClass<ObsidianWriteErr
 }
 
 /**
- * Error with folder operations in Obsidian vault.
+ * Failure creating or trashing a folder in the vault.
  *
  * @since 1.1.0
  * @category Obsidian Errors
  */
-export class ObsidianFolderError extends Schema.TaggedErrorClass<ObsidianFolderError>()(
+export class ObsidianFolderError extends Schema.TaggedError<ObsidianFolderError>()(
 	"ObsidianFolderError",
 	{
 		path: Schema.String,
-		operation: Schema.String,
-		cause: Schema.optionalKey(Schema.Defect),
+		operation: Schema.Literals(["create", "delete"]),
+		cause: Schema.optionalKey(Schema.Defect()),
 	},
 ) {
 	override get message(): string {
@@ -127,20 +129,17 @@ export class ObsidianFolderError extends Schema.TaggedErrorClass<ObsidianFolderE
 }
 
 /**
- * Union of all Obsidian errors.
+ * Any failure touching the vault.
  *
  * @since 0.0.1
  * @category Obsidian Errors
  */
-export type ObsidianError =
-	| ObsidianFileNotFoundError
-	| ObsidianWriteError
-	| ObsidianFolderError;
+export type ObsidianError = ObsidianWriteError | ObsidianFolderError;
 
 /**
- * Union of all sync-related errors.
+ * Every failure a sync can surface to the user.
  *
  * @since 0.0.1
  * @category Errors
  */
-export type SyncError = KavitaError | ObsidianError;
+export type SyncError = InvalidSettingsError | KavitaError | ObsidianError;

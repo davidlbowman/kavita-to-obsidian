@@ -4,58 +4,38 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 
 ## Quick Reference
 
-| Error Message | Likely Cause | Solution |
-|---|---|---|
-| Authentication failed | Wrong or expired API key | [Authentication Failed](#authentication-failed) |
-| Access denied (401/403) | Server rejected credentials | [Network Error (Status 401/403)](#network-error-status-401403) |
-| Kavita server not found (404) | Incorrect server URL | [Network Error (Status 404)](#network-error-status-404) |
-| Cannot reach Kavita | Kavita not running or unreachable | [Connection Refused](#connection-refused) |
-| Unexpected response | Plugin/server version mismatch | [Failed to Parse Response](#failed-to-parse-response) |
-| Cannot write to path | Invalid output path or permissions | [Failed to Write File](#failed-to-write-file) |
-| Folder error | Invalid folder name or path | [Folder Operation Failed](#folder-operation-failed) |
-| No annotations synced | No highlights exist in Kavita | [No Annotations Synced](#no-annotations-synced) |
+| Error Message                         | Likely Cause                           | Solution                                                        |
+| ------------------------------------- | -------------------------------------- | --------------------------------------------------------------- |
+| Set your Kavita server URL / auth key | Setting is empty or not an http(s) URL | [How to Verify Your Kavita URL](#how-to-verify-your-kavita-url) |
+| Kavita rejected your auth key         | Wrong, expired, or deleted auth key    | [Authentication Failed](#authentication-failed)                 |
+| Kavita endpoint not found (404)       | Incorrect server URL                   | [Network Error (Status 404)](#network-error-status-404)         |
+| Cannot reach Kavita                   | Kavita not running or unreachable      | [Connection Refused](#connection-refused)                       |
+| Unexpected response                   | Plugin/server version mismatch         | [Failed to Parse Response](#failed-to-parse-response)           |
+| Cannot write to path                  | Invalid output path or permissions     | [Failed to Write File](#failed-to-write-file)                   |
+| Folder error                          | Invalid folder name or path            | [Folder Operation Failed](#folder-operation-failed)             |
+| No annotations synced                 | No highlights exist in Kavita          | [No Annotations Synced](#no-annotations-synced)                 |
 
 ---
 
 ## Authentication Failed
 
-**Error:** `Authentication failed: <reason>`
+**Error:** `Kavita rejected your auth key. Check it in the plugin settings.`
 
-**Cause:** Your Kavita API key is missing, incorrect, or has expired.
-
-**Steps to fix:**
-
-1. Open your Kavita server in a web browser and log in.
-2. Click your user avatar in the top-right corner and select **User Settings**.
-3. Navigate to the **3rd Party Clients** section.
-4. Copy your existing API key, or click **Reset Key** to generate a new one.
-5. In Obsidian, open **Settings > Kavita Sync**.
-6. Paste the API key into the **API Key** field.
-7. Run the sync again.
-
-> **Tip:** If you recently changed your Kavita password, your API key may have been invalidated. Generate a new key and update the plugin settings.
-
----
-
-## Network Error (Status 401/403)
-
-**Error:** `Access denied. Your API key may be invalid or expired.`
-
-**Cause:** Your Kavita server received the request but rejected your credentials. This differs from an authentication failure because the server actively refused access rather than the key being unrecognized.
+**Cause:** Kavita answered with 401 or 403: the auth key is wrong, expired, deleted, or belongs to an account without access.
 
 **Steps to fix:**
 
-1. Open your Kavita server and navigate to **User Settings > 3rd Party Clients**.
-2. Click **Reset Key** to generate a fresh API key.
-3. Copy the new key and paste it into the plugin settings in Obsidian.
-4. Confirm you are using the API key for the correct Kavita user account. If your Kavita instance has multiple users, each user has their own API key.
-5. Verify the account has the necessary permissions to access the library and series you want to sync.
+1. Create a fresh key as described in [How to Find Your Kavita API Key](#how-to-find-your-kavita-api-key).
+2. In Obsidian, open **Settings > Kavita Sync** and paste it into **Kavita auth key**.
+3. Run the sync again.
+
+> **Tip:** Auth keys can be created with an expiry date. If syncing worked before and suddenly stopped, check whether the key expired.
 
 ---
 
 ## Network Error (Status 404)
 
-**Error:** `Kavita server not found. Check your URL in settings.`
+**Error:** `Kavita endpoint not found. Check your server URL.`
 
 **Cause:** The plugin sent a request to the configured URL, but the server returned a 404 (Not Found) response. This typically means the URL is wrong.
 
@@ -78,7 +58,7 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 
 ## Connection Refused
 
-**Error:** `Cannot reach Kavita: <details>`
+**Error:** `Cannot reach Kavita: Network error calling <endpoint> (status <code>)`
 
 **Cause:** The plugin could not connect to your Kavita server at all. The server may not be running, or a firewall is blocking the connection.
 
@@ -94,7 +74,7 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 
 ## Failed to Parse Response
 
-**Error:** `Failed to parse response: expected <type>`
+**Error:** `Unexpected response from Kavita (<endpoint>). Your server version may be unsupported.`
 
 **Cause:** The plugin received a response from Kavita that it could not decode. This usually means a version mismatch between the plugin and your Kavita server.
 
@@ -105,13 +85,13 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 3. After updating both, restart Kavita and try the sync again.
 4. If the error persists after updating, open a [GitHub issue](https://github.com/davidlbowman/kavita-to-obsidian/issues) and include the Kavita version number from **Server Settings > About** in your report.
 
-> **Note:** Kavita API responses may change between major versions. The plugin is tested against the latest stable Kavita release.
+> **Note:** The plugin requires Kavita 0.8.8 or newer. Every change is tested against live Kavita 0.8.8 and the latest stable release, and the latest and nightly builds are checked daily.
 
 ---
 
 ## Failed to Write File
 
-**Error:** `Failed to write file: <path>`
+**Error:** `Cannot write <path>. Check the path is valid.`
 
 **Cause:** The plugin could not write the output file to the specified path in your Obsidian vault.
 
@@ -119,7 +99,7 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 
 1. Open the plugin settings and check the **Output Path** value.
 2. Verify the path does not contain special characters that are invalid in file names on your operating system (e.g., `<`, `>`, `:`, `"`, `|`, `?`, `*` on Windows).
-3. If you specified a subfolder (e.g., `Kavita/annotations.md`), make sure the folder already exists in your vault, or enable the hierarchical sync mode which creates folders automatically.
+3. Subfolders in the output path (e.g., `Kavita/annotations.md`) are created automatically; make sure no _file_ already exists with the folder's name.
 4. Try resetting the output path to a simple value like `kavita-annotations.md` to rule out path issues.
 5. Check that your vault folder is not read-only or located on a locked volume.
 
@@ -127,7 +107,7 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 
 ## Folder Operation Failed
 
-**Error:** `Folder <operation> failed: <path>`
+**Error:** `Cannot <create|delete> folder <path>. Check the folder name is valid.`
 
 **Cause:** The plugin could not create or modify a folder in your vault, usually because the folder name contains characters that are not allowed by the file system.
 
@@ -152,18 +132,26 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 2. Select some text and choose **Highlight** to create an annotation.
 3. Verify the highlight appears in Kavita by checking the annotation panel in the reader.
 4. Run the sync again in Obsidian.
-5. If you have annotations but they are not syncing, check that the spoiler setting in Kavita is not hiding them. Annotations marked as spoilers may be excluded depending on your server configuration.
+5. If you have annotations but they are not syncing, check the **Include spoilers** setting: annotations marked as spoilers are skipped unless it is on.
+6. Only annotations you own are synced. Highlights other users share with you in Kavita are intentionally excluded.
 
 ---
 
 ## How to Find Your Kavita API Key
 
+**Kavita 0.9 and newer (auth keys):**
+
 1. Open your Kavita server in a web browser and log in.
-2. Click your **user avatar** in the top-right corner.
-3. Select **User Settings** from the dropdown menu.
-4. Scroll down to the **3rd Party Clients** section.
-5. Your API key is displayed here. Click the copy button to copy it to your clipboard.
-6. If no key is shown, click **Reset Key** to generate one.
+2. Click your **user avatar** in the top-right corner and select **User Settings**.
+3. Open **Manage Auth Keys** and create a new key (for example, named "Obsidian").
+4. Copy the key and paste it into the plugin's **Kavita auth key** setting.
+
+**Kavita 0.8.x (API key):**
+
+1. Open **User Settings** and go to the **3rd Party Clients** section.
+2. Copy the API key shown there, or click **Reset Key** to generate one.
+
+The plugin requires Kavita 0.8.8 or newer, the first release with annotations.
 
 ---
 

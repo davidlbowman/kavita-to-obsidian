@@ -1,1136 +1,397 @@
 /**
- * Tests for markdown formatter functions.
+ * Tests for single-file markdown rendering.
  *
  * @module
  */
-import { Result } from "effect";
-import { describe, expect, it } from "vitest";
-import type { AnnotationDto, SeriesMetadataDto } from "../schemas.js";
+import { describe, expect, it } from "@effect/vitest";
+import { Result, Schema } from "effect";
+import {
+	Annotation,
+	ChapterInfo,
+	DEFAULT_SETTINGS,
+	type FormatOptions,
+} from "../schemas.js";
 import {
 	type ChapterInfoMap,
-	type FormatOptions,
 	formatAnnotation,
 	generateBookHeader,
 	generateFrontmatter,
 	generateSeriesHeader,
-	getAuthorNames,
-	getBookSortOrder,
 	getBookTitle,
 	getChapterTitle,
-	getGenreNames,
 	getLibraryName,
 	getSeriesName,
 	getSortedBookGroups,
-	groupByBookTitle,
-	groupByChapterId,
-	groupBySeriesId,
 	makeTag,
 	makeWikilink,
-	type SeriesMetadataMap,
 	toMarkdown,
 	toSlug,
 } from "./markdown.js";
 
-const defaultOptions: FormatOptions = {
-	includeComments: true,
-	includeSpoilers: false,
-	includeTags: true,
-	tagPrefix: "",
-	includeWikilinks: true,
-	annotationTemplate: "",
-};
+const UPDATED = "2024-05-06T07:08:09.000Z";
 
-const createAnnotation = (
-	overrides: Partial<typeof AnnotationDto.Type> = {},
-): typeof AnnotationDto.Type => ({
-	id: 1,
-	xPath: "/html/body/p[1]",
-	endingXPath: null,
-	selectedText: "Test highlight",
+const options: FormatOptions = DEFAULT_SETTINGS;
+
+const plain = (annotation: Annotation): Annotation => ({
+	...annotation,
+	containsSpoiler: false,
+	selectedText: "Quoted text",
 	comment: null,
 	commentHtml: null,
 	commentPlainText: null,
-	chapterTitle: null,
-	context: null,
-	highlightCount: 14,
-	containsSpoiler: false,
-	pageNumber: 1,
-	selectedSlotIndex: 0,
-	likes: [],
-	seriesName: null,
-	libraryName: null,
-	chapterId: 1,
-	volumeId: 1,
-	seriesId: 1,
-	libraryId: 1,
-	ownerUserId: 1,
-	ownerUsername: null,
-	ageRating: 0,
-	createdUtc: "2025-01-01T00:00:00Z",
-	lastModifiedUtc: "2025-01-01T00:00:00Z",
-	...overrides,
+	pageNumber: 0,
 });
 
-describe("toSlug", () => {
-	it("converts to lowercase", () => {
-		expect(toSlug("Hello World")).toBe("hello-world");
-	});
+const catalog = (...entries: Array<ChapterInfo>): ChapterInfoMap =>
+	new Map(entries.map((info) => [info.chapterId, info]));
 
-	it("replaces spaces with hyphens", () => {
-		expect(toSlug("the great gatsby")).toBe("the-great-gatsby");
-	});
-
-	it("removes special characters", () => {
-		expect(toSlug("F. Scott Fitzgerald")).toBe("f-scott-fitzgerald");
-	});
-
-	it("collapses multiple hyphens", () => {
-		expect(toSlug("Fiction & Literature")).toBe("fiction-literature");
-	});
-
-	it("trims leading and trailing hyphens", () => {
-		expect(toSlug("  Hello  ")).toBe("hello");
-	});
-});
-
-describe("makeTag", () => {
-	it("creates tag with slug", () => {
-		expect(makeTag("The Great Gatsby")).toBe("#the-great-gatsby");
-	});
-
-	it("works with optional prefix", () => {
-		expect(makeTag("Fiction", "genre/")).toBe("#genre/fiction");
-	});
-});
-
-describe("makeWikilink", () => {
-	it("creates wikilink", () => {
-		expect(makeWikilink("The Great Gatsby")).toBe("[[The Great Gatsby]]");
-	});
-});
-
-describe("getSeriesName", () => {
-	it("returns seriesName when present", () => {
-		const annotation = createAnnotation({ seriesName: "The Great Gatsby" });
-		expect(getSeriesName(annotation)).toBe("The Great Gatsby");
-	});
-
-	it("falls back to seriesId when seriesName is null", () => {
-		const annotation = createAnnotation({ seriesName: null, seriesId: 123 });
-		expect(getSeriesName(annotation)).toBe("Series 123");
-	});
-});
-
-describe("getChapterTitle", () => {
-	it("returns chapterTitle when present", () => {
-		const annotation = createAnnotation({
-			chapterTitle: "Chapter 1: The Beginning",
-		});
-		expect(getChapterTitle(annotation)).toBe("Chapter 1: The Beginning");
-	});
-
-	it("falls back to chapterId when chapterTitle is null", () => {
-		const annotation = createAnnotation({ chapterTitle: null, chapterId: 42 });
-		expect(getChapterTitle(annotation)).toBe("Chapter 42");
-	});
-});
-
-describe("getLibraryName", () => {
-	it("returns libraryName when present", () => {
-		const annotation = createAnnotation({ libraryName: "Fiction" });
-		expect(getLibraryName(annotation)).toBe("Fiction");
-	});
-
-	it("falls back to libraryId when libraryName is null", () => {
-		const annotation = createAnnotation({ libraryName: null, libraryId: 5 });
-		expect(getLibraryName(annotation)).toBe("Library 5");
-	});
-});
-
-const createMetadata = (
-	overrides: Partial<typeof SeriesMetadataDto.Type> = {},
-): typeof SeriesMetadataDto.Type => ({
-	id: 1,
-	seriesId: 1,
-	summary: null,
-	releaseYear: 2020,
-	language: null,
-	genres: [],
-	tags: [],
-	writers: [],
-	coverArtists: [],
-	publishers: [],
-	characters: [],
-	pencillers: [],
-	inkers: [],
-	colorists: [],
-	letterers: [],
-	editors: [],
-	translators: [],
-	...overrides,
-});
-
-describe("getAuthorNames", () => {
-	it("returns empty array when metadata is undefined", () => {
-		expect(getAuthorNames(undefined)).toEqual([]);
-	});
-
-	it("returns empty array when writers is empty", () => {
-		const metadata = createMetadata({ writers: [] });
-		expect(getAuthorNames(metadata)).toEqual([]);
-	});
-
-	it("returns writer names", () => {
-		const metadata = createMetadata({
-			writers: [
-				{ id: 1, name: "F. Scott Fitzgerald", description: null },
-				{ id: 2, name: "Ernest Hemingway", description: null },
-			],
-		});
-		expect(getAuthorNames(metadata)).toEqual([
-			"F. Scott Fitzgerald",
-			"Ernest Hemingway",
-		]);
-	});
-});
-
-describe("getGenreNames", () => {
-	it("returns empty array when metadata is undefined", () => {
-		expect(getGenreNames(undefined)).toEqual([]);
-	});
-
-	it("returns empty array when genres is empty", () => {
-		const metadata = createMetadata({ genres: [] });
-		expect(getGenreNames(metadata)).toEqual([]);
-	});
-
-	it("returns genre titles", () => {
-		const metadata = createMetadata({
-			genres: [
-				{ id: 1, title: "Fiction" },
-				{ id: 2, title: "Classic" },
-			],
-		});
-		expect(getGenreNames(metadata)).toEqual(["Fiction", "Classic"]);
-	});
-});
-
-describe("generateFrontmatter", () => {
-	it("generates frontmatter with tags", () => {
-		const result = generateFrontmatter(defaultOptions);
-		expect(result).toContain("---");
-		expect(result).toContain("title: Kavita Annotations");
-		expect(result).toContain("tags:");
-		expect(result).toContain("  - kavita");
-		expect(result).toContain("  - annotations");
-		expect(result).toContain("updated:");
-	});
-
-	it("omits tags when includeTags is false", () => {
-		const result = generateFrontmatter({
-			...defaultOptions,
-			includeTags: false,
-		});
-		expect(result).not.toContain("tags:");
-		expect(result).toContain("title: Kavita Annotations");
-	});
-});
-
-describe("generateSeriesHeader", () => {
-	it("generates header with wikilinks", () => {
-		const annotation = createAnnotation({
-			seriesName: "The Great Gatsby",
-			libraryName: "Fiction",
-		});
-		const lines = generateSeriesHeader(annotation, defaultOptions);
-
-		expect(lines).toContain("## The Great Gatsby");
-		expect(lines).toContain("**Series:** [[The Great Gatsby]]");
-		expect(lines).toContain("**Library:** Fiction");
-	});
-
-	it("omits wikilinks when disabled", () => {
-		const annotation = createAnnotation({ seriesName: "Test Series" });
-		const lines = generateSeriesHeader(annotation, {
-			...defaultOptions,
-			includeWikilinks: false,
-		});
-
-		expect(lines).not.toContain("**Series:** [[Test Series]]");
-		expect(lines).toContain("## Test Series");
-	});
-
-	it("does not include tags (tags are only for genres at book level)", () => {
-		const annotation = createAnnotation({ seriesName: "Test Series" });
-		const lines = generateSeriesHeader(annotation, defaultOptions);
-
-		expect(lines.some((l) => l.includes("**Tags:**"))).toBe(false);
-	});
-
-	it("does not include author at series level (moved to book level)", () => {
-		const annotation = createAnnotation({ seriesName: "The Great Gatsby" });
-		const metadata = createMetadata({
-			writers: [{ id: 1, name: "F. Scott Fitzgerald", description: null }],
-		});
-		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
-
-		expect(lines.some((l) => l.includes("**Author:**"))).toBe(false);
-	});
-
-	it("does not include genres at series level (moved to book level)", () => {
-		const annotation = createAnnotation({ seriesName: "Test Book" });
-		const metadata = createMetadata({
-			genres: [
-				{ id: 1, title: "Fiction" },
-				{ id: 2, title: "Classic" },
-			],
-		});
-		const lines = generateSeriesHeader(annotation, defaultOptions, metadata);
-
-		expect(lines.some((l) => l.includes("**Genres:**"))).toBe(false);
-	});
-
-	it("works without metadata", () => {
-		const annotation = createAnnotation({ seriesName: "Test Book" });
-		const lines = generateSeriesHeader(annotation, defaultOptions);
-
-		expect(lines).toContain("## Test Book");
-		expect(lines.some((l) => l.includes("**Author:**"))).toBe(false);
-		expect(lines.some((l) => l.includes("**Genres:**"))).toBe(false);
-	});
-});
+const render = (
+	annotation: Annotation,
+	overrides: Partial<FormatOptions> = {},
+) => formatAnnotation(annotation, { ...options, ...overrides });
 
 describe("formatAnnotation", () => {
-	it("formats basic annotation without note line when no comment", () => {
-		const annotation = createAnnotation({
-			selectedText: "Hello world",
-			pageNumber: 0,
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain("> Hello world");
-			expect(result.success).not.toContain("*Note:*");
-		}
-	});
-
-	it("includes comment when present", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			comment: "My note",
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain("*Note:* My note");
-		}
-	});
-
-	it("excludes note line when comment is null", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			comment: null,
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).not.toContain("*Note:*");
-		}
-	});
-
-	it("excludes note line when comment is empty string", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			comment: "",
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).not.toContain("*Note:*");
-		}
-	});
-
-	it("excludes note line when comment is empty object string '{}'", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			comment: "{}",
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).not.toContain("*Note:*");
-		}
-	});
-
-	it("excludes note line when includeComments disabled", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			comment: "My note",
-		});
-		const result = formatAnnotation(annotation, {
-			...defaultOptions,
-			includeComments: false,
-		});
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).not.toContain("My note");
-			expect(result.success).not.toContain("*Note:*");
-		}
-	});
-
-	it("handles multi-paragraph text with proper blockquoting", () => {
-		const annotation = createAnnotation({
-			selectedText: "First paragraph.\n\nSecond paragraph.",
-			pageNumber: 0,
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain(
-				"> First paragraph.\n> \n> Second paragraph.",
+	it.prop(
+		"hides spoilers unless enabled",
+		{ annotation: Annotation },
+		({ annotation }) => {
+			const spoiler = { ...plain(annotation), containsSpoiler: true };
+			expect(Result.isFailure(render(spoiler))).toBe(true);
+			expect(render(spoiler, { includeSpoilers: true })).toEqual(
+				Result.succeed("> Quoted text"),
 			);
-		}
+		},
+	);
+
+	it.prop(
+		"renders blockquote, comment, and page with the default template",
+		{ annotation: Annotation },
+		({ annotation }) => {
+			const full = {
+				...plain(annotation),
+				selectedText: "line one\nTom &amp; Jerry",
+				commentPlainText: " a note ",
+				pageNumber: 12,
+			};
+			expect(render(full)).toEqual(
+				Result.succeed(
+					"> line one\n> Tom & Jerry\n\n*Note:* a note\n\n<small>Page 12</small>",
+				),
+			);
+			expect(render(full, { includeComments: false })).toEqual(
+				Result.succeed("> line one\n> Tom & Jerry\n\n<small>Page 12</small>"),
+			);
+		},
+	);
+
+	it.prop(
+		"omits non-positive page numbers and treats missing text as empty",
+		{ annotation: Annotation },
+		({ annotation }) => {
+			expect(render({ ...plain(annotation), pageNumber: -3 })).toEqual(
+				Result.succeed("> Quoted text"),
+			);
+			expect(render({ ...plain(annotation), selectedText: null })).toEqual(
+				Result.succeed("> "),
+			);
+		},
+	);
+
+	it.prop(
+		"exposes chapter, series, and timestamp to custom templates",
+		{ annotation: Annotation },
+		({ annotation }) => {
+			const a = {
+				...plain(annotation),
+				chapterTitle: "Ch",
+				seriesName: "Series",
+				createdUtc: "2020-01-01",
+			};
+			expect(
+				render(a, {
+					annotationTemplate:
+						"{{chapterTitle}}|{{seriesName}}|{{createdUtc}}|{{selectedText}}",
+				}),
+			).toEqual(Result.succeed("Ch|Series|2020-01-01|Quoted text"));
+			expect(
+				render(
+					{ ...a, chapterTitle: null, seriesName: null },
+					{ annotationTemplate: "[{{chapterTitle}}{{seriesName}}]" },
+				),
+			).toEqual(Result.succeed("[]"));
+		},
+	);
+
+	it.prop(
+		"falls back to the default template when the template is blank",
+		{ annotation: Annotation },
+		({ annotation }) => {
+			expect(render(plain(annotation), { annotationTemplate: "" })).toEqual(
+				Result.succeed("> Quoted text"),
+			);
+		},
+	);
+
+	it.prop(
+		"fails when the template renders nothing",
+		{ annotation: Annotation },
+		({ annotation }) => {
+			expect(
+				Result.isFailure(
+					render(
+						{ ...plain(annotation), commentPlainText: "note" },
+						{ includeComments: false, annotationTemplate: "{{comment}}" },
+					),
+				),
+			).toBe(true);
+		},
+	);
+});
+
+describe("slugs, tags, and wikilinks", () => {
+	it("slugifies names", () => {
+		expect(toSlug("  The Great Gatsby!  ")).toBe("the-great-gatsby");
+		expect(toSlug("Sci-Fi -- & Fantasy")).toBe("sci-fi-fantasy");
+		expect(toSlug("Café")).toBe("caf");
 	});
 
-	it("includes page number when present", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			pageNumber: 42,
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain("<small>Page 42</small>");
-		}
+	it.prop("slugs are tag-safe", [Schema.String], ([input]) => {
+		const slug = toSlug(input);
+		expect(slug).toMatch(/^[a-z0-9-]*$/);
+		expect(slug).not.toMatch(/^-|-$|--/);
 	});
 
-	it("filters spoilers when disabled", () => {
-		const annotation = createAnnotation({
-			selectedText: "Spoiler",
-			containsSpoiler: true,
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isFailure(result)).toBe(true);
-	});
-
-	it("includes spoilers when enabled", () => {
-		const annotation = createAnnotation({
-			selectedText: "Spoiler",
-			containsSpoiler: true,
-		});
-		const result = formatAnnotation(annotation, {
-			...defaultOptions,
-			includeSpoilers: true,
-		});
-
-		expect(Result.isSuccess(result)).toBe(true);
-	});
-
-	it("decodes HTML entities in selectedText", () => {
-		const annotation = createAnnotation({
-			selectedText: "it&#39;s a test &amp; more",
-			pageNumber: 0,
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain("> it's a test & more");
-		}
-	});
-
-	it("renders Quill delta JSON comment as plain text", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			comment: '{"ops":[{"insert":"My note\\n"}]}',
-			commentPlainText: null,
-			commentHtml: null,
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain("*Note:* My note");
-		}
-	});
-
-	it("prefers commentPlainText over comment", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			commentPlainText: "Plain text note",
-			comment: '{"ops":[{"insert":"Rich text\\n"}]}',
-			commentHtml: null,
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain("*Note:* Plain text note");
-		}
-	});
-
-	it("uses commentHtml as fallback with tags stripped", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			comment: null,
-			commentPlainText: null,
-			commentHtml: "<p>HTML note</p>",
-		});
-		const result = formatAnnotation(annotation, defaultOptions);
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain("*Note:* HTML note");
-		}
-	});
-
-	it("renders with a custom annotation template", () => {
-		const annotation = createAnnotation({
-			selectedText: "Important passage",
-			pageNumber: 99,
-		});
-		const result = formatAnnotation(annotation, {
-			...defaultOptions,
-			annotationTemplate: "**{{selectedText}}** (p. {{pageNumber}})",
-		});
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toBe("**Important passage** (p. 99)");
-		}
-	});
-
-	it("falls back to default template when annotationTemplate is empty", () => {
-		const annotation = createAnnotation({
-			selectedText: "Hello world",
-			pageNumber: 5,
-		});
-		const result = formatAnnotation(annotation, {
-			...defaultOptions,
-			annotationTemplate: "",
-		});
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toContain("> Hello world");
-			expect(result.success).toContain("<small>Page 5</small>");
-		}
-	});
-
-	it("strips comment from template context when includeComments is false", () => {
-		const annotation = createAnnotation({
-			selectedText: "Highlight",
-			comment: "Secret note",
-		});
-		const result = formatAnnotation(annotation, {
-			...defaultOptions,
-			includeComments: false,
-			annotationTemplate:
-				"{{selectedText}}{{#if comment}} - {{comment}}{{/if}}",
-		});
-
-		expect(Result.isSuccess(result)).toBe(true);
-		if (Result.isSuccess(result)) {
-			expect(result.success).toBe("Highlight");
-		}
+	it("builds tags and wikilinks", () => {
+		expect(makeTag("Science Fiction")).toBe("#science-fiction");
+		expect(makeTag("Science Fiction", "genre/")).toBe("#genre/science-fiction");
+		expect(makeWikilink("Ada Lumen")).toBe("[[Ada Lumen]]");
 	});
 });
 
-describe("groupBySeriesId", () => {
-	it("groups annotations by series", () => {
-		const annotations = [
-			createAnnotation({ id: 1, seriesId: 1 }),
-			createAnnotation({ id: 2, seriesId: 1 }),
-			createAnnotation({ id: 3, seriesId: 2 }),
-		];
-
-		const groups = groupBySeriesId(annotations);
-
-		expect(Object.keys(groups).length).toBe(2);
-		expect(groups["1"]?.length).toBe(2);
-		expect(groups["2"]?.length).toBe(1);
-	});
-});
-
-describe("groupByChapterId", () => {
-	it("groups annotations by chapter", () => {
-		const annotations = [
-			createAnnotation({ id: 1, chapterId: 1 }),
-			createAnnotation({ id: 2, chapterId: 1 }),
-			createAnnotation({ id: 3, chapterId: 2 }),
-		];
-
-		const groups = groupByChapterId(annotations);
-
-		expect(Object.keys(groups).length).toBe(2);
-		expect(groups["1"]?.length).toBe(2);
-		expect(groups["2"]?.length).toBe(1);
-	});
-});
-
-describe("toMarkdown", () => {
-	it("returns empty message for no annotations", () => {
-		const result = toMarkdown([], defaultOptions);
-
-		expect(result).toContain("---");
-		expect(result).toContain("title: Kavita Annotations");
-		expect(result).toContain("# Kavita Annotations");
-		expect(result).toContain("*No annotations found.*");
-	});
-
-	it("generates markdown with series name and chapter title", () => {
-		const annotations = [
-			createAnnotation({
-				id: 1,
-				seriesId: 1,
-				seriesName: "The Great Gatsby",
-				chapterId: 1,
-				chapterTitle: "In My Younger Years",
-				libraryName: "Fiction",
-				selectedText: "First highlight",
-			}),
-		];
-
-		const result = toMarkdown(annotations, defaultOptions);
-
-		expect(result).toContain("## The Great Gatsby");
-		expect(result).toContain("#### Chapter: In My Younger Years");
-		expect(result).toContain("**Series:** [[The Great Gatsby]]");
-		expect(result).toContain("**Library:** Fiction");
-		expect(result).toContain("> First highlight");
-	});
-
-	it("falls back to IDs when names are missing", () => {
-		const annotations = [
-			createAnnotation({
-				id: 1,
-				seriesId: 123,
+describe("name fallbacks", () => {
+	it.prop(
+		"falls back to IDs when names are missing",
+		{ annotation: Annotation },
+		({ annotation }) => {
+			const bare = {
+				...annotation,
 				seriesName: null,
-				chapterId: 456,
 				chapterTitle: null,
 				libraryName: null,
-				libraryId: 7,
-				selectedText: "Highlight",
-			}),
-		];
+			};
+			expect(getSeriesName(bare)).toBe(`Series ${annotation.seriesId}`);
+			expect(getChapterTitle(bare)).toBe(`Chapter ${annotation.chapterId}`);
+			expect(getLibraryName(bare)).toBe(`Library ${annotation.libraryId}`);
+			expect(getBookTitle(bare, new Map())).toBe(
+				`Series ${annotation.seriesId}`,
+			);
+		},
+	);
 
-		const result = toMarkdown(annotations, defaultOptions);
-
-		expect(result).toContain("## Series 123");
-		expect(result).toContain("#### Chapter: Chapter 456");
-		expect(result).toContain("**Library:** Library 7");
-	});
-
-	it("generates markdown with multiple series and chapters", () => {
-		const annotations = [
-			createAnnotation({
-				id: 1,
-				seriesId: 1,
-				seriesName: "Book One",
-				chapterId: 1,
-				chapterTitle: "One",
-				selectedText: "First",
-			}),
-			createAnnotation({
-				id: 2,
-				seriesId: 1,
-				seriesName: "Book One",
-				chapterId: 2,
-				chapterTitle: "Two",
-				selectedText: "Second",
-			}),
-			createAnnotation({
-				id: 3,
-				seriesId: 2,
-				seriesName: "Book Two",
-				chapterId: 1,
-				chapterTitle: "Introduction",
-				selectedText: "Third",
-			}),
-		];
-
-		const result = toMarkdown(annotations, defaultOptions);
-
-		expect(result).toContain("## Book One");
-		expect(result).toContain("## Book Two");
-		expect(result).toContain("#### Chapter: One");
-		expect(result).toContain("#### Chapter: Two");
-		expect(result).toContain("#### Chapter: Introduction");
-		expect(result).toContain("> First");
-		expect(result).toContain("> Second");
-		expect(result).toContain("> Third");
-	});
-
-	it("filters spoilers based on options", () => {
-		const annotations = [
-			createAnnotation({
-				id: 1,
-				selectedText: "Normal",
-				containsSpoiler: false,
-			}),
-			createAnnotation({
-				id: 2,
-				selectedText: "Secret",
-				containsSpoiler: true,
-			}),
-		];
-
-		const result = toMarkdown(annotations, defaultOptions);
-
-		expect(result).toContain("> Normal");
-		expect(result).not.toContain("> Secret");
-	});
-
-	it("respects includeTags option for genres", () => {
-		const annotations = [
-			createAnnotation({
-				seriesName: "Test Book",
-				chapterId: 1,
-				selectedText: "Highlight",
-			}),
-		];
-
-		const chapterInfoMap: ChapterInfoMap = new Map([
-			[
-				1,
-				{
-					chapterId: 1,
-					bookTitle: "Test Book",
-					sortOrder: 1,
-					authors: [],
-					genres: ["Fiction"],
-				},
-			],
-		]);
-
-		const resultWithTags = toMarkdown(
-			annotations,
-			defaultOptions,
-			undefined,
-			chapterInfoMap,
-		);
-		const resultWithoutTags = toMarkdown(
-			annotations,
-			{
-				...defaultOptions,
-				includeTags: false,
-			},
-			undefined,
-			chapterInfoMap,
-		);
-
-		expect(resultWithTags).toContain("#fiction");
-		expect(resultWithoutTags).not.toContain("#fiction");
-	});
-
-	it("respects includeWikilinks option", () => {
-		const annotations = [
-			createAnnotation({
-				seriesName: "Test Book",
-				selectedText: "Highlight",
-			}),
-		];
-
-		const resultWithLinks = toMarkdown(annotations, defaultOptions);
-		const resultWithoutLinks = toMarkdown(annotations, {
-			...defaultOptions,
-			includeWikilinks: false,
-		});
-
-		expect(resultWithLinks).toContain("[[Test Book]]");
-		expect(resultWithoutLinks).not.toContain("[[Test Book]]");
-	});
-
-	it("includes author and genres from chapterInfoMap at book level", () => {
-		const annotations = [
-			createAnnotation({
-				seriesId: 42,
-				seriesName: "The Great Gatsby",
-				chapterId: 1,
-				selectedText: "Highlight",
-			}),
-		];
-
-		const chapterInfoMap: ChapterInfoMap = new Map([
-			[
-				1,
-				{
-					chapterId: 1,
-					bookTitle: "The Great Gatsby",
-					sortOrder: 1,
-					authors: ["F. Scott Fitzgerald"],
-					genres: ["Fiction"],
-				},
-			],
-		]);
-
-		const result = toMarkdown(
-			annotations,
-			defaultOptions,
-			undefined,
-			chapterInfoMap,
-		);
-
-		expect(result).toContain("**Author:** [[F. Scott Fitzgerald]]");
-		expect(result).toContain("**Genres:** Fiction");
-		expect(result).toContain("#fiction");
-	});
-
-	it("handles missing metadata gracefully", () => {
-		const annotations = [
-			createAnnotation({
-				seriesId: 99,
-				seriesName: "Unknown Book",
-				selectedText: "Highlight",
-			}),
-		];
-
-		const metadataMap: SeriesMetadataMap = new Map();
-
-		const result = toMarkdown(annotations, defaultOptions, metadataMap);
-
-		expect(result).toContain("## Unknown Book");
-		expect(result).not.toContain("**Author:**");
-		expect(result).not.toContain("**Genres:**");
-	});
-
-	it("groups annotations by book title when chapterInfoMap is provided", () => {
-		const annotations = [
-			createAnnotation({
-				id: 1,
-				seriesId: 1,
-				seriesName: "Horus Heresy",
-				chapterId: 1,
-				chapterTitle: "One",
-				selectedText: "First book highlight",
-			}),
-			createAnnotation({
-				id: 2,
-				seriesId: 1,
-				seriesName: "Horus Heresy",
-				chapterId: 2,
-				chapterTitle: "One",
-				selectedText: "Second book highlight",
-			}),
-		];
-
-		const chapterInfoMap: ChapterInfoMap = new Map([
-			[
-				1,
-				{
-					chapterId: 1,
-					bookTitle: "Horus Rising",
-					sortOrder: 1,
-					authors: ["Dan Abnett"],
-					genres: ["Sci-Fi"],
-				},
-			],
-			[
-				2,
-				{
-					chapterId: 2,
-					bookTitle: "False Gods",
-					sortOrder: 5,
-					authors: ["Graham McNeill"],
-					genres: ["Sci-Fi"],
-				},
-			],
-		]);
-
-		const result = toMarkdown(
-			annotations,
-			defaultOptions,
-			undefined,
-			chapterInfoMap,
-		);
-
-		expect(result).toContain("### Horus Rising");
-		expect(result).toContain("### False Gods");
-		expect(result).toContain("**Author:** [[Dan Abnett]]");
-		expect(result).toContain("**Author:** [[Graham McNeill]]");
-		expect(result).toContain("#sci-fi");
-	});
-
-	it("falls back to series name when chapterInfoMap is not provided", () => {
-		const annotations = [
-			createAnnotation({
-				seriesId: 1,
-				seriesName: "Test Series",
-				chapterId: 1,
-				selectedText: "Highlight",
-			}),
-		];
-
-		const result = toMarkdown(annotations, defaultOptions);
-
-		expect(result).toContain("### Test Series");
-	});
+	it.prop(
+		"uses names and chapter info when present",
+		{ annotation: Annotation, info: ChapterInfo },
+		({ annotation, info }) => {
+			const named = {
+				...annotation,
+				seriesName: "S",
+				chapterTitle: "C",
+				libraryName: "L",
+			};
+			expect(getSeriesName(named)).toBe("S");
+			expect(getChapterTitle(named)).toBe("C");
+			expect(getLibraryName(named)).toBe("L");
+			expect(
+				getBookTitle(
+					named,
+					catalog({ ...info, chapterId: annotation.chapterId }),
+				),
+			).toBe(info.bookTitle);
+		},
+	);
 });
 
-describe("getBookTitle", () => {
-	it("returns book title from chapterInfoMap", () => {
-		const annotation = createAnnotation({ chapterId: 1, seriesName: "Series" });
-		const chapterInfoMap: ChapterInfoMap = new Map([
-			[
-				1,
-				{
-					chapterId: 1,
-					bookTitle: "The Book Title",
-					sortOrder: 1,
-					authors: [],
-					genres: [],
-				},
-			],
+describe("headers", () => {
+	it("renders a book header with wikilinks, genres, and tags", () => {
+		expect(
+			generateBookHeader(
+				"Embers",
+				{ ...options, tagPrefix: "genre/" },
+				["Ada", "Bram"],
+				["Fantasy", "Science Fiction"],
+			),
+		).toEqual([
+			"### Embers",
+			"**Author:** [[Ada]], [[Bram]]",
+			"**Book:** [[Embers]]",
+			"**Genres:** Fantasy, Science Fiction",
+			"**Tags:** #genre/fantasy #genre/science-fiction",
 		]);
-
-		expect(getBookTitle(annotation, chapterInfoMap)).toBe("The Book Title");
 	});
 
-	it("falls back to series name when chapter not in map", () => {
-		const annotation = createAnnotation({
-			chapterId: 99,
-			seriesName: "Fallback Series",
-		});
-		const chapterInfoMap: ChapterInfoMap = new Map();
-
-		expect(getBookTitle(annotation, chapterInfoMap)).toBe("Fallback Series");
-	});
-
-	it("falls back to series name when map is undefined", () => {
-		const annotation = createAnnotation({ seriesName: "My Series" });
-
-		expect(getBookTitle(annotation, undefined)).toBe("My Series");
-	});
-});
-
-describe("groupByBookTitle", () => {
-	it("groups annotations by book title", () => {
-		const annotations = [
-			createAnnotation({ id: 1, chapterId: 1 }),
-			createAnnotation({ id: 2, chapterId: 2 }),
-			createAnnotation({ id: 3, chapterId: 1 }),
-		];
-
-		const chapterInfoMap: ChapterInfoMap = new Map([
-			[
-				1,
-				{
-					chapterId: 1,
-					bookTitle: "Book A",
-					sortOrder: 1,
-					authors: [],
-					genres: [],
-				},
-			],
-			[
-				2,
-				{
-					chapterId: 2,
-					bookTitle: "Book B",
-					sortOrder: 2,
-					authors: [],
-					genres: [],
-				},
-			],
+	it("renders a plain book header without wikilinks or tags", () => {
+		expect(
+			generateBookHeader(
+				"Embers",
+				{ ...options, includeWikilinks: false, includeTags: false },
+				["Ada"],
+				["Fantasy"],
+			),
+		).toEqual(["### Embers", "**Author:** Ada", "**Genres:** Fantasy"]);
+		expect(generateBookHeader("Embers", options, [], [])).toEqual([
+			"### Embers",
+			"**Book:** [[Embers]]",
 		]);
+	});
 
-		const groups = groupByBookTitle(annotations, chapterInfoMap);
+	it.prop(
+		"renders a series header with and without wikilinks",
+		{ annotation: Annotation },
+		({ annotation }) => {
+			const a = { ...annotation, seriesName: "S", libraryName: "L" };
+			expect(generateSeriesHeader(a, options)).toEqual([
+				"## S",
+				"**Series:** [[S]]",
+				"**Library:** L",
+			]);
+			expect(
+				generateSeriesHeader(a, { ...options, includeWikilinks: false }),
+			).toEqual(["## S", "**Library:** L"]);
+		},
+	);
 
-		expect(Object.keys(groups)).toHaveLength(2);
-		expect(groups["Book A"]).toHaveLength(2);
-		expect(groups["Book B"]).toHaveLength(1);
+	it("renders frontmatter with the injected timestamp", () => {
+		expect(generateFrontmatter(options, UPDATED)).toBe(
+			`---\ntitle: Kavita Annotations\ntags:\n  - annotations\n  - kavita\nupdated: ${UPDATED}\n---`,
+		);
+		expect(
+			generateFrontmatter({ ...options, includeTags: false }, UPDATED),
+		).toBe(`---\ntitle: Kavita Annotations\nupdated: ${UPDATED}\n---`);
 	});
 });
 
 describe("getSortedBookGroups", () => {
-	it("sorts book groups by sortOrder", () => {
-		const annotations = [
-			createAnnotation({ id: 1, chapterId: 5 }),
-			createAnnotation({ id: 2, chapterId: 1 }),
-			createAnnotation({ id: 3, chapterId: 3 }),
-		];
-
-		const chapterInfoMap: ChapterInfoMap = new Map([
-			[
-				5,
-				{
-					chapterId: 5,
-					bookTitle: "Fulgrim",
-					sortOrder: 5,
-					authors: [],
-					genres: [],
-				},
-			],
-			[
-				1,
-				{
-					chapterId: 1,
-					bookTitle: "Horus Rising",
-					sortOrder: 1,
-					authors: [],
-					genres: [],
-				},
-			],
-			[
-				3,
-				{
-					chapterId: 3,
-					bookTitle: "Galaxy in Flames",
-					sortOrder: 3,
-					authors: [],
-					genres: [],
-				},
-			],
-		]);
-
-		const sorted = getSortedBookGroups(annotations, chapterInfoMap);
-
-		expect(sorted[0]?.[0]).toBe("Horus Rising");
-		expect(sorted[1]?.[0]).toBe("Galaxy in Flames");
-		expect(sorted[2]?.[0]).toBe("Fulgrim");
-	});
-
-	it("handles missing chapterInfoMap gracefully", () => {
-		const annotations = [createAnnotation({ id: 1, seriesName: "Test" })];
-
-		const sorted = getSortedBookGroups(annotations, undefined);
-
-		expect(sorted).toHaveLength(1);
-		expect(sorted[0]?.[0]).toBe("Test");
-	});
+	it.prop(
+		"orders books by sort order and defaults unknown books to 0",
+		{ a: Annotation, b: Annotation, c: Annotation },
+		({ a, b, c }) => {
+			const first = { ...a, chapterId: 1, seriesName: "S" };
+			const second = { ...b, chapterId: 2, seriesName: "S" };
+			const unknown = { ...c, chapterId: 3, seriesName: "Unknown" };
+			const groups = getSortedBookGroups(
+				[second, first, unknown],
+				catalog(
+					{
+						chapterId: 1,
+						bookTitle: "One",
+						sortOrder: 1,
+						authors: [],
+						genres: [],
+					},
+					{
+						chapterId: 2,
+						bookTitle: "Two",
+						sortOrder: 2,
+						authors: [],
+						genres: [],
+					},
+				),
+			);
+			expect(groups.map(([title]) => title)).toEqual(["Unknown", "One", "Two"]);
+		},
+	);
 });
 
-describe("getBookSortOrder", () => {
-	it("returns sortOrder from chapterInfoMap", () => {
-		const annotations = [createAnnotation({ chapterId: 1 })];
-		const chapterInfoMap: ChapterInfoMap = new Map([
-			[
-				1,
-				{
-					chapterId: 1,
-					bookTitle: "Book",
-					sortOrder: 42,
-					authors: [],
-					genres: [],
-				},
-			],
-		]);
-
-		expect(getBookSortOrder("Book", annotations, chapterInfoMap)).toBe(42);
-	});
-
-	it("returns 0 when chapterInfoMap is undefined", () => {
-		const annotations = [createAnnotation({ chapterId: 1 })];
-
-		expect(getBookSortOrder("Book", annotations, undefined)).toBe(0);
-	});
-
-	it("returns 0 when chapter not in map", () => {
-		const annotations = [createAnnotation({ chapterId: 99 })];
-		const chapterInfoMap: ChapterInfoMap = new Map();
-
-		expect(getBookSortOrder("Book", annotations, chapterInfoMap)).toBe(0);
-	});
-});
-
-describe("generateBookHeader", () => {
-	it("generates book header with title", () => {
-		const lines = generateBookHeader("Test Book", defaultOptions);
-
-		expect(lines).toContain("### Test Book");
-	});
-
-	it("includes wikilink when enabled", () => {
-		const lines = generateBookHeader("Test Book", defaultOptions);
-
-		expect(lines.some((l) => l.includes("[[Test Book]]"))).toBe(true);
-	});
-
-	it("omits wikilink when disabled", () => {
-		const lines = generateBookHeader("Test Book", {
-			...defaultOptions,
-			includeWikilinks: false,
-		});
-
-		expect(lines.some((l) => l.includes("[[Test Book]]"))).toBe(false);
-	});
-
-	it("includes author with wikilink", () => {
-		const lines = generateBookHeader("Test Book", defaultOptions, [
-			"Test Author",
-		]);
-
-		expect(lines).toContain("**Author:** [[Test Author]]");
-	});
-
-	it("includes multiple authors with wikilinks", () => {
-		const lines = generateBookHeader("Test Book", defaultOptions, [
-			"Author One",
-			"Author Two",
-		]);
-
-		expect(lines).toContain("**Author:** [[Author One]], [[Author Two]]");
-	});
-
-	it("includes genres", () => {
-		const lines = generateBookHeader(
-			"Test Book",
-			defaultOptions,
-			[],
-			["Fantasy", "Adventure"],
+describe("toMarkdown", () => {
+	it("renders an empty document", () => {
+		expect(toMarkdown([], options, new Map(), UPDATED)).toBe(
+			`${generateFrontmatter(options, UPDATED)}\n\n# Kavita Annotations\n\n*No annotations found.*\n`,
 		);
-
-		expect(lines).toContain("**Genres:** Fantasy, Adventure");
 	});
 
-	it("includes genre tags when tags enabled", () => {
-		const lines = generateBookHeader(
-			"Test Book",
-			defaultOptions,
-			[],
-			["Fantasy"],
-		);
+	it.prop(
+		"groups by series, book, and chapter in volume order",
+		{ a: Annotation, b: Annotation, c: Annotation },
+		({ a, b, c }) => {
+			const base = {
+				seriesName: "Lantern",
+				libraryName: "Books",
+				seriesId: a.seriesId,
+			};
+			const late = {
+				...plain(a),
+				...base,
+				chapterId: a.chapterId,
+				chapterTitle: "Late chapter",
+				selectedText: "late quote",
+			};
+			const early = {
+				...plain(b),
+				...base,
+				chapterId: a.chapterId + 1,
+				chapterTitle: "Early chapter",
+				selectedText: "early quote",
+			};
+			const hidden = {
+				...early,
+				id: c.id,
+				containsSpoiler: true,
+				selectedText: "secret",
+			};
+			const doc = toMarkdown(
+				[late, early, hidden],
+				options,
+				catalog(
+					{
+						chapterId: late.chapterId,
+						bookTitle: "Cinders",
+						sortOrder: 2,
+						authors: ["Ada"],
+						genres: ["Fantasy"],
+					},
+					{
+						chapterId: early.chapterId,
+						bookTitle: "Embers",
+						sortOrder: 1,
+						authors: [],
+						genres: [],
+					},
+				),
+				UPDATED,
+			);
+			expect(doc.startsWith(generateFrontmatter(options, UPDATED))).toBe(true);
+			expect(doc).toContain(
+				"# Kavita Annotations\n\n## Lantern\n**Series:** [[Lantern]]\n**Library:** Books\n",
+			);
+			expect(doc.indexOf("### Embers")).toBeLessThan(
+				doc.indexOf("### Cinders"),
+			);
+			expect(doc).toContain(
+				"### Cinders\n**Author:** [[Ada]]\n**Book:** [[Cinders]]\n**Genres:** Fantasy\n**Tags:** #fantasy\n\n#### Chapter: Late chapter\n\n> late quote\n\n---\n",
+			);
+			expect(doc).toContain(
+				"#### Chapter: Early chapter\n\n> early quote\n\n---\n",
+			);
+			expect(doc).not.toContain("secret");
+		},
+	);
 
-		expect(lines.some((l) => l.includes("#fantasy"))).toBe(true);
-	});
-
-	it("omits genre tags when no genres", () => {
-		const lines = generateBookHeader("Test Book", defaultOptions, [], []);
-
-		expect(lines.some((l) => l.includes("**Tags:**"))).toBe(false);
-	});
-
-	it("omits author when wikilinks disabled", () => {
-		const lines = generateBookHeader(
-			"Test Book",
-			{
-				...defaultOptions,
-				includeWikilinks: false,
-			},
-			["Test Author"],
-		);
-
-		expect(lines).toContain("**Author:** Test Author");
-		expect(lines.some((l) => l.includes("[[Test Author]]"))).toBe(false);
-	});
-
-	it("respects tagPrefix option", () => {
-		const lines = generateBookHeader(
-			"Test Book",
-			{ ...defaultOptions, tagPrefix: "reading/" },
-			[],
-			["Fantasy"],
-		);
-
-		expect(lines.some((l) => l.includes("#reading/fantasy"))).toBe(true);
-	});
+	it.prop(
+		"renders one section per series",
+		{ a: Annotation, b: Annotation },
+		({ a, b }) => {
+			const one = { ...plain(a), seriesName: "One", seriesId: 1 };
+			const two = { ...plain(b), seriesName: "Two", seriesId: 2 };
+			const doc = toMarkdown(
+				[two, one],
+				{ ...options, includeWikilinks: false },
+				new Map(),
+				UPDATED,
+			);
+			expect(doc).toContain("## One\n**Library:**");
+			expect(doc).toContain("## Two\n**Library:**");
+			expect(doc).toContain("### One\n");
+			expect(doc).not.toMatch(/^\*\*(Series|Book):\*\* /m);
+		},
+	);
 });

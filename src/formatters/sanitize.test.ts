@@ -3,7 +3,8 @@
  *
  * @module
  */
-import { describe, expect, it } from "vitest";
+import { describe, expect, it } from "@effect/vitest";
+import { Schema } from "effect";
 import {
 	decodeHtmlEntities,
 	extractTextFromQuillDelta,
@@ -11,233 +12,183 @@ import {
 	stripHtmlTags,
 } from "./sanitize.js";
 
+const NoAmpersand = Schema.String.pipe(
+	Schema.check(Schema.makeFilter((s: string) => !s.includes("&"))),
+);
+
+const NoAngleBrackets = Schema.String.pipe(
+	Schema.check(Schema.makeFilter((s: string) => !/[<>]/.test(s))),
+);
+
 describe("decodeHtmlEntities", () => {
-	it("decodes XML-5 named entities", () => {
-		expect(decodeHtmlEntities("&amp;")).toBe("&");
-		expect(decodeHtmlEntities("&lt;")).toBe("<");
-		expect(decodeHtmlEntities("&gt;")).toBe(">");
-		expect(decodeHtmlEntities("&quot;")).toBe('"');
-		expect(decodeHtmlEntities("&apos;")).toBe("'");
+	it("decodes XML named entities", () => {
+		expect(decodeHtmlEntities("&amp;&lt;&gt;&quot;&apos;")).toBe(`&<>"'`);
 	});
 
 	it("decodes typographic named entities", () => {
-		expect(decodeHtmlEntities("&nbsp;")).toBe(" ");
-		expect(decodeHtmlEntities("&mdash;")).toBe("—");
-		expect(decodeHtmlEntities("&ndash;")).toBe("–");
-		expect(decodeHtmlEntities("&hellip;")).toBe("…");
-		expect(decodeHtmlEntities("&rsquo;")).toBe("\u2019");
-		expect(decodeHtmlEntities("&lsquo;")).toBe("\u2018");
-		expect(decodeHtmlEntities("&rdquo;")).toBe("\u201D");
-		expect(decodeHtmlEntities("&ldquo;")).toBe("\u201C");
+		expect(
+			decodeHtmlEntities(
+				"&nbsp;&mdash;&ndash;&hellip;&rsquo;&lsquo;&rdquo;&ldquo;",
+			),
+		).toBe(" —–…’‘”“");
 	});
 
-	it("decodes numeric entities", () => {
-		expect(decodeHtmlEntities("&#39;")).toBe("'");
-		expect(decodeHtmlEntities("&#123;")).toBe("{");
-		expect(decodeHtmlEntities("&#125;")).toBe("}");
+	it("decodes decimal and hex entities", () => {
+		expect(decodeHtmlEntities("&#39;&#123;")).toBe("'{");
+		expect(decodeHtmlEntities("&#x27;&#x7B;&#x7b;")).toBe("'{{");
 	});
 
-	it("decodes hex entities", () => {
-		expect(decodeHtmlEntities("&#x27;")).toBe("'");
-		expect(decodeHtmlEntities("&#x7B;")).toBe("{");
-		expect(decodeHtmlEntities("&#x7b;")).toBe("{");
+	it("leaves unknown named entities alone", () => {
+		expect(decodeHtmlEntities("&bogus; &copy;")).toBe("&bogus; &copy;");
 	});
 
 	it("decodes mixed content", () => {
 		expect(decodeHtmlEntities("It&#39;s a &quot;test&quot; &amp; more")).toBe(
-			'It\'s a "test" & more',
+			`It's a "test" & more`,
 		);
 	});
 
-	it("passes through text with no entities", () => {
-		expect(decodeHtmlEntities("Hello world")).toBe("Hello world");
-	});
-
-	it("returns empty string for empty input", () => {
-		expect(decodeHtmlEntities("")).toBe("");
+	it.prop("is the identity on text without '&'", [NoAmpersand], ([text]) => {
+		expect(decodeHtmlEntities(text)).toBe(text);
 	});
 });
 
 describe("stripHtmlTags", () => {
-	it("strips emphasis tags", () => {
-		expect(stripHtmlTags("<em>text</em>")).toBe("text");
-	});
-
-	it("strips paragraph tags", () => {
-		expect(stripHtmlTags("<p>text</p>")).toBe("text");
-	});
-
-	it("strips self-closing br tags", () => {
-		expect(stripHtmlTags("line1<br/>line2")).toBe("line1line2");
-		expect(stripHtmlTags("line1<br />line2")).toBe("line1line2");
-	});
-
-	it("strips tags with attributes", () => {
-		expect(stripHtmlTags('<span class="highlight">text</span>')).toBe("text");
-	});
-
-	it("strips nested tags", () => {
-		expect(stripHtmlTags("<p><strong>bold</strong> text</p>")).toBe(
-			"bold text",
+	it("removes paired and self-closing tags", () => {
+		expect(stripHtmlTags("<p>Hello <em>world</em></p><br/><br />!")).toBe(
+			"Hello world!",
 		);
 	});
 
-	it("passes through text with no tags", () => {
-		expect(stripHtmlTags("Hello world")).toBe("Hello world");
+	it("keeps tags' attributes out of the text", () => {
+		expect(stripHtmlTags('<a href="x">link</a>')).toBe("link");
 	});
 
-	it("returns empty string for empty input", () => {
-		expect(stripHtmlTags("")).toBe("");
-	});
+	it.prop(
+		"is the identity on text without angle brackets",
+		[NoAngleBrackets],
+		([text]) => {
+			expect(stripHtmlTags(text)).toBe(text);
+		},
+	);
 });
 
 describe("extractTextFromQuillDelta", () => {
-	it("extracts text from a single insert", () => {
-		const delta = JSON.stringify({ ops: [{ insert: "Hello world\n" }] });
-		expect(extractTextFromQuillDelta(delta)).toBe("Hello world");
+	it("concatenates string inserts and trims trailing newlines", () => {
+		expect(
+			extractTextFromQuillDelta(
+				JSON.stringify({
+					ops: [{ insert: "Hello " }, { insert: "world\n\n" }],
+				}),
+			),
+		).toBe("Hello world");
 	});
 
-	it("extracts text from multiple inserts", () => {
-		const delta = JSON.stringify({
-			ops: [{ insert: "Hello " }, { insert: "world\n" }],
-		});
-		expect(extractTextFromQuillDelta(delta)).toBe("Hello world");
+	it("skips non-string inserts and ops without insert", () => {
+		expect(
+			extractTextFromQuillDelta(
+				JSON.stringify({
+					ops: [
+						{ insert: "A" },
+						{ insert: { image: "x.png" } },
+						{ retain: 3 },
+						{ insert: "B" },
+					],
+				}),
+			),
+		).toBe("AB");
 	});
 
-	it("extracts text from inserts with attributes", () => {
-		const delta = JSON.stringify({
-			ops: [{ insert: "bold text", attributes: { bold: true } }],
-		});
-		expect(extractTextFromQuillDelta(delta)).toBe("bold text");
+	it("returns invalid JSON unchanged", () => {
+		expect(extractTextFromQuillDelta("not json {")).toBe("not json {");
 	});
 
-	it("skips non-string inserts like images", () => {
-		const delta = JSON.stringify({
-			ops: [
-				{ insert: "before " },
-				{ insert: { image: "http://example.com/img.png" } },
-				{ insert: " after\n" },
-			],
-		});
-		expect(extractTextFromQuillDelta(delta)).toBe("before  after");
-	});
-
-	it("trims trailing newlines", () => {
-		const delta = JSON.stringify({
-			ops: [{ insert: "text\n\n\n" }],
-		});
-		expect(extractTextFromQuillDelta(delta)).toBe("text");
-	});
-
-	it("returns original string for non-JSON input", () => {
-		expect(extractTextFromQuillDelta("just plain text")).toBe(
-			"just plain text",
-		);
-	});
-
-	it("returns original string for malformed JSON", () => {
-		expect(extractTextFromQuillDelta("{bad json")).toBe("{bad json");
-	});
-
-	it("returns original string for non-Quill object", () => {
-		expect(extractTextFromQuillDelta('{"key": "value"}')).toBe(
-			'{"key": "value"}',
-		);
-	});
-
-	it("returns original string for plain string value", () => {
-		expect(extractTextFromQuillDelta("Hello world")).toBe("Hello world");
+	it("returns JSON that is not a delta unchanged", () => {
+		expect(extractTextFromQuillDelta('{"foo":1}')).toBe('{"foo":1}');
+		expect(extractTextFromQuillDelta('{"ops":"nope"}')).toBe('{"ops":"nope"}');
+		expect(extractTextFromQuillDelta("42")).toBe("42");
 	});
 });
 
 describe("resolveComment", () => {
-	it("prefers commentPlainText when available", () => {
-		const result = resolveComment({
-			comment: '{"ops":[{"insert":"quill\\n"}]}',
-			commentHtml: "<p>html</p>",
-			commentPlainText: "plain text",
-		});
-		expect(result).toBe("plain text");
+	it("prefers trimmed plain text", () => {
+		expect(
+			resolveComment({
+				comment: "raw",
+				commentHtml: "<p>html</p>",
+				commentPlainText: "  plain  ",
+			}),
+		).toBe("plain");
 	});
 
-	it("falls back to commentHtml when commentPlainText is null", () => {
-		const result = resolveComment({
-			comment: null,
-			commentHtml: "<p>html content</p>",
-			commentPlainText: null,
-		});
-		expect(result).toBe("html content");
+	it("skips empty or '{}' plain text and falls back to stripped, decoded HTML", () => {
+		expect(
+			resolveComment({
+				comment: "raw",
+				commentHtml: "<p>Tom &amp; Jerry</p>",
+				commentPlainText: "{}",
+			}),
+		).toBe("Tom & Jerry");
+		expect(
+			resolveComment({
+				comment: "raw",
+				commentHtml: "<b>bold</b>",
+				commentPlainText: "   ",
+			}),
+		).toBe("bold");
 	});
 
-	it("strips tags and decodes entities from commentHtml", () => {
-		const result = resolveComment({
-			comment: null,
-			commentHtml: "<p>It&#39;s &amp; <em>formatted</em></p>",
-			commentPlainText: null,
-		});
-		expect(result).toBe("It's & formatted");
+	it("falls back to the raw comment when HTML has no text", () => {
+		expect(
+			resolveComment({
+				comment: "It&#39;s raw",
+				commentHtml: "<p></p>",
+				commentPlainText: null,
+			}),
+		).toBe("It's raw");
+		expect(
+			resolveComment({
+				comment: "raw",
+				commentHtml: "   ",
+				commentPlainText: null,
+			}),
+		).toBe("raw");
 	});
 
-	it("falls back to comment and extracts Quill delta", () => {
-		const result = resolveComment({
-			comment: '{"ops":[{"insert":"quill text\\n"}]}',
-			commentHtml: null,
-			commentPlainText: null,
-		});
-		expect(result).toBe("quill text");
+	it("extracts Quill delta comments", () => {
+		expect(
+			resolveComment({
+				comment: JSON.stringify({ ops: [{ insert: "From delta\n" }] }),
+				commentHtml: null,
+				commentPlainText: null,
+			}),
+		).toBe("From delta");
 	});
 
-	it("decodes entities in comment after Quill extraction", () => {
-		const result = resolveComment({
-			comment: '{"ops":[{"insert":"it&#39;s here\\n"}]}',
-			commentHtml: null,
-			commentPlainText: null,
-		});
-		expect(result).toBe("it's here");
-	});
-
-	it("returns null when all fields are null", () => {
-		const result = resolveComment({
-			comment: null,
-			commentHtml: null,
-			commentPlainText: null,
-		});
-		expect(result).toBeNull();
-	});
-
-	it("returns null when all fields are empty strings", () => {
-		const result = resolveComment({
-			comment: "",
-			commentHtml: "",
-			commentPlainText: "",
-		});
-		expect(result).toBeNull();
-	});
-
-	it('returns null when comment is "{}" with null others', () => {
-		const result = resolveComment({
-			comment: "{}",
-			commentHtml: null,
-			commentPlainText: null,
-		});
-		expect(result).toBeNull();
-	});
-
-	it("handles whitespace-only values", () => {
-		const result = resolveComment({
-			comment: "   ",
-			commentHtml: "   ",
-			commentPlainText: "   ",
-		});
-		expect(result).toBeNull();
-	});
-
-	it('skips commentPlainText when it is "{}"', () => {
-		const result = resolveComment({
-			comment: null,
-			commentHtml: "<p>fallback</p>",
-			commentPlainText: "{}",
-		});
-		expect(result).toBe("fallback");
+	it("returns null when nothing usable remains", () => {
+		expect(
+			resolveComment({
+				comment: null,
+				commentHtml: null,
+				commentPlainText: null,
+			}),
+		).toBeNull();
+		expect(
+			resolveComment({ comment: "{}", commentHtml: "", commentPlainText: "" }),
+		).toBeNull();
+		expect(
+			resolveComment({
+				comment: "  ",
+				commentHtml: null,
+				commentPlainText: null,
+			}),
+		).toBeNull();
+		expect(
+			resolveComment({
+				comment: JSON.stringify({ ops: [{ insert: "\n" }] }),
+				commentHtml: null,
+				commentPlainText: null,
+			}),
+		).toBeNull();
 	});
 });

@@ -1,125 +1,238 @@
 /**
- * Schema definitions for Kavita API responses and plugin settings.
+ * Schemas for Kavita API payloads, plugin settings, and sync results.
+ *
+ * Every type the plugin uses is derived from a schema in this module.
  *
  * @module
  */
-import { Schema, SchemaGetter, SchemaTransformation } from "effect";
+import { Effect, Predicate, Schema, SchemaGetter } from "effect";
 
 /**
- * Helper to create an optional key with a default value.
- *
- * Replaces `Schema.optionalWith(schema, { exact: true, default: () => val })` in v4.
+ * A JSON array that Kavita may send as `null`, decoded to an empty array.
  *
  * @since 2.0.0
  * @category Helpers
  */
-const optionalKeyWithDefault = <S extends Schema.Top>(
-	schema: S,
-	defaultValue: () => S["Type"],
-) =>
-	Schema.optionalKey(schema).pipe(
-		Schema.decodeTo(Schema.toType(schema), {
-			decode: SchemaGetter.withDefault(defaultValue),
-			encode: SchemaGetter.required(),
+const NullableArray = <S extends Schema.Top>(item: S) =>
+	Schema.NullOr(Schema.Array(item)).pipe(
+		Schema.decodeTo(Schema.Array(Schema.toType(item)), {
+			decode: SchemaGetter.transform((value) => value ?? []),
+			encode: SchemaGetter.transform((value) => value),
 		}),
 	);
 
 /**
- * Kavita annotation data transfer object.
+ * A highlight or note on a book in Kavita.
  *
- * Represents an annotation/highlight on a book in Kavita.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class AnnotationDto extends Schema.Class<AnnotationDto>("AnnotationDto")(
-	{
-		id: Schema.Number,
-		/** Starting XPath selector for the highlight */
-		xPath: Schema.NullOr(Schema.String),
-		/** Ending XPath selector (can be same as xPath for single element) */
-		endingXPath: Schema.NullOr(Schema.String),
-		/** The highlighted text */
-		selectedText: Schema.NullOr(Schema.String),
-		/** User's comment on the annotation (rich text) */
-		comment: Schema.NullOr(Schema.String),
-		/** HTML version of comment */
-		commentHtml: Schema.NullOr(Schema.String),
-		/** Plain text version of comment */
-		commentPlainText: Schema.NullOr(Schema.String),
-		/** Title of the TOC chapter within EPUB */
-		chapterTitle: Schema.NullOr(Schema.String),
-		/** Surrounding text context */
-		context: Schema.NullOr(Schema.String),
-		/** Number of characters selected */
-		highlightCount: Schema.Number,
-		/** Whether this annotation contains spoilers */
-		containsSpoiler: Schema.Boolean,
-		/** Page number in the book */
-		pageNumber: Schema.Number,
-		/** Highlight color slot index (0-4) */
-		selectedSlotIndex: Schema.Number,
-		/** User IDs who liked this annotation */
-		likes: Schema.NullOr(Schema.Array(Schema.Number)),
-		/** Name of the series */
-		seriesName: Schema.NullOr(Schema.String),
-		/** Name of the library */
-		libraryName: Schema.NullOr(Schema.String),
-		/** Chapter ID */
-		chapterId: Schema.Number,
-		/** Volume ID */
-		volumeId: Schema.Number,
-		/** Series ID */
-		seriesId: Schema.Number,
-		/** Library ID */
-		libraryId: Schema.Number,
-		/** Owner user ID */
-		ownerUserId: Schema.Number,
-		/** Owner username */
-		ownerUsername: Schema.NullOr(Schema.String),
-		/** Age rating of the series */
-		ageRating: Schema.Number,
-		/** Creation timestamp */
-		createdUtc: Schema.String,
-		/** Last modified timestamp */
-		lastModifiedUtc: Schema.String,
-	},
-) {}
-
-/**
- * Filter parameters for browsing annotations.
+ * Only the fields the plugin reads are declared; Kavita sends more.
  *
  * @since 0.0.1
  * @category Kavita Schemas
  */
-export class BrowseAnnotationFilterDto extends Schema.Class<BrowseAnnotationFilterDto>(
-	"BrowseAnnotationFilterDto",
-)({
-	seriesIds: Schema.optionalKey(Schema.Array(Schema.Number)),
-	chapterIds: Schema.optionalKey(Schema.Array(Schema.Number)),
-	includeSpoilers: Schema.optionalKey(Schema.Boolean),
-	startDate: Schema.optionalKey(Schema.DateTimeUtc),
-	endDate: Schema.optionalKey(Schema.DateTimeUtc),
-}) {}
+export const Annotation = Schema.Struct({
+	id: Schema.Int,
+	selectedText: Schema.NullOr(Schema.String),
+	comment: Schema.NullOr(Schema.String),
+	commentHtml: Schema.NullOr(Schema.String),
+	commentPlainText: Schema.NullOr(Schema.String),
+	chapterTitle: Schema.NullOr(Schema.String),
+	containsSpoiler: Schema.Boolean,
+	pageNumber: Schema.Int,
+	seriesName: Schema.NullOr(Schema.String),
+	libraryName: Schema.NullOr(Schema.String),
+	chapterId: Schema.Int,
+	volumeId: Schema.Int,
+	seriesId: Schema.Int,
+	libraryId: Schema.Int,
+	ownerUserId: Schema.Int,
+	createdUtc: Schema.String,
+});
 
 /**
- * Array of annotations response from Kavita API.
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export type Annotation = typeof Annotation.Type;
+
+/**
+ * Response body of `POST /api/Annotation/all-filtered`.
  *
  * @since 0.0.1
  * @category Kavita Schemas
  */
-export const AnnotationsResponse = Schema.Array(AnnotationDto);
+export const Annotations = Schema.Array(Annotation);
 
 /**
- * Type alias for annotations response.
+ * A person credited on a chapter (writer, artist, ...).
+ *
+ * @since 0.0.2
+ * @category Kavita Schemas
+ */
+export const Person = Schema.Struct({
+	name: Schema.NullOr(Schema.String),
+});
+
+/**
+ * A genre on a chapter.
+ *
+ * @since 0.0.2
+ * @category Kavita Schemas
+ */
+export const Genre = Schema.Struct({
+	title: Schema.NullOr(Schema.String),
+});
+
+/**
+ * A chapter (for books, the book itself) within a volume.
  *
  * @since 0.0.1
  * @category Kavita Schemas
  */
-export type AnnotationsResponseType = typeof AnnotationsResponse.Type;
+export const Chapter = Schema.Struct({
+	id: Schema.Int,
+	titleName: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	writers: Schema.optionalKey(NullableArray(Person)),
+	genres: Schema.optionalKey(NullableArray(Genre)),
+});
 
 /**
- * Export mode for annotations.
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export type Chapter = typeof Chapter.Type;
+
+/**
+ * A volume and its chapters.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export const Volume = Schema.Struct({
+	id: Schema.Int,
+	number: Schema.Finite,
+	name: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	chapters: NullableArray(Chapter),
+});
+
+/**
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export type Volume = typeof Volume.Type;
+
+/**
+ * Response body of `GET /api/Series/volumes`.
+ *
+ * @since 0.0.1
+ * @category Kavita Schemas
+ */
+export const Volumes = Schema.Array(Volume);
+
+/**
+ * The session token from `POST /api/Plugin/authenticate`.
+ *
+ * Kavita leaves the user `id` in this response as `0`, so the id is read
+ * from {@link CurrentUser} instead.
+ *
+ * @since 2.0.0
+ * @category Kavita Schemas
+ */
+export const PluginSession = Schema.Struct({
+	token: Schema.String,
+});
+
+/**
+ * The fields the plugin reads from `GET /api/Account`.
+ *
+ * @since 2.0.0
+ * @category Kavita Schemas
+ */
+export const CurrentUser = Schema.Struct({
+	id: Schema.Int,
+});
+
+/**
+ * Book-level metadata for one chapter, resolved from its volume.
+ *
+ * @since 0.0.2
+ * @category Sync Schemas
+ */
+export const ChapterInfo = Schema.Struct({
+	chapterId: Schema.Int,
+	bookTitle: Schema.String,
+	sortOrder: Schema.Finite,
+	authors: Schema.Array(Schema.String),
+	genres: Schema.Array(Schema.String),
+});
+
+/**
+ * @since 0.0.2
+ * @category Sync Schemas
+ */
+export type ChapterInfo = typeof ChapterInfo.Type;
+
+/**
+ * One book's annotations plus the metadata for its vault note.
+ *
+ * @since 1.1.0
+ * @category Sync Schemas
+ */
+export const BookFile = Schema.Struct({
+	bookTitle: Schema.String,
+	seriesName: Schema.String,
+	seriesId: Schema.Int,
+	chapterId: Schema.Int,
+	authors: Schema.Array(Schema.String),
+	genres: Schema.Array(Schema.String),
+	annotations: Schema.Array(Annotation),
+});
+
+/**
+ * @since 1.1.0
+ * @category Sync Schemas
+ */
+export type BookFile = typeof BookFile.Type;
+
+/**
+ * Outcome of a single-file sync.
+ *
+ * @since 0.0.1
+ * @category Sync Schemas
+ */
+export const SingleFileSyncResult = Schema.Struct({
+	annotationCount: Schema.Int,
+	outputPath: Schema.String,
+});
+
+/**
+ * @since 0.0.1
+ * @category Sync Schemas
+ */
+export type SingleFileSyncResult = typeof SingleFileSyncResult.Type;
+
+/**
+ * Outcome of a hierarchical sync.
+ *
+ * @since 1.1.0
+ * @category Sync Schemas
+ */
+export const HierarchicalSyncResult = Schema.Struct({
+	annotationCount: Schema.Int,
+	seriesCount: Schema.Int,
+	bookCount: Schema.Int,
+	filesCreated: Schema.Int,
+	filesUpdated: Schema.Int,
+	filesDeleted: Schema.Int,
+});
+
+/**
+ * @since 1.1.0
+ * @category Sync Schemas
+ */
+export type HierarchicalSyncResult = typeof HierarchicalSyncResult.Type;
+
+/**
+ * How annotations are laid out in the vault.
  *
  * @since 1.1.0
  * @category Plugin Schemas
@@ -127,7 +240,13 @@ export type AnnotationsResponseType = typeof AnnotationsResponse.Type;
 export const ExportMode = Schema.Literals(["single-file", "hierarchical"]);
 
 /**
- * Default Handlebars template for rendering individual annotations.
+ * @since 1.1.0
+ * @category Plugin Schemas
+ */
+export type ExportMode = typeof ExportMode.Type;
+
+/**
+ * Default template for rendering one annotation.
  *
  * @since 1.2.0
  * @category Plugin Schemas
@@ -143,359 +262,108 @@ export const DEFAULT_ANNOTATION_TEMPLATE = `{{blockquote}}
 {{/if}}`;
 
 /**
- * Plugin settings stored in Obsidian.
+ * A stored setting that falls back to its default when missing or malformed,
+ * so one bad value in `data.json` never discards the rest.
  *
- * @since 0.0.1
- * @category Plugin Schemas
+ * @since 2.0.0
+ * @category Helpers
  */
-export class PluginSettings extends Schema.Class<PluginSettings>(
-	"PluginSettings",
-)({
-	kavitaUrl: Schema.String,
-	kavitaApiKey: Schema.String,
-	outputPath: optionalKeyWithDefault(
-		Schema.String,
-		() => "kavita-annotations.md",
-	),
-	matchThreshold: optionalKeyWithDefault(
-		Schema.Number.pipe(
-			Schema.decodeTo(
-				Schema.Number,
-				SchemaTransformation.transform({
-					decode: (n) => Math.min(1, Math.max(0, n)),
-					encode: (n) => n,
-				}),
-			),
-		),
-		() => 0.7,
-	),
-	includeComments: optionalKeyWithDefault(Schema.Boolean, () => true),
-	includeSpoilers: optionalKeyWithDefault(Schema.Boolean, () => false),
-	/**
-	 * Include Obsidian tags generated from series, author, and library names.
-	 * @since 0.0.2
-	 */
-	includeTags: optionalKeyWithDefault(Schema.Boolean, () => true),
-	/**
-	 * Prefix for generated tags (e.g., "reading/" produces #reading/book/...).
-	 * @since 0.0.2
-	 */
-	tagPrefix: optionalKeyWithDefault(Schema.String, () => ""),
-	/**
-	 * Include wikilinks for series and author names (e.g., [[Author Name]]).
-	 * @since 0.0.2
-	 */
-	includeWikilinks: optionalKeyWithDefault(Schema.Boolean, () => true),
-	/**
-	 * Export mode: single file or hierarchical folders.
-	 * @since 1.1.0
-	 */
-	exportMode: optionalKeyWithDefault(ExportMode, () => "hierarchical" as const),
-	/**
-	 * Root folder name for hierarchical mode.
-	 * @since 1.1.0
-	 */
-	rootFolderName: optionalKeyWithDefault(
-		Schema.String,
-		() => "Kavita Annotations",
-	),
-	/**
-	 * Delete orphaned files when annotations are removed from Kavita.
-	 * @since 1.1.0
-	 */
-	deleteOrphanedFiles: optionalKeyWithDefault(Schema.Boolean, () => true),
-	/**
-	 * Handlebars template for rendering individual annotations.
-	 * @since 1.2.0
-	 */
-	annotationTemplate: optionalKeyWithDefault(
-		Schema.String,
-		() => DEFAULT_ANNOTATION_TEMPLATE,
-	),
-}) {}
-
-/**
- * Default plugin settings.
- *
- * @since 0.0.1
- * @category Plugin Schemas
- */
-export const DEFAULT_SETTINGS: typeof PluginSettings.Type = {
-	kavitaUrl: "",
-	kavitaApiKey: "",
-	outputPath: "kavita-annotations.md",
-	matchThreshold: 0.7,
-	includeComments: true,
-	includeSpoilers: false,
-	includeTags: true,
-	tagPrefix: "",
-	includeWikilinks: true,
-	exportMode: "hierarchical",
-	rootFolderName: "Kavita Annotations",
-	deleteOrphanedFiles: true,
-	annotationTemplate: DEFAULT_ANNOTATION_TEMPLATE,
+const setting = <S extends Schema.Codec<unknown, unknown>>(
+	schema: S,
+	fallback: S["Type"],
+) => {
+	const lenient = Schema.catchDecoding<S>(() => Effect.succeedSome(fallback))(
+		schema,
+	);
+	return Schema.withDecodingDefaultTypeKey<typeof lenient>(
+		Effect.succeed(fallback),
+	)(lenient);
 };
 
 /**
- * Kavita library types.
+ * Plugin settings as persisted in the vault's `data.json`.
+ *
+ * Decoding never fails: unknown keys are dropped and missing or malformed
+ * values take their defaults.
  *
  * @since 0.0.1
- * @category Kavita Schemas
+ * @category Plugin Schemas
  */
-export const LibraryType = {
-	Manga: 0,
-	Comic: 1,
-	Book: 2,
-	Images: 3,
-	LightNovel: 4,
-} as const;
+export const PluginSettings = Schema.Struct({
+	kavitaUrl: setting(Schema.String, ""),
+	kavitaApiKey: setting(Schema.String, ""),
+	exportMode: setting(ExportMode, "hierarchical"),
+	outputPath: setting(Schema.String, "kavita-annotations.md"),
+	rootFolderName: setting(Schema.String, "Kavita Annotations"),
+	deleteOrphanedFiles: setting(Schema.Boolean, true),
+	includeComments: setting(Schema.Boolean, true),
+	includeSpoilers: setting(Schema.Boolean, false),
+	includeTags: setting(Schema.Boolean, true),
+	tagPrefix: setting(Schema.String, ""),
+	includeWikilinks: setting(Schema.Boolean, true),
+	annotationTemplate: setting(Schema.String, DEFAULT_ANNOTATION_TEMPLATE),
+});
 
 /**
- * Kavita library data transfer object.
- *
  * @since 0.0.1
- * @category Kavita Schemas
+ * @category Plugin Schemas
  */
-export class LibraryDto extends Schema.Class<LibraryDto>("LibraryDto")({
-	id: Schema.Number,
-	name: Schema.String,
-	type: Schema.Number,
-	folders: Schema.optionalKey(Schema.Array(Schema.String)),
-}) {}
+export type PluginSettings = typeof PluginSettings.Type;
+
+const decodeSettingsObject = Schema.decodeUnknownSync(PluginSettings);
 
 /**
- * Request to create a library.
+ * Decode whatever Obsidian loaded from `data.json` into complete settings.
+ *
+ * Anything that is not an object (a corrupt or hand-edited file) is treated
+ * as a fresh install rather than failing plugin load.
+ *
+ * @since 2.0.0
+ * @category Plugin Schemas
+ */
+export const decodePluginSettings = (input: unknown): PluginSettings =>
+	decodeSettingsObject(Predicate.isObject(input) ? input : {});
+
+/**
+ * Settings for a fresh install.
  *
  * @since 0.0.1
- * @category Kavita Schemas
+ * @category Plugin Schemas
  */
-export class CreateLibraryDto extends Schema.Class<CreateLibraryDto>(
-	"CreateLibraryDto",
-)({
-	name: Schema.String,
-	type: Schema.Number,
-	folders: Schema.Array(Schema.String),
-	fileGroupTypes: optionalKeyWithDefault(Schema.Array(Schema.Number), () => []),
-	excludePatterns: optionalKeyWithDefault(
-		Schema.Array(Schema.String),
-		() => [],
+export const DEFAULT_SETTINGS: PluginSettings = decodePluginSettings({});
+
+/**
+ * The annotation-formatting subset of the settings.
+ *
+ * @since 0.0.1
+ * @category Plugin Schemas
+ */
+export const FormatOptions = PluginSettings.mapFields((fields) => ({
+	includeComments: fields.includeComments,
+	includeSpoilers: fields.includeSpoilers,
+	includeTags: fields.includeTags,
+	tagPrefix: fields.tagPrefix,
+	includeWikilinks: fields.includeWikilinks,
+	annotationTemplate: fields.annotationTemplate,
+}));
+
+/**
+ * @since 0.0.1
+ * @category Plugin Schemas
+ */
+export type FormatOptions = typeof FormatOptions.Type;
+
+/**
+ * Base URL of the Kavita server; must be http(s).
+ *
+ * @since 2.0.0
+ * @category Plugin Schemas
+ */
+export const KavitaUrl = Schema.URLFromString.pipe(
+	Schema.check(
+		Schema.makeFilter(
+			(url: URL) => url.protocol === "http:" || url.protocol === "https:",
+			{ message: "must be an http:// or https:// address" },
+		),
 	),
-	/**
-	 * Enable reading metadata from files (authors, genres, etc.).
-	 * @since 0.0.2
-	 */
-	enableMetadata: optionalKeyWithDefault(Schema.Boolean, () => true),
-}) {}
-
-/**
- * Genre tag from Kavita metadata.
- *
- * @since 0.0.2
- * @category Kavita Schemas
- */
-export class GenreTagDto extends Schema.Class<GenreTagDto>("GenreTagDto")({
-	id: Schema.Number,
-	title: Schema.String,
-}) {}
-
-/**
- * Tag from Kavita metadata.
- *
- * @since 0.0.2
- * @category Kavita Schemas
- */
-export class TagDto extends Schema.Class<TagDto>("TagDto")({
-	id: Schema.Number,
-	title: Schema.String,
-}) {}
-
-/**
- * Person (author, artist, etc.) from Kavita metadata.
- *
- * @since 0.0.2
- * @category Kavita Schemas
- */
-export class PersonDto extends Schema.Class<PersonDto>("PersonDto")({
-	id: Schema.Number,
-	name: Schema.String,
-	description: Schema.NullOr(Schema.String),
-}) {}
-
-/**
- * Kavita chapter data transfer object.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class ChapterDto extends Schema.Class<ChapterDto>("ChapterDto")({
-	id: Schema.Number,
-	number: Schema.String,
-	title: Schema.optionalKey(Schema.String),
-	pages: Schema.optionalKey(Schema.Number),
-	/**
-	 * The book title from EPUB dc:title metadata.
-	 * @since 0.0.2
-	 */
-	titleName: Schema.optionalKey(Schema.String),
-	/**
-	 * Sort order for the chapter within the series.
-	 * @since 0.0.2
-	 */
-	sortOrder: Schema.optionalKey(Schema.Number),
-	/**
-	 * Writers/authors for this specific chapter/book.
-	 * @since 0.0.2
-	 */
-	writers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	/**
-	 * Genres for this specific chapter/book.
-	 * @since 0.0.2
-	 */
-	genres: optionalKeyWithDefault(Schema.Array(GenreTagDto), () => []),
-}) {}
-
-/**
- * Kavita volume data transfer object.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class VolumeDto extends Schema.Class<VolumeDto>("VolumeDto")({
-	id: Schema.Number,
-	number: Schema.Number,
-	name: Schema.optionalKey(Schema.String),
-	chapters: Schema.Array(ChapterDto),
-}) {}
-
-/**
- * Kavita series data transfer object.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class SeriesDto extends Schema.Class<SeriesDto>("SeriesDto")({
-	id: Schema.Number,
-	name: Schema.String,
-	libraryId: Schema.optionalKey(Schema.Number),
-}) {}
-
-/**
- * Paginated series response.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class SeriesPagedResponse extends Schema.Class<SeriesPagedResponse>(
-	"SeriesPagedResponse",
-)({
-	result: Schema.Array(SeriesDto),
-	pagination: Schema.optionalKey(
-		Schema.Struct({
-			currentPage: Schema.Number,
-			totalPages: Schema.Number,
-			totalItems: Schema.Number,
-		}),
-	),
-}) {}
-
-/**
- * Request to create an annotation.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class CreateAnnotationDto extends Schema.Class<CreateAnnotationDto>(
-	"CreateAnnotationDto",
-)({
-	/** Chapter ID (required) */
-	chapterId: Schema.Number,
-	/** Volume ID (required) */
-	volumeId: Schema.Number,
-	/** Series ID (required) */
-	seriesId: Schema.Number,
-	/** Library ID (required) */
-	libraryId: Schema.Number,
-	/** Owner user ID (required) */
-	ownerUserId: Schema.Number,
-	/** Starting XPath selector for the highlight (required) */
-	xPath: Schema.String,
-	/** The highlighted text (required) */
-	selectedText: Schema.String,
-	/** Number of characters selected (required) */
-	highlightCount: Schema.Number,
-	/** Page number in the book (required) */
-	pageNumber: Schema.Number,
-	/** Highlight color slot index 0-4 (required) */
-	selectedSlotIndex: Schema.Number,
-	/** Whether this annotation contains spoilers (required) */
-	containsSpoiler: Schema.Boolean,
-	/** Ending XPath selector (optional, defaults to xPath) */
-	endingXPath: Schema.optionalKey(Schema.String),
-	/** User's comment on the annotation (optional) */
-	comment: Schema.optionalKey(Schema.String),
-}) {}
-
-/**
- * Request to register a new user.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class RegisterDto extends Schema.Class<RegisterDto>("RegisterDto")({
-	username: Schema.String,
-	email: Schema.String,
-	password: Schema.String,
-}) {}
-
-/**
- * Request to login.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class LoginDto extends Schema.Class<LoginDto>("LoginDto")({
-	username: Schema.String,
-	password: Schema.String,
-}) {}
-
-/**
- * Response from login.
- *
- * @since 0.0.1
- * @category Kavita Schemas
- */
-export class UserDto extends Schema.Class<UserDto>("UserDto")({
-	token: Schema.String,
-	apiKey: Schema.optionalKey(Schema.String),
-	username: Schema.String,
-}) {}
-
-/**
- * Series metadata from Kavita API.
- *
- * Contains detailed metadata including writers, genres, tags, etc.
- *
- * @since 0.0.2
- * @category Kavita Schemas
- */
-export class SeriesMetadataDto extends Schema.Class<SeriesMetadataDto>(
-	"SeriesMetadataDto",
-)({
-	id: Schema.Number,
-	seriesId: Schema.Number,
-	summary: Schema.NullOr(Schema.String),
-	releaseYear: Schema.Number,
-	language: Schema.NullOr(Schema.String),
-	genres: optionalKeyWithDefault(Schema.Array(GenreTagDto), () => []),
-	tags: optionalKeyWithDefault(Schema.Array(TagDto), () => []),
-	writers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	coverArtists: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	publishers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	characters: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	pencillers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	inkers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	colorists: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	letterers: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	editors: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-	translators: optionalKeyWithDefault(Schema.Array(PersonDto), () => []),
-}) {}
+);

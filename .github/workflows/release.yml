@@ -2,48 +2,57 @@ name: Release
 
 on:
   push:
-    tags:
-      - "[0-9]*"
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
-  artifact-metadata: write
-  attestations: write
   contents: write
   id-token: write
-
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  attestations: write
+  artifact-metadata: write
 
 jobs:
-  build:
+  release:
+    name: Publish manifest version
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
-      - name: Install dependencies
-        run: bun install
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
 
-      - name: Lint
-        run: bun run lint
+      - name: Install
+        run: bun install --frozen-lockfile
 
-      - name: Obsidian lint
-        run: bun run lint:obsidian
+      - name: Resolve version
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(bun run scripts/check-version.ts)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if gh release view "$version" >/dev/null 2>&1; then
+            echo "Release $version already exists; nothing to publish."
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Type check
-        run: bun run typecheck
+      - name: Gate
+        if: steps.version.outputs.publish == 'true'
+        run: bun run check
 
-      - name: Test
-        run: bun run test
-
-      - name: Build
-        run: bun run build
-
-      - name: Generate artifact attestation
+      - name: Attest build provenance
+        if: steps.version.outputs.publish == 'true'
         uses: actions/attest@v4
         with:
           subject-path: |
@@ -51,10 +60,14 @@ jobs:
             styles.css
 
       - name: Create release
-        uses: softprops/action-gh-release@v2
+        if: steps.version.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ steps.version.outputs.version }}
+          name: ${{ steps.version.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          generate_release_notes: true
           files: |
             main.js
             manifest.json
             styles.css
-          generate_release_notes: true

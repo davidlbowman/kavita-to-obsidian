@@ -1,4 +1,3 @@
-import tsparser from "@typescript-eslint/parser";
 import { defineConfig } from "eslint/config";
 import obsidianmd from "eslint-plugin-obsidianmd";
 import globals from "globals";
@@ -7,10 +6,10 @@ export default defineConfig([
 	{
 		ignores: [
 			"node_modules/**",
-			"dist/**",
 			"**/*.test.ts",
+			"**/__mocks__/**",
 			"test-integration/**",
-			"__mocks__/**",
+			"test-support/**",
 			"scripts/**",
 			"coverage/**",
 			"main.js",
@@ -22,8 +21,7 @@ export default defineConfig([
 	{
 		files: ["src/**/*.ts"],
 		languageOptions: {
-			parser: tsparser,
-			parserOptions: { project: "./tsconfig.json" },
+			parserOptions: { projectService: true },
 			globals: globals.browser,
 		},
 	},
