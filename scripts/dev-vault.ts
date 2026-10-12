@@ -254,7 +254,7 @@ if (fresh) {
 	await waitFor(
 		() =>
 			existsSync(showcase) &&
-			readFileSync(showcase, "utf8").includes("%% kavita-sync:start"),
+			readFileSync(showcase, "utf8").includes("\n## My notes"),
 		90_000,
 	)
 ) {
