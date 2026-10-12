@@ -44,5 +44,9 @@
 	"dependencies": {
 		"effect": "4.0.3"
 	},
-	"packageManager": "bun@1.3.13"
+	"packageManager": "bun@1.3.13",
+	"overrides": {
+		"moment": "2.31.0",
+		"obsidian": "1.14.4"
+	}
 }
