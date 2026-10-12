@@ -71,7 +71,7 @@ describe("toSyncConfig", () => {
 			);
 			assert.isTrue(Redacted.isRedacted(config.kavitaApiKey));
 			assert.strictEqual(Redacted.value(config.kavitaApiKey), "secret");
-			assert.notInclude(String(config.kavitaApiKey), "secret");
+			assert.notInclude(JSON.stringify(config), "secret");
 		}),
 	);
 

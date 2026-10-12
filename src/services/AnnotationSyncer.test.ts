@@ -75,14 +75,14 @@ describe("AnnotationSyncer", () => {
 			});
 
 			const { result, expected } = yield* Effect.gen(function* () {
-				const result = yield* runSync;
+				const synced = yield* runSync;
 				const config = yield* PluginConfig;
 				const chapterInfo = yield* fetchChapterInfo(
 					kavita,
 					annotations.map((a) => a.seriesId),
 				);
 				return {
-					result,
+					result: synced,
 					expected: toMarkdown(annotations, config, chapterInfo, EPOCH),
 				};
 			}).pipe(Effect.provide(layer));

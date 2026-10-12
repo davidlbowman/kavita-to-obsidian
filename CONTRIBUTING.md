@@ -17,18 +17,20 @@ bun install
 bun run check
 ```
 
-`bun run check` is the same gate CI runs: Biome, the Obsidian ESLint rules, `tsc`, unit tests with coverage thresholds, and a production build.
+`bun run check` is the same gate CI runs: oxlint (type-aware) and oxfmt, the Obsidian ESLint rules, `tsc` (TypeScript 7), unit tests with coverage thresholds, and a production build.
 
-| Command | What it does |
-|---|---|
-| `bun run dev` | Development build with inline source maps |
-| `bun run build` | Minified production build (`main.js`) |
-| `bun run lint` / `lint:fix` | Biome check / auto-fix |
-| `bun run lint:obsidian` | Obsidian plugin review rules (must pass before release) |
-| `bun run typecheck` | `tsc --noEmit` |
-| `bun run test` / `test:watch` / `test:coverage` | Unit tests |
-| `bun run integration` | Fresh Kavita container + live integration tests |
-| `bun run integration:up` / `integration:test` / `integration:down` | The same, step by step |
+| Command                                                            | What it does                                                            |
+| ------------------------------------------------------------------ | ----------------------------------------------------------------------- |
+| `bun run dev`                                                      | Development build with inline source maps                               |
+| `bun run build`                                                    | Minified production build (`main.js`)                                   |
+| `bun run lint` / `lint:fix`                                        | oxlint (type-aware) + oxfmt check / auto-fix                            |
+| `bun run format`                                                   | Format with oxfmt                                                       |
+| `bun run dev:vault`                                                | Build, start a seeded Kavita, and open a ready-made Obsidian test vault |
+| `bun run lint:obsidian`                                            | Obsidian plugin review rules (must pass before release)                 |
+| `bun run typecheck`                                                | `tsc --noEmit`                                                          |
+| `bun run test` / `test:watch` / `test:coverage`                    | Unit tests                                                              |
+| `bun run integration`                                              | Fresh Kavita container + live integration tests                         |
+| `bun run integration:up` / `integration:test` / `integration:down` | The same, step by step                                                  |
 
 ## Branches and releases
 
@@ -94,7 +96,8 @@ The plugin talks to Kavita with: `POST /api/Plugin/authenticate` (auth key → J
 ### Style
 
 - JSDoc only: no `//` or `/* */` comments.
-- Biome formats and lints; run `bun run lint:fix`.
+- oxfmt formats and oxlint lints (it enforces no `as`, no `!`, and no floating promises); run `bun run lint:fix`.
+- ESLint only runs Obsidian's review rules (`eslint-plugin-obsidianmd`), which bundle their own TypeScript. Installs are isolated (`bunfig.toml`) so that doesn't clash with the project's TypeScript 7.
 - Follow [Obsidian's plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines): use `app.vault` and `fileManager` rather than the adapter, `normalizePath` on constructed paths, sentence case in UI text, and no default hotkeys.
 
 ## Tests
@@ -126,10 +129,19 @@ KAVITA_PORT=5056 bun run integration     # if 5055 is taken
 
 CI runs the live suite against 0.8.8 (the minimum supported version) and 0.9.1 on every PR. The `Kavita compatibility` workflow runs it daily against `latest` and `nightly`.
 
+## Trying it in Obsidian
+
+```bash
+bun run dev:vault
+```
+
+This builds the plugin, starts and seeds Kavita, and opens a throwaway **Kavita Test Vault** in Obsidian with the plugin installed, configured, and hot-reloading. Re-run it after changes. Do this before every `staging` → `main` release.
+
 ## Pull request checklist
 
 - [ ] Targets `staging` (or is the `staging` → `main` release PR)
 - [ ] `bun run check` passes
 - [ ] `bun run integration` passes if you touched Kavita calls, syncing, or the vault
+- [ ] Tried it by hand with `bun run dev:vault` before releasing
 - [ ] New behaviour has tests; new data types are schemas
 - [ ] `CHANGELOG.md` updated for user-visible changes

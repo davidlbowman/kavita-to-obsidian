@@ -48,6 +48,22 @@ export interface SeededBook {
 	readonly libraryId: number;
 }
 
+const annotationFor = (
+	book: SeededBook,
+	text: string,
+	overrides: Partial<NewAnnotation> = {},
+): NewAnnotation => ({
+	chapterId: book.chapterId,
+	volumeId: book.volumeId,
+	seriesId: book.seriesId,
+	libraryId: book.libraryId,
+	pageNumber: 1,
+	selectedText: text,
+	comment: null,
+	containsSpoiler: false,
+	...overrides,
+});
+
 /**
  * The live server and handles for mutating it.
  *
@@ -167,22 +183,6 @@ export class LiveKavita extends Context.Service<
 					discard: true,
 				});
 			}
-
-			const annotationFor = (
-				book: SeededBook,
-				text: string,
-				overrides: Partial<NewAnnotation> = {},
-			): NewAnnotation => ({
-				chapterId: book.chapterId,
-				volumeId: book.volumeId,
-				seriesId: book.seriesId,
-				libraryId: book.libraryId,
-				pageNumber: 1,
-				selectedText: text,
-				comment: null,
-				containsSpoiler: false,
-				...overrides,
-			});
 
 			for (const book of books) {
 				for (const a of book.fixture.annotations) {

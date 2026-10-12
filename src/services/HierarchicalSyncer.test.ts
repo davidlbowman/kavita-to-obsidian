@@ -62,7 +62,7 @@ const sampleBooks = (seriesCount: number, booksPerSeries: number) =>
 		const total = seriesCount * booksPerSeries;
 		const ids = yield* distinct(PositiveInt, seriesCount + total);
 		const names = yield* distinct(Name, seriesCount + total);
-		const chapterIds = ids.slice(seriesCount).sort((a, b) => a - b);
+		const chapterIds = ids.slice(seriesCount).toSorted((a, b) => a - b);
 		const books: Array<Book> = [];
 		for (let s = 0; s < seriesCount; s++) {
 			for (let b = 0; b < booksPerSeries; b++) {
@@ -152,6 +152,17 @@ const runSync = Effect.gen(function* () {
 const managed = (chapterId: number) =>
 	`---\nkavita_chapter_id: ${chapterId}\n---\n`;
 
+const seedOrphans = (fake: FakeApp, current: Book) => {
+	fake.seed(`${ROOT}/Gone/gone.md`, managed(1));
+	fake.seed(`${ROOT}/Kept/stale.md`, managed(2));
+	fake.seed(`${ROOT}/Kept/mine.md`, "# My own notes\n");
+	fake.seed(`${ROOT}/loose.md`, managed(3));
+	fake.seed(
+		buildBookPath(ROOT, current.seriesName, current.bookTitle),
+		managed(current.chapterId),
+	);
+};
+
 describe("HierarchicalSyncer", () => {
 	it.effect("writes Root/Series/Book.md for every book", () =>
 		Effect.gen(function* () {
@@ -235,17 +246,6 @@ describe("HierarchicalSyncer", () => {
 			assert.strictEqual(second.filesUpdated, 3);
 		}),
 	);
-
-	const seedOrphans = (fake: FakeApp, current: Book) => {
-		fake.seed(`${ROOT}/Gone/gone.md`, managed(1));
-		fake.seed(`${ROOT}/Kept/stale.md`, managed(2));
-		fake.seed(`${ROOT}/Kept/mine.md`, "# My own notes\n");
-		fake.seed(`${ROOT}/loose.md`, managed(3));
-		fake.seed(
-			buildBookPath(ROOT, current.seriesName, current.bookTitle),
-			managed(current.chapterId),
-		);
-	};
 
 	it.effect("trashes managed notes whose annotations are gone", () =>
 		Effect.gen(function* () {

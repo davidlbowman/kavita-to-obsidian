@@ -69,6 +69,11 @@ export const NewAnnotation = Schema.Struct({
  */
 export type NewAnnotation = typeof NewAnnotation.Type;
 
+const json =
+	<S extends Schema.Decoder<unknown>>(schema: S) =>
+	(response: HttpClientResponse.HttpClientResponse) =>
+		HttpClientResponse.schemaBodyJson(schema)(response);
+
 /**
  * Admin client bound to one Kavita base URL.
  *
@@ -87,11 +92,6 @@ export const makeKavitaAdmin = Effect.fnUntraced(function* (baseUrl: string) {
 		http.pipe(
 			HttpClient.mapRequest(HttpClientRequest.bearerToken(session.token)),
 		);
-
-	const json =
-		<S extends Schema.Decoder<unknown>>(schema: S) =>
-		(response: HttpClientResponse.HttpClientResponse) =>
-			HttpClientResponse.schemaBodyJson(schema)(response);
 
 	const waitUntilHealthy = http
 		.get("/api/health")

@@ -25,22 +25,18 @@ describe("validateTemplate", () => {
 
 	it("rejects unclosed blocks with a count", () => {
 		const result = validateTemplate("{{#if a}}{{#if b}}x{{/if}}");
-		expect(Result.isFailure(result)).toBe(true);
-		if (Result.isFailure(result)) {
-			expect(result.failure).toBe(
+		expect(result).toStrictEqual(
+			Result.fail(
 				"Unclosed {{#if}} block: 1 opening tag(s) without matching {{/if}}",
-			);
-		}
+			),
+		);
 	});
 
 	it("rejects a closing tag before its opener", () => {
 		const result = validateTemplate("{{/if}}{{#if a}}");
-		expect(Result.isFailure(result)).toBe(true);
-		if (Result.isFailure(result)) {
-			expect(result.failure).toBe(
-				"Unexpected {{/if}} without matching {{#if}}",
-			);
-		}
+		expect(result).toStrictEqual(
+			Result.fail("Unexpected {{/if}} without matching {{#if}}"),
+		);
 	});
 });
 

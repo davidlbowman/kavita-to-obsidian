@@ -27,7 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Technical
 
-- Upgraded to Effect 4.0.3 (stable), TypeScript 6, Vitest 5, Biome 2.5, Obsidian API 1.14, and esbuild 0.28.
+- Upgraded to Effect 4.0.3 (stable), TypeScript 7, Vitest 5, Obsidian API 1.14, and esbuild 0.28.
+- Replaced Biome with oxlint (type-aware, via tsgolint) and oxfmt.
+- `bun run dev:vault` sets up a seeded Kavita and a ready-made Obsidian test vault for manual testing.
 - Rewrote the services on `Context.Service`, `Schema.TaggedError`, and `effect/http`, with every type derived from a schema.
 - New test suites: schema-driven property tests (157 unit tests, ~99.8% coverage), plus live integration tests that run the real plugin against Kavita 0.8.8 and 0.9.1 in Docker on every PR, and against Kavita `latest`/`nightly` daily.
 - Added a `staging` branch: features merge to `staging`, and merging `staging` into `main` publishes a release automatically.

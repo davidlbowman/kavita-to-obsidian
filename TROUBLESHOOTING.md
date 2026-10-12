@@ -4,16 +4,16 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 
 ## Quick Reference
 
-| Error Message | Likely Cause | Solution |
-|---|---|---|
+| Error Message                         | Likely Cause                           | Solution                                                        |
+| ------------------------------------- | -------------------------------------- | --------------------------------------------------------------- |
 | Set your Kavita server URL / auth key | Setting is empty or not an http(s) URL | [How to Verify Your Kavita URL](#how-to-verify-your-kavita-url) |
-| Kavita rejected your auth key | Wrong, expired, or deleted auth key | [Authentication Failed](#authentication-failed) |
-| Kavita endpoint not found (404) | Incorrect server URL | [Network Error (Status 404)](#network-error-status-404) |
-| Cannot reach Kavita | Kavita not running or unreachable | [Connection Refused](#connection-refused) |
-| Unexpected response | Plugin/server version mismatch | [Failed to Parse Response](#failed-to-parse-response) |
-| Cannot write to path | Invalid output path or permissions | [Failed to Write File](#failed-to-write-file) |
-| Folder error | Invalid folder name or path | [Folder Operation Failed](#folder-operation-failed) |
-| No annotations synced | No highlights exist in Kavita | [No Annotations Synced](#no-annotations-synced) |
+| Kavita rejected your auth key         | Wrong, expired, or deleted auth key    | [Authentication Failed](#authentication-failed)                 |
+| Kavita endpoint not found (404)       | Incorrect server URL                   | [Network Error (Status 404)](#network-error-status-404)         |
+| Cannot reach Kavita                   | Kavita not running or unreachable      | [Connection Refused](#connection-refused)                       |
+| Unexpected response                   | Plugin/server version mismatch         | [Failed to Parse Response](#failed-to-parse-response)           |
+| Cannot write to path                  | Invalid output path or permissions     | [Failed to Write File](#failed-to-write-file)                   |
+| Folder error                          | Invalid folder name or path            | [Folder Operation Failed](#folder-operation-failed)             |
+| No annotations synced                 | No highlights exist in Kavita          | [No Annotations Synced](#no-annotations-synced)                 |
 
 ---
 
@@ -99,7 +99,7 @@ This guide covers common errors you may encounter when using the Kavita-to-Obsid
 
 1. Open the plugin settings and check the **Output Path** value.
 2. Verify the path does not contain special characters that are invalid in file names on your operating system (e.g., `<`, `>`, `:`, `"`, `|`, `?`, `*` on Windows).
-3. Subfolders in the output path (e.g., `Kavita/annotations.md`) are created automatically; make sure no *file* already exists with the folder's name.
+3. Subfolders in the output path (e.g., `Kavita/annotations.md`) are created automatically; make sure no _file_ already exists with the folder's name.
 4. Try resetting the output path to a simple value like `kavita-annotations.md` to rule out path issues.
 5. Check that your vault folder is not read-only or located on a locked volume.
 

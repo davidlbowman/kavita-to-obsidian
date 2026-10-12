@@ -48,7 +48,7 @@ updated: 2026-10-12T10:30:00.000Z
 
 > In my younger and more vulnerable years my father gave me some advice...
 
-*Note:* This opening is iconic
+_Note:_ This opening is iconic
 
 <small>Page 3</small>
 
@@ -71,10 +71,12 @@ updated: 2026-10-12T10:30:00.000Z
 # Kavita Annotations
 
 ## The Great Gatsby
+
 **Series:** [[The Great Gatsby]]
 **Library:** Books
 
 ### The Great Gatsby
+
 **Author:** [[F. Scott Fitzgerald]]
 **Book:** [[The Great Gatsby]]
 
@@ -121,20 +123,20 @@ See [How to Find Your Kavita API Key](./TROUBLESHOOTING.md#how-to-find-your-kavi
 
 ## Settings
 
-| Setting | What it does | Default |
-|---------|--------------|---------|
-| **Kavita URL** | Your Kavita server address (http or https) | - |
-| **Kavita auth key** | Auth key (Kavita 0.9+) or API key (0.8.x) | - |
-| **Export mode** | "Single file" or "Hierarchical folders" | Hierarchical folders |
-| **Output path** | Where to save annotations (single file mode); missing folders are created | `kavita-annotations.md` |
-| **Root folder** | Root folder for book notes (hierarchical mode) | `Kavita Annotations` |
-| **Delete orphaned files** | Move book notes to the trash once their annotations are gone from Kavita. Only notes the plugin created (with `kavita_chapter_id` in frontmatter) are ever touched, and nothing is removed if Kavita returns no annotations at all | On |
-| **Include comments** | Include your personal notes with highlights | On |
-| **Include spoilers** | Include highlights marked as spoilers | Off |
-| **Include tags** | Generate Obsidian tags from genres | On |
-| **Tag prefix** | Prefix for generated genre tags (empty uses `genre/` in book notes) | (empty) |
-| **Include wikilinks** | Create links to author/series notes | On |
-| **Annotation template** | How each annotation is rendered; see the setting's description for variables | Blockquote, note, page |
+| Setting                   | What it does                                                                                                                                                                                                                       | Default                 |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| **Kavita URL**            | Your Kavita server address (http or https)                                                                                                                                                                                         | -                       |
+| **Kavita auth key**       | Auth key (Kavita 0.9+) or API key (0.8.x)                                                                                                                                                                                          | -                       |
+| **Export mode**           | "Single file" or "Hierarchical folders"                                                                                                                                                                                            | Hierarchical folders    |
+| **Output path**           | Where to save annotations (single file mode); missing folders are created                                                                                                                                                          | `kavita-annotations.md` |
+| **Root folder**           | Root folder for book notes (hierarchical mode)                                                                                                                                                                                     | `Kavita Annotations`    |
+| **Delete orphaned files** | Move book notes to the trash once their annotations are gone from Kavita. Only notes the plugin created (with `kavita_chapter_id` in frontmatter) are ever touched, and nothing is removed if Kavita returns no annotations at all | On                      |
+| **Include comments**      | Include your personal notes with highlights                                                                                                                                                                                        | On                      |
+| **Include spoilers**      | Include highlights marked as spoilers                                                                                                                                                                                              | Off                     |
+| **Include tags**          | Generate Obsidian tags from genres                                                                                                                                                                                                 | On                      |
+| **Tag prefix**            | Prefix for generated genre tags (empty uses `genre/` in book notes)                                                                                                                                                                | (empty)                 |
+| **Include wikilinks**     | Create links to author/series notes                                                                                                                                                                                                | On                      |
+| **Annotation template**   | How each annotation is rendered; see the setting's description for variables                                                                                                                                                       | Blockquote, note, page  |
 
 Only annotations you own are synced. Highlights that other Kavita users share with you are never written to your vault.
 
@@ -165,7 +167,7 @@ See my highlights from [[kavita-annotations#The Great Gatsby]]
 If you have notes for authors or series, the wikilinks will automatically connect:
 
 ```markdown
-**Author:** [[F. Scott Fitzgerald]]  ← Links to your author note if it exists
+**Author:** [[F. Scott Fitzgerald]] ← Links to your author note if it exists
 ```
 
 ## Troubleshooting
@@ -174,12 +176,12 @@ For detailed solutions to common issues, see the [Troubleshooting Guide](./TROUB
 
 **Quick fixes:**
 
-| Error | Solution |
-|-------|----------|
-| Kavita rejected your auth key | [Create a new auth key](./TROUBLESHOOTING.md#authentication-failed) |
-| Kavita endpoint not found (404) | [Check your Kavita URL](./TROUBLESHOOTING.md#network-error-status-404) |
-| Connection refused | [Ensure Kavita is running](./TROUBLESHOOTING.md#connection-refused) |
-| No annotations synced | [Create highlights in Kavita first](./TROUBLESHOOTING.md#no-annotations-synced) |
+| Error                           | Solution                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------- |
+| Kavita rejected your auth key   | [Create a new auth key](./TROUBLESHOOTING.md#authentication-failed)             |
+| Kavita endpoint not found (404) | [Check your Kavita URL](./TROUBLESHOOTING.md#network-error-status-404)          |
+| Connection refused              | [Ensure Kavita is running](./TROUBLESHOOTING.md#connection-refused)             |
+| No annotations synced           | [Create highlights in Kavita first](./TROUBLESHOOTING.md#no-annotations-synced) |
 
 ## Network & Privacy
 

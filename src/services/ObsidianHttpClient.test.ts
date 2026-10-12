@@ -11,16 +11,22 @@ import {
 	HttpClientRequest,
 	HttpClientResponse,
 } from "effect/http";
-import type { RequestUrlParam } from "obsidian";
+import type { RequestUrlParam, RequestUrlResponse } from "obsidian";
 import { requestUrl } from "../__mocks__/obsidian.js";
 import { ObsidianHttpClient, toRequestUrlParam } from "./ObsidianHttpClient.js";
 
 const KAVITA = new URL("http://kavita.test/api/thing?apiKey=k&pluginName=p");
 
-const respond = (status: number, body: string, headers = {}) => ({
+const respond = (
+	status: number,
+	body: string,
+	headers: Record<string, string> = {},
+): RequestUrlResponse => ({
 	status,
 	headers,
 	arrayBuffer: new TextEncoder().encode(body).buffer,
+	text: body,
+	json: null,
 });
 
 const execute = (request: HttpClientRequest.HttpClientRequest) =>
@@ -34,6 +40,14 @@ const lastParam = (): RequestUrlParam => {
 	assert.isDefined(call);
 	return call?.[0];
 };
+
+const withBody = (body: unknown, contentType?: string) =>
+	toRequestUrlParam(
+		HttpClientRequest.post(KAVITA).pipe(
+			HttpClientRequest.setBody(HttpBody.raw(body, { contentType })),
+		),
+		KAVITA,
+	);
 
 describe("toRequestUrlParam", () => {
 	it.effect("sends JSON bodies as strings with a content type", () =>
@@ -69,13 +83,6 @@ describe("toRequestUrlParam", () => {
 	it.effect("passes raw string, Uint8Array, and ArrayBuffer bodies", () =>
 		Effect.gen(function* () {
 			const buffer = new TextEncoder().encode("abc").buffer;
-			const withBody = (body: unknown, contentType?: string) =>
-				toRequestUrlParam(
-					HttpClientRequest.post(KAVITA).pipe(
-						HttpClientRequest.setBody(HttpBody.raw(body, { contentType })),
-					),
-					KAVITA,
-				);
 			const text = yield* withBody("hello", "text/plain");
 			assert.strictEqual(text.body, "hello");
 			assert.strictEqual(text.contentType, "text/plain");

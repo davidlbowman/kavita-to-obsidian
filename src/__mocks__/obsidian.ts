@@ -6,6 +6,7 @@
  *
  * @module
  */
+import type { RequestUrlParam, RequestUrlResponse } from "obsidian";
 import { vi } from "vitest";
 
 /**
@@ -14,7 +15,8 @@ import { vi } from "vitest";
  * @since 0.0.1
  * @category Mocks
  */
-export const requestUrl = vi.fn();
+export const requestUrl =
+	vi.fn<(param: RequestUrlParam) => Promise<RequestUrlResponse>>();
 
 /**
  * Every notice shown since the last {@link clearCapturedNotices}.

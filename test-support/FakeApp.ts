@@ -118,7 +118,7 @@ export const makeFakeApp = (): FakeApp => {
 		index.delete(node.path);
 		contents.delete(node.path);
 		if (node instanceof TFolder) {
-			for (const child of [...node.children]) {
+			for (const child of node.children.slice()) {
 				if (child instanceof TFile || child instanceof TFolder) detach(child);
 			}
 		}

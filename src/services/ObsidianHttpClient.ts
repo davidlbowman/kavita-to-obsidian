@@ -43,8 +43,7 @@ const toRequestBody = (
 				return new TextDecoder().decode(body.body);
 			if (body.body instanceof ArrayBuffer) return body.body;
 			return null;
-		case "FormData":
-		case "Stream":
+		default:
 			return null;
 	}
 };

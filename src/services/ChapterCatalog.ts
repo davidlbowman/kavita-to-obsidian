@@ -31,18 +31,16 @@ export const toChapterInfo = (
 	volumes: ReadonlyArray<Volume>,
 ): Array<ChapterInfo> =>
 	volumes.flatMap((volume) =>
-		volume.chapters.map(
-			(chapter): ChapterInfo => ({
-				chapterId: chapter.id,
-				bookTitle:
-					nonEmpty(chapter.titleName) ??
-					nonEmpty(volume.name) ??
-					`Volume ${volume.number}`,
-				sortOrder: volume.number,
-				authors: names(chapter.writers?.map((w) => w.name)),
-				genres: names(chapter.genres?.map((g) => g.title)),
-			}),
-		),
+		volume.chapters.map((chapter): ChapterInfo => ({
+			chapterId: chapter.id,
+			bookTitle:
+				nonEmpty(chapter.titleName) ??
+				nonEmpty(volume.name) ??
+				`Volume ${volume.number}`,
+			sortOrder: volume.number,
+			authors: names(chapter.writers?.map((w) => w.name)),
+			genres: names(chapter.genres?.map((g) => g.title)),
+		})),
 	);
 
 /**

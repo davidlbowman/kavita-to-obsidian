@@ -117,6 +117,20 @@ const annotationsOf = Effect.gen(function* () {
 	return yield* (yield* KavitaClient).annotations;
 });
 
+const failingFetch = (response: () => Response | undefined) =>
+	Effect.gen(function* () {
+		const user = yield* sampleOne(KavitaUser);
+		const server = fakeServer((url) =>
+			url.pathname === "/api/Plugin/authenticate" ||
+			url.pathname === "/api/Account"
+				? json(Schema.encodeSync(KavitaUser)(user))
+				: response(),
+		);
+		return yield* Effect.flip(
+			annotationsOf.pipe(Effect.provide(clientLayer(server.layer))),
+		);
+	});
+
 describe("KavitaClient", () => {
 	it.effect(
 		"exchanges the auth key, then fetches only the user's annotations",
@@ -227,20 +241,6 @@ describe("KavitaClient", () => {
 				}
 			}),
 	);
-
-	const failingFetch = (response: () => Response | undefined) =>
-		Effect.gen(function* () {
-			const user = yield* sampleOne(KavitaUser);
-			const server = fakeServer((url) =>
-				url.pathname === "/api/Plugin/authenticate" ||
-				url.pathname === "/api/Account"
-					? json(Schema.encodeSync(KavitaUser)(user))
-					: response(),
-			);
-			return yield* Effect.flip(
-				annotationsOf.pipe(Effect.provide(clientLayer(server.layer))),
-			);
-		});
 
 	it.effect("maps a 401 on a later call to KavitaAuthError", () =>
 		Effect.gen(function* () {

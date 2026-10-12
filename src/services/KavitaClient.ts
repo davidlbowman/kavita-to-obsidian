@@ -66,6 +66,19 @@ export const toKavitaError =
 		});
 	};
 
+const request = <S extends Schema.Decoder<unknown>>(
+	endpoint: string,
+	client: HttpClient.HttpClient,
+	req: HttpClientRequest.HttpClientRequest,
+	schema: S,
+) =>
+	client
+		.execute(req)
+		.pipe(
+			Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
+			Effect.mapError(toKavitaError(endpoint)),
+		);
+
 /**
  * Kavita API client.
  *
@@ -104,19 +117,6 @@ export class KavitaClient extends Context.Service<
 				),
 				HttpClient.filterStatusOk,
 			);
-
-			const request = <S extends Schema.Decoder<unknown>>(
-				endpoint: string,
-				client: HttpClient.HttpClient,
-				req: HttpClientRequest.HttpClientRequest,
-				schema: S,
-			) =>
-				client
-					.execute(req)
-					.pipe(
-						Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
-						Effect.mapError(toKavitaError(endpoint)),
-					);
 
 			const session = yield* request(
 				"/api/Plugin/authenticate",

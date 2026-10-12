@@ -49,7 +49,7 @@ jobs:
       - name: Version consistency
         run: bun run scripts/check-version.ts
 
-      - name: Biome
+      - name: oxlint + oxfmt
         run: bun run lint
 
       - name: Obsidian lint
