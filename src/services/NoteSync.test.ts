@@ -234,14 +234,14 @@ describe("NoteSync, one note per book", () => {
 		}),
 	);
 
-	it.effect("updates a renamed or moved note in place", () =>
+	it.effect("updates a note renamed or moved within the folder", () =>
 		Effect.gen(function* () {
 			const { annotations, extra, ids } = yield* library;
 			const fake = makeFakeApp();
 			let current: Annotations = annotations;
 			const { client } = stubKavita(() => current);
 			yield* sync(fake, client);
-			const moved = "Reading/My Embers notes.md";
+			const moved = `${ROOT}/Favorites/My Embers notes.md`;
 			fake.seed(moved, fake.read(EMBERS) ?? "");
 			yield* trash(fake, EMBERS);
 
@@ -251,6 +251,25 @@ describe("NoteSync, one note per book", () => {
 			assert.strictEqual(summary.notesCreated, 0);
 			assert.isUndefined(fake.read(EMBERS));
 			assert.include(fake.read(moved) ?? "", `annotation=${at(ids, 3)})`);
+		}),
+	);
+
+	it.effect("leaves a note moved out of the folder alone", () =>
+		Effect.gen(function* () {
+			const { annotations } = yield* library;
+			const fake = makeFakeApp();
+			const { client } = stubKavita(() => annotations);
+			yield* sync(fake, client);
+			const original = fake.read(EMBERS) ?? "";
+			const outside = "Reading/My Embers notes.md";
+			fake.seed(outside, original);
+			yield* trash(fake, EMBERS);
+
+			const summary = yield* sync(fake, client);
+
+			assert.strictEqual(summary.notesCreated, 1);
+			assert.strictEqual(fake.read(outside), original);
+			assert.isDefined(fake.read(EMBERS));
 		}),
 	);
 
@@ -414,7 +433,7 @@ describe("NoteSync, one note per book", () => {
 				),
 			);
 			assert.deepStrictEqual(messages, [
-				"Fetching your highlights…",
+				"Getting your highlights…",
 				"Looking up book details…",
 				"Writing 1 of 2: Embers",
 				"Writing 2 of 2: Cinders",

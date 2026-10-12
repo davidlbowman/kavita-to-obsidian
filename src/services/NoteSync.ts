@@ -29,7 +29,7 @@ import {
 } from "../formatters/paths.js";
 import { singleNote } from "../formatters/singleNote.js";
 import type { Book, BookNoteRef, SyncSummary } from "../schemas.js";
-import { fetchChapterInfo, toBooks } from "./ChapterCatalog.js";
+import { loadChapterInfo, toBooks } from "./ChapterCatalog.js";
 import { KavitaClient } from "./KavitaClient.js";
 import { ObsidianVault, type WriteOutcome } from "./ObsidianVault.js";
 import { PluginConfig } from "./PluginConfig.js";
@@ -150,10 +150,10 @@ export class NoteSync extends Context.Service<
 
 			const loadBooks = Effect.gen(function* () {
 				const progress = yield* SyncProgress;
-				yield* progress.report("Fetching your highlights…");
+				yield* progress.report("Getting your highlights…");
 				const annotations = yield* kavita.annotations;
 				yield* progress.report("Looking up book details…");
-				const catalog = yield* fetchChapterInfo(
+				const catalog = yield* loadChapterInfo(
 					kavita,
 					annotations.map((a) => a.seriesId),
 				);
@@ -206,7 +206,7 @@ export class NoteSync extends Context.Service<
 				const progress = yield* SyncProgress;
 				const books = yield* loadBooks;
 				yield* vault.ensureFolder(root);
-				const refs = yield* vault.bookNotes;
+				const refs = yield* vault.bookNotes(root);
 				const claimed = new Set<string>();
 				const written = new Set<string>();
 				const writes: Array<NoteWrite> = [];

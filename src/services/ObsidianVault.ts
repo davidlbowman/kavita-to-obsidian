@@ -38,7 +38,7 @@ export class ObsidianVault extends Context.Service<
 		): Effect.Effect<WriteOutcome, ObsidianWriteError>;
 		exists(path: string): Effect.Effect<boolean>;
 		ensureFolder(path: string): Effect.Effect<void, ObsidianFolderError>;
-		readonly bookNotes: Effect.Effect<ReadonlyArray<BookNoteRef>>;
+		bookNotes(root: string): Effect.Effect<ReadonlyArray<BookNoteRef>>;
 		trashFile(path: string): Effect.Effect<void, ObsidianWriteError>;
 		trashFolderIfEmpty(path: string): Effect.Effect<void, ObsidianFolderError>;
 	}
@@ -112,31 +112,44 @@ export class ObsidianVault extends Context.Service<
 					}),
 			);
 
-			const bookNotes = Effect.sync(() =>
-				vault.getMarkdownFiles().flatMap((file): Array<BookNoteRef> => {
-					const frontmatter = metadataCache.getFileCache(file)?.frontmatter;
-					const id: unknown = frontmatter?.[MANAGED_NOTE_KEY];
-					const added: unknown = frontmatter?.[ADDED_KEY];
-					const title: unknown = frontmatter?.title;
-					const url: unknown = frontmatter?.kavita_url;
-					const chapterId = Predicate.isNumber(id)
-						? id
-						: Predicate.isString(id)
-							? Number(id)
-							: Number.NaN;
-					return Number.isInteger(chapterId)
-						? [
-								{
-									path: file.path,
-									chapterId,
-									added: Predicate.isString(added) ? added : undefined,
-									title: Predicate.isString(title) ? title : undefined,
-									url: Predicate.isString(url) ? url : undefined,
-								},
-							]
-						: [];
-				}),
-			);
+			const bookNoteRef = (file: TFile): Array<BookNoteRef> => {
+				const frontmatter = metadataCache.getFileCache(file)?.frontmatter;
+				const id: unknown = frontmatter?.[MANAGED_NOTE_KEY];
+				const added: unknown = frontmatter?.[ADDED_KEY];
+				const title: unknown = frontmatter?.title;
+				const url: unknown = frontmatter?.kavita_url;
+				const chapterId = Predicate.isNumber(id)
+					? id
+					: Predicate.isString(id)
+						? Number(id)
+						: Number.NaN;
+				return Number.isInteger(chapterId)
+					? [
+							{
+								path: file.path,
+								chapterId,
+								added: Predicate.isString(added) ? added : undefined,
+								title: Predicate.isString(title) ? title : undefined,
+								url: Predicate.isString(url) ? url : undefined,
+							},
+						]
+					: [];
+			};
+
+			const collectBookNotes = (folder: TFolder): Array<BookNoteRef> =>
+				folder.children.flatMap((child) =>
+					child instanceof TFolder
+						? collectBookNotes(child)
+						: child instanceof TFile && child.extension === "md"
+							? bookNoteRef(child)
+							: [],
+				);
+
+			const bookNotes = (root: string) =>
+				Effect.sync(() => {
+					const folder = vault.getAbstractFileByPath(root);
+					return folder instanceof TFolder ? collectBookNotes(folder) : [];
+				});
 
 			const trashFile = Effect.fn("ObsidianVault.trashFile")((path: string) =>
 				Effect.tryPromise({

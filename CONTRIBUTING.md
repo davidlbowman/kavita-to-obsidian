@@ -19,18 +19,19 @@ bun run check
 
 `bun run check` is the same gate CI runs: oxlint (type-aware) and oxfmt, the Obsidian ESLint rules, `tsc` (TypeScript 7), unit tests with coverage thresholds, and a production build.
 
-| Command                                                            | What it does                                                            |
-| ------------------------------------------------------------------ | ----------------------------------------------------------------------- |
-| `bun run dev`                                                      | Development build with inline source maps                               |
-| `bun run build`                                                    | Minified production build (`main.js`)                                   |
-| `bun run lint` / `lint:fix`                                        | oxlint (type-aware) + oxfmt check / auto-fix                            |
-| `bun run format`                                                   | Format with oxfmt                                                       |
-| `bun run dev:vault`                                                | Build, start a seeded Kavita, and open a ready-made Obsidian test vault |
-| `bun run lint:obsidian`                                            | Obsidian plugin review rules (must pass before release)                 |
-| `bun run typecheck`                                                | `tsc --noEmit`                                                          |
-| `bun run test` / `test:watch` / `test:coverage`                    | Unit tests                                                              |
-| `bun run integration`                                              | Fresh Kavita container + live integration tests                         |
-| `bun run integration:up` / `integration:test` / `integration:down` | The same, step by step                                                  |
+| Command                                                            | What it does                                                                                   |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
+| `bun run dev`                                                      | Development build with inline source maps                                                      |
+| `bun run build`                                                    | Minified production build (`main.js`)                                                          |
+| `bun run lint` / `lint:fix`                                        | oxlint (type-aware) + oxfmt check / auto-fix                                                   |
+| `bun run format`                                                   | Format with oxfmt                                                                              |
+| `bun run dev:vault`                                                | Build, start a seeded Kavita, and open a ready-made Obsidian test vault                        |
+| `bun run review:scan`                                              | Approximate the Obsidian community review: whole-repo lint, bundle API check, dependency audit |
+| `bun run lint:obsidian`                                            | Obsidian plugin review rules (must pass before release)                                        |
+| `bun run typecheck`                                                | `tsc --noEmit`                                                                                 |
+| `bun run test` / `test:watch` / `test:coverage`                    | Unit tests                                                                                     |
+| `bun run integration`                                              | Fresh Kavita container + live integration tests                                                |
+| `bun run integration:up` / `integration:test` / `integration:down` | The same, step by step                                                                         |
 
 ## Branches and releases
 
@@ -40,7 +41,7 @@ feature branch ──PR──▶ staging ──PR──▶ main ──▶ GitHub
 
 1. Branch from `staging` (`feat/…`, `fix/…`, `chore/…`) and open a PR **into `staging`**. Reference issues with `Refs #N`.
 2. CI must be green: the `check` job and the live Kavita jobs (0.8.8 and 0.9.1). Feature PRs are **squash-merged** into `staging` (the only method GitHub allows there).
-3. Before a release, try it by hand with `bun run dev:vault` (see below). Then bump the version and open a PR **from `staging` into `main`**, with `Closes #N` for the issues it delivers. CI rejects PRs into `main` from any other branch, and they land as a **merge commit** (the only method allowed on `main`).
+3. Before a release, try it by hand with `bun run dev:vault` (see below), run `bun run review:scan`, and run the Obsidian community review on the `staging` branch until it's clean. The `release` skill in `.claude/skills/` has the full checklist, including hotfixes. Then bump the version and open a PR **from `staging` into `main`**, with `Closes #N` for the issues it delivers. CI rejects PRs into `main` from any other branch, and they land as a **merge commit** (the only method allowed on `main`).
 4. Merging into `main` publishes the release automatically: the `Release` workflow builds, attests, and creates a GitHub release tagged with the manifest version (Obsidian requires the tag to equal the version, no `v` prefix). If that version is already released, the workflow does nothing.
 
 Both branches are protected by rulesets: changes land only through PRs, and force-pushes and deletion are blocked.

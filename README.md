@@ -5,7 +5,7 @@ Bring your reading highlights and notes from [Kavita](https://www.kavitareader.c
 - **One note per book.** Highlights are grouped by chapter in reading order and colored to match your Kavita highlight colors.
 - **Back to the page.** Every highlight links straight to its exact spot in Kavita's reader, and each book links to the book.
 - **Covers and a library.** Each note can show the book's cover, and an optional library view (an Obsidian base) shows all your books as cover cards.
-- **Your notes stay yours.** Each note ends with a **My notes** heading. Anything you write under it, and any properties you add, are kept on every sync.
+- **Your notes stay yours.** Each note ends with a **My notes** heading. Anything you write under it, and any properties you add, are kept on every sync. Rename notes or reorganize them inside the folder freely.
 - **Native and searchable.** Properties work with Bases and Dataview, and the settings are searchable.
 
 ## What a book note looks like
@@ -105,8 +105,8 @@ Other commands:
 | **Highlight template**                  | Customize each highlight, with a live preview of your own highlights                            | Callout                 |
 | **Link authors and series**             | Write authors and series as `[[links]]`                                                         | On                      |
 | **Add tags** / **Genre tag prefix**     | Tag notes by series, author, and genre                                                          | On / `genre/`           |
-| **Sync when Obsidian starts**           | Fetch new highlights when the vault opens                                                       | Off                     |
-| **Sync automatically**                  | Fetch new highlights every 15 minutes to 3 hours                                                | Off                     |
+| **Sync when Obsidian starts**           | Check for new highlights when the vault opens                                                   | Off                     |
+| **Sync automatically**                  | Check for new highlights every 15 minutes to 3 hours                                            | Off                     |
 
 ### Highlight template
 
@@ -118,11 +118,20 @@ Every error tells you what went wrong and links to the fix. See the [troubleshoo
 
 ## Network & Privacy
 
-This plugin connects only to your own Kavita server.
+This plugin connects only to your own Kavita server. All requests go through Obsidian's `requestUrl` to the server URL you configure:
 
-- **Connects to:** your configured Kavita server URL only (no third-party services).
-- **Authentication:** exchanges your auth key for a short-lived session token through Kavita's plugin authentication endpoint, then uses that token for every other request. The auth key is stored in Obsidian's secret storage, not in your vault.
-- **Data fetched:** your account, your highlights, book details, and cover images, through Kavita's API. It's read-only: the plugin never changes anything in Kavita.
+| Request                             | Why                                                                  |
+| ----------------------------------- | -------------------------------------------------------------------- |
+| `POST /api/Plugin/authenticate`     | Exchange your auth key for a short-lived session token               |
+| `GET /api/Account`                  | Find out which user the key belongs to, so only your highlights sync |
+| `POST /api/Annotation/all-filtered` | Get your highlights                                                  |
+| `GET /api/Series/volumes`           | Get book titles, authors, and genres                                 |
+| `GET /api/Image/chapter-cover`      | Download covers (only when **Download book covers** is on)           |
+
+- **Read-only:** the plugin never changes anything in Kavita.
+- **Auth key:** stored in Obsidian's secret storage, not in your vault.
+- **Open in Kavita:** the **Open this book in Kavita** command and the links in your notes open Kavita in your browser.
+- **Vault access:** the plugin only reads and writes inside its own notes folder (and the single note, in one-note mode).
 - **Only yours:** highlights other Kavita users share with you are never synced.
 - **No telemetry:** no analytics or usage data, and nothing is sent anywhere else.
 

@@ -19,7 +19,6 @@ export class ObsidianApp extends Context.Service<
 		readonly vault: Pick<
 			Vault,
 			| "getAbstractFileByPath"
-			| "getMarkdownFiles"
 			| "read"
 			| "create"
 			| "createBinary"

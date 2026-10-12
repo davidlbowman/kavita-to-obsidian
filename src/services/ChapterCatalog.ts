@@ -65,7 +65,7 @@ export const toChapterInfo = (
  * @since 2.0.0
  * @category Chapter Catalog
  */
-export const fetchChapterInfo = Effect.fn("ChapterCatalog.fetchChapterInfo")(
+export const loadChapterInfo = Effect.fn("ChapterCatalog.loadChapterInfo")(
 	function* (kavita: KavitaClient["Service"], seriesIds: Iterable<number>) {
 		const perSeries = yield* Effect.forEach(
 			new Set(seriesIds),
