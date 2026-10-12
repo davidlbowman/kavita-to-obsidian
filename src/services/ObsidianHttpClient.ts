@@ -4,13 +4,11 @@
  * @module
  */
 import { Effect, Layer, Predicate } from "effect";
-import {
-	type HttpBody,
-	HttpClient,
-	HttpClientError,
-	type HttpClientRequest,
-	HttpClientResponse,
-} from "effect/http";
+import type * as HttpBody from "effect/http/HttpBody";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientError from "effect/http/HttpClientError";
+import type * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { type RequestUrlParam, requestUrl } from "obsidian";
 
 const NULL_BODY_STATUSES: ReadonlySet<number> = new Set([101, 204, 205, 304]);

@@ -4,7 +4,7 @@
  * @module
  */
 import { Effect, Layer } from "effect";
-import type { HttpClient } from "effect/http";
+import type * as HttpClient from "effect/http/HttpClient";
 import type { ConnectionInfo, PluginSettings, SyncSummary } from "./schemas.js";
 import { KavitaClient } from "./services/KavitaClient.js";
 import { NoteSync } from "./services/NoteSync.js";
