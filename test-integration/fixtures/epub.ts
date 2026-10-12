@@ -1,12 +1,11 @@
 /**
  * Minimal, dependency-free EPUB 3 builder for integration fixtures.
  *
- * Writes a STORE-only ZIP so no `zip` binary is needed on the host or in CI.
+ * Writes a STORE-only ZIP so no `zip` binary is needed on the host or in CI,
+ * using only web-standard APIs (no Node.js modules).
  *
  * @module
  */
-import { crc32, deflateSync } from "node:zlib";
-
 /**
  * A single chapter of fixture book content.
  *
@@ -122,27 +121,89 @@ const chapterXhtml = (
 </body>
 </html>`;
 
-const u16 = (n: number): Buffer => {
-	const b = Buffer.alloc(2);
-	b.writeUInt16LE(n);
-	return b;
+const encoder = new TextEncoder();
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+	let c = n;
+	for (let k = 0; k < 8; k++) {
+		c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+	}
+	return c >>> 0;
+});
+
+/**
+ * CRC-32 as used by ZIP and PNG.
+ *
+ * @since 2.0.0
+ * @category Fixtures
+ */
+export const crc32 = (data: Uint8Array): number => {
+	let crc = 0xffffffff;
+	for (const byte of data) {
+		crc = (CRC_TABLE[(crc ^ byte) & 0xff] ?? 0) ^ (crc >>> 8);
+	}
+	return (crc ^ 0xffffffff) >>> 0;
 };
 
-const u32 = (n: number): Buffer => {
-	const b = Buffer.alloc(4);
-	b.writeUInt32LE(n >>> 0);
-	return b;
+const adler32 = (data: Uint8Array): number => {
+	let a = 1;
+	let b = 0;
+	for (const byte of data) {
+		a = (a + byte) % 65521;
+		b = (b + a) % 65521;
+	}
+	return ((b << 16) | a) >>> 0;
 };
 
-const pngChunk = (type: string, data: Buffer): Buffer => {
-	const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
-	return Buffer.concat([u32be(data.length), body, u32be(crc32(body))]);
+const concat = (parts: ReadonlyArray<Uint8Array>): Uint8Array => {
+	const out = new Uint8Array(parts.reduce((sum, part) => sum + part.length, 0));
+	let offset = 0;
+	for (const part of parts) {
+		out.set(part, offset);
+		offset += part.length;
+	}
+	return out;
 };
 
-const u32be = (n: number): Buffer => {
-	const b = Buffer.alloc(4);
-	b.writeUInt32BE(n >>> 0);
-	return b;
+const bytes = (size: number, write: (view: DataView) => void): Uint8Array => {
+	const out = new Uint8Array(size);
+	write(new DataView(out.buffer));
+	return out;
+};
+
+const u16 = (n: number) => bytes(2, (v) => v.setUint16(0, n, true));
+const u32 = (n: number) => bytes(4, (v) => v.setUint32(0, n >>> 0, true));
+const u32be = (n: number) => bytes(4, (v) => v.setUint32(0, n >>> 0));
+
+const MAX_STORED_BLOCK = 65535;
+
+/**
+ * Wrap data in a zlib stream of uncompressed deflate blocks.
+ *
+ * @since 2.0.0
+ * @category Fixtures
+ */
+export const zlibStored = (data: Uint8Array): Uint8Array => {
+	const blocks: Array<Uint8Array> = [Uint8Array.of(0x78, 0x01)];
+	for (let start = 0; start < data.length || start === 0;) {
+		const chunk = data.subarray(start, start + MAX_STORED_BLOCK);
+		start += MAX_STORED_BLOCK;
+		const last = start >= data.length;
+		blocks.push(
+			Uint8Array.of(last ? 1 : 0),
+			u16(chunk.length),
+			u16(~chunk.length & 0xffff),
+			chunk,
+		);
+		if (last) break;
+	}
+	blocks.push(u32be(adler32(data)));
+	return concat(blocks);
+};
+
+const pngChunk = (type: string, data: Uint8Array): Uint8Array => {
+	const body = concat([encoder.encode(type), data]);
+	return concat([u32be(data.length), body, u32be(crc32(body))]);
 };
 
 const lighten = (channel: number) => Math.min(255, channel + 70);
@@ -153,31 +214,34 @@ const lighten = (channel: number) => Math.min(255, channel + 70);
  * @since 2.0.0
  * @category Fixtures
  */
-export const coverPng = (color: readonly [number, number, number]): Buffer => {
+export const coverPng = (
+	color: readonly [number, number, number],
+): Uint8Array => {
 	const width = 300;
 	const height = 450;
 	const [r, g, b] = color;
-	const rows: Array<Buffer> = [];
+	const stride = 1 + width * 3;
+	const pixels = new Uint8Array(stride * height);
 	for (let y = 0; y < height; y++) {
 		const band = y > 150 && y < 230;
-		const row = Buffer.alloc(1 + width * 3);
 		for (let x = 0; x < width; x++) {
-			row[1 + x * 3] = band ? lighten(r) : r;
-			row[2 + x * 3] = band ? lighten(g) : g;
-			row[3 + x * 3] = band ? lighten(b) : b;
+			const at = y * stride + 1 + x * 3;
+			pixels[at] = band ? lighten(r) : r;
+			pixels[at + 1] = band ? lighten(g) : g;
+			pixels[at + 2] = band ? lighten(b) : b;
 		}
-		rows.push(row);
 	}
-	const header = Buffer.alloc(13);
-	header.writeUInt32BE(width, 0);
-	header.writeUInt32BE(height, 4);
-	header.writeUInt8(8, 8);
-	header.writeUInt8(2, 9);
-	return Buffer.concat([
-		Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+	const header = bytes(13, (v) => {
+		v.setUint32(0, width);
+		v.setUint32(4, height);
+		v.setUint8(8, 8);
+		v.setUint8(9, 2);
+	});
+	return concat([
+		Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a),
 		pngChunk("IHDR", header),
-		pngChunk("IDAT", deflateSync(Buffer.concat(rows))),
-		pngChunk("IEND", Buffer.alloc(0)),
+		pngChunk("IDAT", zlibStored(pixels)),
+		pngChunk("IEND", new Uint8Array(0)),
 	]);
 };
 
@@ -188,31 +252,30 @@ export const coverPng = (color: readonly [number, number, number]): Buffer => {
  * @category Fixtures
  */
 export const storeZip = (
-	entries: ReadonlyArray<readonly [name: string, content: string | Buffer]>,
-): Buffer => {
-	const locals: Array<Buffer> = [];
-	const centrals: Array<Buffer> = [];
+	entries: ReadonlyArray<readonly [name: string, content: string | Uint8Array]>,
+): Uint8Array => {
+	const locals: Array<Uint8Array> = [];
+	const centrals: Array<Uint8Array> = [];
 	let offset = 0;
 	for (const [name, content] of entries) {
-		const nameBuf = Buffer.from(name, "utf8");
+		const nameBytes = encoder.encode(name);
 		const data =
-			typeof content === "string" ? Buffer.from(content, "utf8") : content;
-		const crc = crc32(data);
-		const shared = Buffer.concat([
+			typeof content === "string" ? encoder.encode(content) : content;
+		const shared = concat([
 			u16(20),
 			u16(0x0800),
 			u16(0),
 			u16(0),
 			u16(0x21),
-			u32(crc),
+			u32(crc32(data)),
 			u32(data.length),
 			u32(data.length),
-			u16(nameBuf.length),
+			u16(nameBytes.length),
 			u16(0),
 		]);
-		const local = Buffer.concat([u32(0x04034b50), shared, nameBuf, data]);
+		const local = concat([u32(0x04034b50), shared, nameBytes, data]);
 		centrals.push(
-			Buffer.concat([
+			concat([
 				u32(0x02014b50),
 				u16(20),
 				shared,
@@ -221,14 +284,14 @@ export const storeZip = (
 				u16(0),
 				u32(0),
 				u32(offset),
-				nameBuf,
+				nameBytes,
 			]),
 		);
 		locals.push(local);
 		offset += local.length;
 	}
-	const central = Buffer.concat(centrals);
-	const end = Buffer.concat([
+	const central = concat(centrals);
+	const end = concat([
 		u32(0x06054b50),
 		u16(0),
 		u16(0),
@@ -238,7 +301,7 @@ export const storeZip = (
 		u32(offset),
 		u16(0),
 	]);
-	return Buffer.concat([...locals, central, end]);
+	return concat([...locals, central, end]);
 };
 
 /**
@@ -249,7 +312,7 @@ export const storeZip = (
  * @since 2.0.0
  * @category Fixtures
  */
-export const buildEpub = (book: EpubBook): Buffer =>
+export const buildEpub = (book: EpubBook): Uint8Array =>
 	storeZip([
 		["mimetype", "application/epub+zip"],
 		["META-INF/container.xml", containerXml],
