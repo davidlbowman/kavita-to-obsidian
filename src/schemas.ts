@@ -38,6 +38,7 @@ export const Annotation = Schema.Struct({
 	chapterTitle: Schema.NullOr(Schema.String),
 	containsSpoiler: Schema.Boolean,
 	pageNumber: Schema.Int,
+	selectedSlotIndex: Schema.Int,
 	seriesName: Schema.NullOr(Schema.String),
 	libraryName: Schema.NullOr(Schema.String),
 	chapterId: Schema.Int,
@@ -46,6 +47,7 @@ export const Annotation = Schema.Struct({
 	libraryId: Schema.Int,
 	ownerUserId: Schema.Int,
 	createdUtc: Schema.String,
+	lastModifiedUtc: Schema.String,
 });
 
 /**
@@ -90,6 +92,7 @@ export const Genre = Schema.Struct({
  */
 export const Chapter = Schema.Struct({
 	id: Schema.Int,
+	createdUtc: Schema.optionalKey(Schema.NullOr(Schema.String)),
 	titleName: Schema.optionalKey(Schema.NullOr(Schema.String)),
 	writers: Schema.optionalKey(NullableArray(Person)),
 	genres: Schema.optionalKey(NullableArray(Genre)),
@@ -149,7 +152,15 @@ export const PluginSession = Schema.Struct({
  */
 export const CurrentUser = Schema.Struct({
 	id: Schema.Int,
+	username: Schema.optionalKey(Schema.NullOr(Schema.String)),
+	kavitaVersion: Schema.optionalKey(Schema.NullOr(Schema.String)),
 });
+
+/**
+ * @since 2.0.0
+ * @category Kavita Schemas
+ */
+export type CurrentUser = typeof CurrentUser.Type;
 
 /**
  * Book-level metadata for one chapter, resolved from its volume.
@@ -159,6 +170,7 @@ export const CurrentUser = Schema.Struct({
  */
 export const ChapterInfo = Schema.Struct({
 	chapterId: Schema.Int,
+	added: Schema.String,
 	bookTitle: Schema.String,
 	sortOrder: Schema.Finite,
 	authors: Schema.Array(Schema.String),
@@ -172,16 +184,19 @@ export const ChapterInfo = Schema.Struct({
 export type ChapterInfo = typeof ChapterInfo.Type;
 
 /**
- * One book's annotations plus the metadata for its vault note.
+ * One book's highlights plus the metadata for its note.
  *
  * @since 1.1.0
  * @category Sync Schemas
  */
-export const BookFile = Schema.Struct({
+export const Book = Schema.Struct({
 	bookTitle: Schema.String,
 	seriesName: Schema.String,
+	seriesIndex: Schema.Finite,
 	seriesId: Schema.Int,
 	chapterId: Schema.Int,
+	libraryId: Schema.Int,
+	added: Schema.String,
 	authors: Schema.Array(Schema.String),
 	genres: Schema.Array(Schema.String),
 	annotations: Schema.Array(Annotation),
@@ -191,45 +206,89 @@ export const BookFile = Schema.Struct({
  * @since 1.1.0
  * @category Sync Schemas
  */
-export type BookFile = typeof BookFile.Type;
+export type Book = typeof Book.Type;
 
 /**
- * Outcome of a single-file sync.
+ * A book note found in the vault, with the identity it carries.
  *
- * @since 0.0.1
+ * @since 2.0.0
  * @category Sync Schemas
  */
-export const SingleFileSyncResult = Schema.Struct({
-	annotationCount: Schema.Int,
-	outputPath: Schema.String,
+export const BookNoteRef = Schema.Struct({
+	path: Schema.String,
+	chapterId: Schema.Int,
+	added: Schema.UndefinedOr(Schema.String),
+	title: Schema.UndefinedOr(Schema.String),
+	url: Schema.UndefinedOr(Schema.String),
 });
 
 /**
- * @since 0.0.1
+ * @since 2.0.0
  * @category Sync Schemas
  */
-export type SingleFileSyncResult = typeof SingleFileSyncResult.Type;
+export type BookNoteRef = typeof BookNoteRef.Type;
 
 /**
- * Outcome of a hierarchical sync.
+ * Kavita's five highlight colors, in highlight-slot order.
  *
- * @since 1.1.0
+ * @since 2.0.0
  * @category Sync Schemas
  */
-export const HierarchicalSyncResult = Schema.Struct({
-	annotationCount: Schema.Int,
-	seriesCount: Schema.Int,
-	bookCount: Schema.Int,
-	filesCreated: Schema.Int,
-	filesUpdated: Schema.Int,
-	filesDeleted: Schema.Int,
+export const HighlightColor = Schema.Literals([
+	"cyan",
+	"green",
+	"yellow",
+	"orange",
+	"magenta",
+]);
+
+/**
+ * @since 2.0.0
+ * @category Sync Schemas
+ */
+export type HighlightColor = typeof HighlightColor.Type;
+
+/**
+ * What a sync did, for the summary notice and the settings status row.
+ *
+ * @since 2.0.0
+ * @category Sync Schemas
+ */
+export const SyncSummary = Schema.Struct({
+	highlights: Schema.Int,
+	newHighlights: Schema.Int,
+	books: Schema.Int,
+	notesCreated: Schema.Int,
+	notesUpdated: Schema.Int,
+	notesUnchanged: Schema.Int,
+	notesDeleted: Schema.Int,
+	openPath: Schema.String,
 });
 
 /**
- * @since 1.1.0
+ * @since 2.0.0
  * @category Sync Schemas
  */
-export type HierarchicalSyncResult = typeof HierarchicalSyncResult.Type;
+export type SyncSummary = typeof SyncSummary.Type;
+
+/**
+ * Who and what a working connection reaches.
+ *
+ * @since 2.0.0
+ * @category Sync Schemas
+ */
+export const ConnectionInfo = Schema.Struct({
+	username: Schema.String,
+	kavitaVersion: Schema.String,
+	highlights: Schema.Int,
+	books: Schema.Int,
+});
+
+/**
+ * @since 2.0.0
+ * @category Sync Schemas
+ */
+export type ConnectionInfo = typeof ConnectionInfo.Type;
 
 /**
  * How annotations are laid out in the vault.
@@ -246,12 +305,12 @@ export const ExportMode = Schema.Literals(["single-file", "hierarchical"]);
 export type ExportMode = typeof ExportMode.Type;
 
 /**
- * Default template for rendering one annotation.
+ * The default template before 2.0; settings still holding it are upgraded.
  *
- * @since 1.2.0
+ * @since 2.0.0
  * @category Plugin Schemas
  */
-export const DEFAULT_ANNOTATION_TEMPLATE = `{{blockquote}}
+export const LEGACY_ANNOTATION_TEMPLATE = `{{blockquote}}
 {{#if comment}}
 
 *Note:* {{comment}}
@@ -260,6 +319,18 @@ export const DEFAULT_ANNOTATION_TEMPLATE = `{{blockquote}}
 
 <small>Page {{pageNumber}}</small>
 {{/if}}`;
+
+/**
+ * Default template for rendering one highlight: a callout colored like the
+ * Kavita highlight, titled with a link back to it in Kavita's reader.
+ *
+ * @since 1.2.0
+ * @category Plugin Schemas
+ */
+export const DEFAULT_ANNOTATION_TEMPLATE = `> [!{{callout}}]{{fold}} [{{location}}]({{link}})
+{{quote}}{{#if comment}}
+>
+> **Note:** {{commentQuote}}{{/if}}`;
 
 /**
  * A stored setting that falls back to its default when missing or malformed,
@@ -281,27 +352,45 @@ const setting = <S extends Schema.Codec<unknown, unknown>>(
 };
 
 /**
+ * Minutes between automatic syncs; `0` turns automatic sync off.
+ *
+ * @since 2.0.0
+ * @category Plugin Schemas
+ */
+export const SyncInterval = Schema.Literals([0, 15, 30, 60, 180]);
+
+/**
  * Plugin settings as persisted in the vault's `data.json`.
  *
  * Decoding never fails: unknown keys are dropped and missing or malformed
- * values take their defaults.
+ * values take their defaults. The auth key itself lives in Obsidian's secret
+ * storage; `authKeySecret` is only the name of that secret.
  *
  * @since 0.0.1
  * @category Plugin Schemas
  */
 export const PluginSettings = Schema.Struct({
 	kavitaUrl: setting(Schema.String, ""),
+	authKeySecret: setting(Schema.String, ""),
 	kavitaApiKey: setting(Schema.String, ""),
 	exportMode: setting(ExportMode, "hierarchical"),
 	outputPath: setting(Schema.String, "kavita-annotations.md"),
 	rootFolderName: setting(Schema.String, "Kavita Annotations"),
 	deleteOrphanedFiles: setting(Schema.Boolean, true),
+	downloadCovers: setting(Schema.Boolean, true),
+	createLibraryView: setting(Schema.Boolean, false),
 	includeComments: setting(Schema.Boolean, true),
 	includeSpoilers: setting(Schema.Boolean, false),
+	highlightColors: setting(Schema.Boolean, true),
 	includeTags: setting(Schema.Boolean, true),
 	tagPrefix: setting(Schema.String, ""),
 	includeWikilinks: setting(Schema.Boolean, true),
 	annotationTemplate: setting(Schema.String, DEFAULT_ANNOTATION_TEMPLATE),
+	syncOnStartup: setting(Schema.Boolean, false),
+	syncInterval: setting(SyncInterval, 0),
+	setupDismissed: setting(Schema.Boolean, false),
+	lastSyncedAt: setting(Schema.String, ""),
+	lastSyncSummary: setting(Schema.String, ""),
 });
 
 /**
@@ -316,13 +405,18 @@ const decodeSettingsObject = Schema.decodeUnknownSync(PluginSettings);
  * Decode whatever Obsidian loaded from `data.json` into complete settings.
  *
  * Anything that is not an object (a corrupt or hand-edited file) is treated
- * as a fresh install rather than failing plugin load.
+ * as a fresh install rather than failing plugin load. A template still equal
+ * to the pre-2.0 default is upgraded to the current default.
  *
  * @since 2.0.0
  * @category Plugin Schemas
  */
-export const decodePluginSettings = (input: unknown): PluginSettings =>
-	decodeSettingsObject(Predicate.isObject(input) ? input : {});
+export const decodePluginSettings = (input: unknown): PluginSettings => {
+	const settings = decodeSettingsObject(Predicate.isObject(input) ? input : {});
+	return settings.annotationTemplate === LEGACY_ANNOTATION_TEMPLATE
+		? { ...settings, annotationTemplate: DEFAULT_ANNOTATION_TEMPLATE }
+		: settings;
+};
 
 /**
  * Settings for a fresh install.
@@ -333,7 +427,7 @@ export const decodePluginSettings = (input: unknown): PluginSettings =>
 export const DEFAULT_SETTINGS: PluginSettings = decodePluginSettings({});
 
 /**
- * The annotation-formatting subset of the settings.
+ * The note-formatting subset of the settings.
  *
  * @since 0.0.1
  * @category Plugin Schemas
@@ -341,6 +435,7 @@ export const DEFAULT_SETTINGS: PluginSettings = decodePluginSettings({});
 export const FormatOptions = PluginSettings.mapFields((fields) => ({
 	includeComments: fields.includeComments,
 	includeSpoilers: fields.includeSpoilers,
+	highlightColors: fields.highlightColors,
 	includeTags: fields.includeTags,
 	tagPrefix: fields.tagPrefix,
 	includeWikilinks: fields.includeWikilinks,

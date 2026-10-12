@@ -4,12 +4,8 @@
  * @module
  */
 import { readFileSync } from "node:fs";
-import { beforeEach, describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
-import {
-	capturedNotices,
-	clearCapturedNotices,
-} from "../__mocks__/obsidian.js";
 import {
 	InvalidSettingsError,
 	KavitaAuthError,
@@ -19,11 +15,7 @@ import {
 	ObsidianWriteError,
 	type SyncError,
 } from "../errors.js";
-import {
-	describeSyncError,
-	showErrorNotice,
-	TROUBLESHOOTING_URL,
-} from "./errorNotice.js";
+import { describeSyncError, TROUBLESHOOTING_URL } from "./errorNotice.js";
 
 const slugify = (heading: string): string =>
 	heading
@@ -49,12 +41,17 @@ const everyError: ReadonlyArray<SyncError> = [
 		statusCode: 401,
 	}),
 	new KavitaNetworkError({ endpoint: "/api/Series/volumes", statusCode: 404 }),
+	new KavitaNetworkError({
+		endpoint: "/api/Annotation/all-filtered",
+		statusCode: 404,
+	}),
 	new KavitaNetworkError({ endpoint: "/api/Series/volumes", statusCode: 500 }),
 	new KavitaNetworkError({ endpoint: "/api/Series/volumes" }),
 	new KavitaParseError({
 		endpoint: "/api/Annotation/all-filtered",
 		cause: "x",
 	}),
+	new KavitaParseError({ endpoint: "/api/Plugin/authenticate", cause: "x" }),
 	new ObsidianWriteError({ path: "Kavita/Book.md" }),
 	new ObsidianFolderError({ path: "Kavita", operation: "create" }),
 	new ObsidianFolderError({ path: "Kavita/Old", operation: "delete" }),
@@ -90,68 +87,101 @@ describe("describeSyncError", () => {
 			),
 		).toEqual({
 			message:
-				"Kavita rejected your auth key. Check it in the plugin settings.",
+				"Kavita rejected the auth key. Create a new one and paste it in the plugin settings.",
 			anchor: "#authentication-failed",
 		});
 	});
 
+	it("tells an old server apart from a wrong URL", () => {
+		expect(
+			describeSyncError(
+				new KavitaNetworkError({
+					endpoint: "/api/Annotation/all-filtered",
+					statusCode: 404,
+				}),
+			).message,
+		).toBe(
+			"This Kavita server doesn't support highlights. Update Kavita to 0.8.8 or newer.",
+		);
+		expect(
+			describeSyncError(
+				new KavitaNetworkError({
+					endpoint: "/api/Plugin/authenticate",
+					statusCode: 404,
+				}),
+			),
+		).toEqual({
+			message: "No Kavita server found at that URL. Check the server URL.",
+			anchor: "#network-error-status-404",
+		});
+	});
+
 	it.prop(
-		"distinguishes 404s from other network failures",
-		{ endpoint: Schema.String },
-		({ endpoint }) => {
-			expect(
-				describeSyncError(
-					new KavitaNetworkError({ endpoint, statusCode: 404 }),
-				),
-			).toEqual({
-				message: "Kavita endpoint not found. Check your server URL.",
-				anchor: "#network-error-status-404",
-			});
-			const refused = new KavitaNetworkError({ endpoint });
-			expect(describeSyncError(refused)).toEqual({
-				message: `Cannot reach Kavita: ${refused.message}`,
+		"separates unreachable servers from server errors",
+		{
+			endpoint: Schema.String,
+			status: Schema.Int.check(Schema.isGreaterThanOrEqualTo(405)),
+		},
+		({ endpoint, status }) => {
+			expect(describeSyncError(new KavitaNetworkError({ endpoint }))).toEqual({
+				message:
+					"Can't reach the Kavita server. Check that it's running and the URL is right.",
 				anchor: "#connection-refused",
 			});
+			expect(
+				describeSyncError(
+					new KavitaNetworkError({ endpoint, statusCode: status }),
+				).message,
+			).toBe(`Kavita answered with an error (${status}). Try again shortly.`);
 		},
 	);
 
+	it("tells a non-Kavita server apart from an unsupported version", () => {
+		expect(
+			describeSyncError(
+				new KavitaParseError({
+					endpoint: "/api/Plugin/authenticate",
+					cause: null,
+				}),
+			),
+		).toEqual({
+			message:
+				"That URL doesn't look like a Kavita server. Check the server URL.",
+			anchor: "#how-to-verify-your-kavita-url",
+		});
+		expect(
+			describeSyncError(
+				new KavitaParseError({ endpoint: "/api/Series/volumes", cause: null }),
+			),
+		).toEqual({
+			message:
+				"Kavita sent something unexpected. Your server version may be unsupported.",
+			anchor: "#failed-to-parse-response",
+		});
+	});
+
 	it.prop(
-		"names the endpoint or path involved",
-		{ endpoint: Schema.String, path: Schema.String },
-		({ endpoint, path }) => {
-			expect(
-				describeSyncError(new KavitaParseError({ endpoint, cause: null }))
-					.message,
-			).toContain(`(${endpoint})`);
+		"names the path involved in vault failures",
+		{ path: Schema.String },
+		({ path }) => {
 			expect(describeSyncError(new ObsidianWriteError({ path })).message).toBe(
-				`Cannot write ${path}. Check the path is valid.`,
+				`Couldn't write ${path}. Check the folder and note names in settings.`,
 			);
 			expect(
 				describeSyncError(
 					new ObsidianFolderError({ path, operation: "delete" }),
 				).message,
-			).toBe(`Cannot delete folder ${path}. Check the folder name is valid.`);
+			).toBe(
+				`Couldn't delete the folder ${path}. Check the folder name in settings.`,
+			);
 		},
 	);
 });
 
-describe("showErrorNotice", () => {
-	beforeEach(clearCapturedNotices);
-
-	it("shows the message and a lasting troubleshooting link", () => {
-		showErrorNotice(
-			new KavitaAuthError({ endpoint: "/api/x", statusCode: 401 }),
+describe("TROUBLESHOOTING_URL", () => {
+	it("points at the troubleshooting guide on GitHub", () => {
+		expect(TROUBLESHOOTING_URL).toBe(
+			"https://github.com/davidlbowman/kavita-to-obsidian/blob/main/TROUBLESHOOTING.md",
 		);
-		expect(capturedNotices).toEqual([
-			{
-				message:
-					"Kavita rejected your auth key. Check it in the plugin settings.",
-				timeout: undefined,
-			},
-			{
-				message: `See troubleshooting: ${TROUBLESHOOTING_URL}#authentication-failed`,
-				timeout: 8000,
-			},
-		]);
 	});
 });

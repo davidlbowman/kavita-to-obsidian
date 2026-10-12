@@ -4,7 +4,7 @@
  * @module
  */
 import { assert, describe, it } from "@effect/vitest";
-import { Arbitrary, Effect, Layer, Schema } from "effect";
+import { Arbitrary, Effect, Layer, Option, Schema } from "effect";
 import {
 	HttpClient,
 	HttpClientError,
@@ -19,7 +19,12 @@ import {
 	PluginSession,
 	Volumes,
 } from "../schemas.js";
-import { KavitaClient, PLUGIN_NAME, toKavitaError } from "./KavitaClient.js";
+import {
+	imageExtension,
+	KavitaClient,
+	PLUGIN_NAME,
+	toKavitaError,
+} from "./KavitaClient.js";
 import { PluginConfig } from "./PluginConfig.js";
 
 /**
@@ -116,6 +121,26 @@ const wire = <S extends Schema.Codec<unknown, unknown>>(
 const annotationsOf = Effect.gen(function* () {
 	return yield* (yield* KavitaClient).annotations;
 });
+
+const clientOf = Effect.gen(function* () {
+	return yield* KavitaClient;
+});
+
+/**
+ * A server that authenticates `user`, then answers covers with `cover`.
+ */
+const coverServer = (
+	user: typeof KavitaUser.Type,
+	cover: () => Response | undefined,
+) =>
+	fakeServer((url) =>
+		url.pathname === "/api/Plugin/authenticate" ||
+		url.pathname === "/api/Account"
+			? json(Schema.encodeSync(KavitaUser)(user))
+			: url.pathname === "/api/Image/chapter-cover"
+				? cover()
+				: json({}, 404),
+	);
 
 const failingFetch = (response: () => Response | undefined) =>
 	Effect.gen(function* () {
@@ -310,4 +335,120 @@ describe("KavitaClient", () => {
 			assert.strictEqual(error.endpoint, "/x");
 		}),
 	);
+
+	it.effect("exposes the account the auth key belongs to", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const server = coverServer(user, () => json({}, 404));
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			assert.deepStrictEqual(
+				client.user,
+				Schema.decodeUnknownSync(CurrentUser)(
+					JSON.parse(JSON.stringify(Schema.encodeSync(KavitaUser)(user))),
+				),
+			);
+		}),
+	);
+
+	it.effect("reads an account without username or version", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const server = fakeServer(() => json({ id: user.id, token: user.token }));
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			assert.strictEqual(client.user.id, user.id);
+			assert.isUndefined(client.user.username);
+			assert.isUndefined(client.user.kavitaVersion);
+		}),
+	);
+
+	it.effect.each([
+		["image/jpeg", "jpg"],
+		["image/png", "png"],
+		["image/webp; charset=binary", "webp"],
+		["image/gif", "gif"],
+	])("downloads a %s cover", ([contentType, extension]) =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const chapterId = yield* sampleOne(Schema.Int);
+			const bytes = new TextEncoder().encode("cover-bytes");
+			const server = coverServer(
+				user,
+				() =>
+					new Response(bytes, {
+						status: 200,
+						headers: { "content-type": contentType ?? "" },
+					}),
+			);
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			const cover = yield* client.cover(chapterId);
+
+			assert.isTrue(Option.isSome(cover));
+			if (Option.isSome(cover)) {
+				assert.strictEqual(cover.value.extension, extension);
+				assert.strictEqual(
+					new TextDecoder().decode(cover.value.data),
+					"cover-bytes",
+				);
+			}
+			const call = server.received.at(-1);
+			assert.strictEqual(call?.url.pathname, "/api/Image/chapter-cover");
+			assert.strictEqual(
+				call?.url.searchParams.get("chapterId"),
+				String(chapterId),
+			);
+			assert.strictEqual(call?.url.searchParams.get("apiKey"), API_KEY);
+			assert.strictEqual(
+				call?.request.headers.authorization,
+				`Bearer ${user.token}`,
+			);
+			assert.strictEqual(call?.request.headers.accept, "image/*");
+		}),
+	);
+
+	it.effect("returns None when a book has no cover", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const server = coverServer(user, () => json({}, 404));
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			assert.isTrue(Option.isNone(yield* client.cover(1)));
+		}),
+	);
+
+	it.effect("fails a cover download on a server error", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const server = coverServer(user, () => json({}, 500));
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			const error = yield* Effect.flip(client.cover(1));
+			assert.strictEqual(error._tag, "KavitaNetworkError");
+			if (error._tag === "KavitaNetworkError") {
+				assert.strictEqual(error.endpoint, "/api/Image/chapter-cover");
+				assert.strictEqual(error.statusCode, 500);
+			}
+		}),
+	);
+});
+
+describe("imageExtension", () => {
+	it.each([
+		["image/jpeg", "jpg"],
+		["image/png", "png"],
+		["image/webp", "webp"],
+		["image/gif", "gif"],
+		["image/svg+xml", "png"],
+		["application/octet-stream", "png"],
+		[undefined, "png"],
+	])("%s → %s", (contentType, extension) => {
+		assert.strictEqual(imageExtension(contentType), extension);
+	});
 });

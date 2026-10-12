@@ -3,7 +3,15 @@
  *
  * @module
  */
-import { Context, Effect, flow, Layer, Redacted, type Schema } from "effect";
+import {
+	Context,
+	Effect,
+	flow,
+	Layer,
+	Option,
+	Redacted,
+	type Schema,
+} from "effect";
 import {
 	HttpClient,
 	type HttpClientError,
@@ -33,6 +41,32 @@ import { PluginConfig } from "./PluginConfig.js";
  * @category Constants
  */
 export const PLUGIN_NAME = "kavita-to-obsidian";
+
+/**
+ * A downloaded cover image.
+ *
+ * @since 2.0.0
+ * @category Covers
+ */
+export interface CoverImage {
+	readonly data: ArrayBuffer;
+	readonly extension: string;
+}
+
+/**
+ * File extension for an image content type.
+ *
+ * @since 2.0.0
+ * @category Covers
+ */
+export const imageExtension = (contentType: string | undefined): string => {
+	const subtype = contentType?.split(";")[0]?.split("/")[1]?.trim();
+	if (subtype === "jpeg") return "jpg";
+	if (subtype === "png" || subtype === "webp" || subtype === "gif") {
+		return subtype;
+	}
+	return "png";
+};
 
 const OWNER_FILTER_FIELD = 1;
 const EQUAL_COMPARISON = 0;
@@ -92,10 +126,14 @@ const request = <S extends Schema.Decoder<unknown>>(
 export class KavitaClient extends Context.Service<
 	KavitaClient,
 	{
+		readonly user: CurrentUser;
 		readonly annotations: Effect.Effect<ReadonlyArray<Annotation>, KavitaError>;
 		readonly volumes: (
 			seriesId: number,
 		) => Effect.Effect<ReadonlyArray<Volume>, KavitaError>;
+		readonly cover: (
+			chapterId: number,
+		) => Effect.Effect<Option.Option<CoverImage>, KavitaError>;
 	}
 >()("kavita-to-obsidian/KavitaClient") {
 	/**
@@ -108,14 +146,14 @@ export class KavitaClient extends Context.Service<
 		KavitaClient,
 		Effect.gen(function* () {
 			const config = yield* PluginConfig;
-			const http = (yield* HttpClient.HttpClient).pipe(
+			const base = (yield* HttpClient.HttpClient).pipe(
 				HttpClient.mapRequest(
-					flow(
-						HttpClientRequest.prependUrl(config.kavitaUrl.href),
-						HttpClientRequest.acceptJson,
-					),
+					HttpClientRequest.prependUrl(config.kavitaUrl.href),
 				),
 				HttpClient.filterStatusOk,
+			);
+			const http = base.pipe(
+				HttpClient.mapRequest(HttpClientRequest.acceptJson),
 			);
 
 			const session = yield* request(
@@ -175,7 +213,45 @@ export class KavitaClient extends Context.Service<
 				);
 			});
 
-			return KavitaClient.of({ annotations, volumes });
+			const images = base.pipe(
+				HttpClient.mapRequest(
+					flow(
+						HttpClientRequest.bearerToken(session.token),
+						HttpClientRequest.accept("image/*"),
+					),
+				),
+			);
+
+			const cover = Effect.fn("KavitaClient.cover")(function* (
+				chapterId: number,
+			) {
+				return yield* images
+					.execute(
+						HttpClientRequest.get("/api/Image/chapter-cover").pipe(
+							HttpClientRequest.setUrlParams({
+								chapterId: String(chapterId),
+								apiKey: Redacted.value(config.kavitaApiKey),
+							}),
+						),
+					)
+					.pipe(
+						Effect.flatMap((response) =>
+							Effect.map(response.arrayBuffer, (data) =>
+								Option.some({
+									data,
+									extension: imageExtension(response.headers["content-type"]),
+								}),
+							),
+						),
+						Effect.catchIf(
+							(error) => error.response?.status === 404,
+							() => Effect.succeedNone,
+						),
+						Effect.mapError(toKavitaError("/api/Image/chapter-cover")),
+					);
+			});
+
+			return KavitaClient.of({ user, annotations, volumes, cover });
 		}),
 	);
 }

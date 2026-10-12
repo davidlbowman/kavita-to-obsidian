@@ -3,38 +3,20 @@
  *
  * @module
  */
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Option, Predicate } from "effect";
 import { TFile, TFolder } from "obsidian";
 import { ObsidianFolderError, ObsidianWriteError } from "../errors.js";
-import { MANAGED_NOTE_KEY } from "../formatters/bookFile.js";
+import { ADDED_KEY, MANAGED_NOTE_KEY } from "../formatters/bookNote.js";
+import type { BookNoteRef } from "../schemas.js";
 import { ObsidianApp } from "./ObsidianApp.js";
 
 /**
- * Whether a write created a new note or replaced an existing one.
+ * What a write did to the vault.
  *
  * @since 2.0.0
  * @category Vault
  */
-export type WriteOutcome = "created" | "updated";
-
-const collectManagedNotes = (
-	folder: TFolder,
-	isManaged: (file: TFile) => boolean,
-	into: Array<string>,
-): Array<string> => {
-	for (const child of folder.children) {
-		if (child instanceof TFolder) {
-			collectManagedNotes(child, isManaged, into);
-		} else if (
-			child instanceof TFile &&
-			child.extension === "md" &&
-			isManaged(child)
-		) {
-			into.push(child.path);
-		}
-	}
-	return into;
-};
+export type WriteOutcome = "created" | "updated" | "unchanged";
 
 /**
  * Vault adapter.
@@ -45,12 +27,18 @@ const collectManagedNotes = (
 export class ObsidianVault extends Context.Service<
 	ObsidianVault,
 	{
-		writeFile(
+		readText(path: string): Effect.Effect<Option.Option<string>>;
+		writeText(
 			path: string,
 			content: string,
 		): Effect.Effect<WriteOutcome, ObsidianWriteError>;
+		writeBinaryIfMissing(
+			path: string,
+			data: ArrayBuffer,
+		): Effect.Effect<WriteOutcome, ObsidianWriteError>;
+		exists(path: string): Effect.Effect<boolean>;
 		ensureFolder(path: string): Effect.Effect<void, ObsidianFolderError>;
-		managedNotes(root: string): Effect.Effect<ReadonlyArray<string>>;
+		readonly bookNotes: Effect.Effect<ReadonlyArray<BookNoteRef>>;
 		trashFile(path: string): Effect.Effect<void, ObsidianWriteError>;
 		trashFolderIfEmpty(path: string): Effect.Effect<void, ObsidianFolderError>;
 	}
@@ -66,12 +54,23 @@ export class ObsidianVault extends Context.Service<
 		Effect.gen(function* () {
 			const { vault, fileManager, metadataCache } = yield* ObsidianApp;
 
-			const writeFile = Effect.fn("ObsidianVault.writeFile")(
+			const readText = (path: string) =>
+				Effect.promise(async () => {
+					const file = vault.getAbstractFileByPath(path);
+					return file instanceof TFile
+						? Option.some(await vault.read(file))
+						: Option.none<string>();
+				});
+
+			const writeText = Effect.fn("ObsidianVault.writeText")(
 				(path: string, content: string) =>
 					Effect.tryPromise({
 						try: async (): Promise<WriteOutcome> => {
 							const existing = vault.getAbstractFileByPath(path);
 							if (existing instanceof TFile) {
+								if ((await vault.read(existing)) === content) {
+									return "unchanged";
+								}
 								await vault.modify(existing, content);
 								return "updated";
 							}
@@ -81,6 +80,24 @@ export class ObsidianVault extends Context.Service<
 						catch: (cause) => new ObsidianWriteError({ path, cause }),
 					}),
 			);
+
+			const writeBinaryIfMissing = Effect.fn(
+				"ObsidianVault.writeBinaryIfMissing",
+			)((path: string, data: ArrayBuffer) =>
+				Effect.tryPromise({
+					try: async (): Promise<WriteOutcome> => {
+						if (vault.getAbstractFileByPath(path) !== null) {
+							return "unchanged";
+						}
+						await vault.createBinary(path, data);
+						return "created";
+					},
+					catch: (cause) => new ObsidianWriteError({ path, cause }),
+				}),
+			);
+
+			const exists = (path: string) =>
+				Effect.sync(() => vault.getAbstractFileByPath(path) !== null);
 
 			const ensureFolder = Effect.fn("ObsidianVault.ensureFolder")(
 				(path: string) =>
@@ -95,20 +112,31 @@ export class ObsidianVault extends Context.Service<
 					}),
 			);
 
-			const managedNotes = (root: string) =>
-				Effect.sync(() => {
-					const folder = vault.getAbstractFileByPath(root);
-					return folder instanceof TFolder
-						? collectManagedNotes(
-								folder,
-								(file) =>
-									metadataCache.getFileCache(file)?.frontmatter?.[
-										MANAGED_NOTE_KEY
-									] !== undefined,
-								[],
-							)
+			const bookNotes = Effect.sync(() =>
+				vault.getMarkdownFiles().flatMap((file): Array<BookNoteRef> => {
+					const frontmatter = metadataCache.getFileCache(file)?.frontmatter;
+					const id: unknown = frontmatter?.[MANAGED_NOTE_KEY];
+					const added: unknown = frontmatter?.[ADDED_KEY];
+					const title: unknown = frontmatter?.title;
+					const url: unknown = frontmatter?.kavita_url;
+					const chapterId = Predicate.isNumber(id)
+						? id
+						: Predicate.isString(id)
+							? Number(id)
+							: Number.NaN;
+					return Number.isInteger(chapterId)
+						? [
+								{
+									path: file.path,
+									chapterId,
+									added: Predicate.isString(added) ? added : undefined,
+									title: Predicate.isString(title) ? title : undefined,
+									url: Predicate.isString(url) ? url : undefined,
+								},
+							]
 						: [];
-				});
+				}),
+			);
 
 			const trashFile = Effect.fn("ObsidianVault.trashFile")((path: string) =>
 				Effect.tryPromise({
@@ -137,9 +165,12 @@ export class ObsidianVault extends Context.Service<
 			);
 
 			return ObsidianVault.of({
-				writeFile,
+				readText,
+				writeText,
+				writeBinaryIfMissing,
+				exists,
 				ensureFolder,
-				managedNotes,
+				bookNotes,
 				trashFile,
 				trashFolderIfEmpty,
 			});

@@ -4,7 +4,7 @@
  * @module
  */
 import { assert, describe, it } from "@effect/vitest";
-import { Effect } from "effect";
+import { Effect, Option } from "effect";
 import { type FakeApp, makeFakeApp } from "../../test-support/FakeApp.js";
 import type { ObsidianApp } from "./ObsidianApp.js";
 import { ObsidianVault } from "./ObsidianVault.js";
@@ -28,32 +28,88 @@ const failingTrash = (fake: FakeApp): ObsidianApp["Service"] => ({
 });
 
 describe("ObsidianVault", () => {
-	it.effect("writeFile creates then updates a note", () =>
+	it.effect("writeText creates, updates, and skips unchanged notes", () =>
 		Effect.gen(function* () {
 			const fake = makeFakeApp();
-			const first = yield* withVault(fake.app, (v) =>
-				v.writeFile("note.md", "one"),
+			const outcomes = yield* withVault(fake.app, (v) =>
+				Effect.all([
+					v.writeText("note.md", "one"),
+					v.writeText("note.md", "two"),
+					v.writeText("note.md", "two"),
+				]),
 			);
-			const second = yield* withVault(fake.app, (v) =>
-				v.writeFile("note.md", "two"),
-			);
-			assert.strictEqual(first, "created");
-			assert.strictEqual(second, "updated");
+			assert.deepStrictEqual(outcomes, ["created", "updated", "unchanged"]);
 			assert.strictEqual(fake.read("note.md"), "two");
 		}),
 	);
 
 	it.effect(
-		"writeFile into a missing folder fails with ObsidianWriteError",
+		"writeText into a missing folder fails with ObsidianWriteError",
 		() =>
 			Effect.gen(function* () {
 				const fake = makeFakeApp();
 				const error = yield* Effect.flip(
-					withVault(fake.app, (v) => v.writeFile("missing/note.md", "x")),
+					withVault(fake.app, (v) => v.writeText("missing/note.md", "x")),
 				);
 				assert.strictEqual(error._tag, "ObsidianWriteError");
 				assert.strictEqual(error.path, "missing/note.md");
 			}),
+	);
+
+	it.effect("readText reads notes and is None for missing paths", () =>
+		Effect.gen(function* () {
+			const fake = makeFakeApp();
+			fake.seed("Root/a.md", "hello");
+			const [found, missing, folder] = yield* withVault(fake.app, (v) =>
+				Effect.all([
+					v.readText("Root/a.md"),
+					v.readText("Root/b.md"),
+					v.readText("Root"),
+				]),
+			);
+			assert.deepStrictEqual(found, Option.some("hello"));
+			assert.isTrue(Option.isNone(missing));
+			assert.isTrue(Option.isNone(folder));
+		}),
+	);
+
+	it.effect("writeBinaryIfMissing writes once and never overwrites", () =>
+		Effect.gen(function* () {
+			const fake = makeFakeApp();
+			const first = new TextEncoder().encode("first").buffer;
+			const second = new TextEncoder().encode("second").buffer;
+			const outcomes = yield* withVault(fake.app, (v) =>
+				Effect.all([
+					v.writeBinaryIfMissing("cover.png", first),
+					v.writeBinaryIfMissing("cover.png", second),
+				]),
+			);
+			assert.deepStrictEqual(outcomes, ["created", "unchanged"]);
+			assert.strictEqual(fake.binaries().get("cover.png"), first);
+		}),
+	);
+
+	it.effect("writeBinaryIfMissing failures become ObsidianWriteError", () =>
+		Effect.gen(function* () {
+			const fake = makeFakeApp();
+			const error = yield* Effect.flip(
+				withVault(fake.app, (v) =>
+					v.writeBinaryIfMissing("missing/cover.png", new ArrayBuffer(1)),
+				),
+			);
+			assert.strictEqual(error._tag, "ObsidianWriteError");
+		}),
+	);
+
+	it.effect("exists sees files and folders", () =>
+		Effect.gen(function* () {
+			const fake = makeFakeApp();
+			fake.seed("Root/a.md", "a");
+			const [file, folder, missing] = yield* withVault(fake.app, (v) =>
+				Effect.all([v.exists("Root/a.md"), v.exists("Root"), v.exists("nope")]),
+			);
+			assert.deepStrictEqual([file, folder, missing], [true, true, false]);
+		}),
 	);
 
 	it.effect("ensureFolder creates nested folders and is idempotent", () =>
@@ -80,37 +136,44 @@ describe("ObsidianVault", () => {
 			}),
 	);
 
-	it.effect(
-		"managedNotes finds only plugin notes under the root, recursively",
-		() =>
-			Effect.gen(function* () {
-				const fake = makeFakeApp();
-				fake.seed("Root/Series/book.md", managed(1));
-				fake.seed("Root/Series/mine.md", "# My own note\n");
-				fake.seed("Root/Series/data.txt", managed(2));
-				fake.seed("Root/Series/Deep/nested.md", managed(3));
-				fake.seed("Root/top.md", managed(4));
-				fake.seed("Root/plain.md", "---\ntags: x\n---\n");
-				fake.seed("Elsewhere/other.md", managed(5));
-				const notes = yield* withVault(fake.app, (v) => v.managedNotes("Root"));
-				assert.sameMembers(
-					[...notes],
-					["Root/Series/book.md", "Root/Series/Deep/nested.md", "Root/top.md"],
-				);
-			}),
-	);
-
-	it.effect("managedNotes is empty when the root is missing or a file", () =>
+	it.effect("bookNotes finds every book note in the vault by chapter id", () =>
 		Effect.gen(function* () {
 			const fake = makeFakeApp();
-			fake.seed("Root", managed(1));
-			assert.deepStrictEqual(
-				yield* withVault(fake.app, (v) => v.managedNotes("Missing")),
-				[],
+			fake.seed("Root/Series/book.md", managed(1));
+			fake.seed("Root/Series/mine.md", "# My own note\n");
+			fake.seed("Root/Series/Deep/nested.md", managed(3));
+			fake.seed("Root/quoted.md", '---\nkavita_chapter_id: "4"\n---\n');
+			fake.seed("Root/bad.md", "---\nkavita_chapter_id: soon\n---\n");
+			fake.seed("Root/plain.md", "---\ntags: x\n---\n");
+			fake.seed("Moved/elsewhere.md", managed(5));
+			fake.seed("Root/data.txt", managed(2));
+			fake.seed(
+				"Root/full.md",
+				"---\ntitle: Embers\nkavita_chapter_id: 6\nkavita_added: 2026-01-02T03:04:05\nkavita_url: http://kavita.test/library/1/series/1/book/6\n---\n",
 			);
-			assert.deepStrictEqual(
-				yield* withVault(fake.app, (v) => v.managedNotes("Root")),
-				[],
+			const notes = yield* withVault(fake.app, (v) => v.bookNotes);
+			assert.sameDeepMembers(
+				[...notes],
+				[
+					...[
+						{ path: "Root/Series/book.md", chapterId: 1 },
+						{ path: "Root/Series/Deep/nested.md", chapterId: 3 },
+						{ path: "Root/quoted.md", chapterId: 4 },
+						{ path: "Moved/elsewhere.md", chapterId: 5 },
+					].map((ref) => ({
+						...ref,
+						added: undefined,
+						title: undefined,
+						url: undefined,
+					})),
+					{
+						path: "Root/full.md",
+						chapterId: 6,
+						added: "2026-01-02T03:04:05",
+						title: "Embers",
+						url: "http://kavita.test/library/1/series/1/book/6",
+					},
+				],
 			);
 		}),
 	);

@@ -8,6 +8,7 @@
  */
 import type { RequestUrlParam, RequestUrlResponse } from "obsidian";
 import { vi } from "vitest";
+import { parse, stringify } from "yaml";
 
 /**
  * Replaced per test with a fake or fetch-backed implementation.
@@ -89,3 +90,19 @@ export class TFolder extends TAbstractFile {
 		return this.parent === null;
 	}
 }
+
+/**
+ * Mirrors Obsidian's `parseYaml`.
+ *
+ * @since 2.0.0
+ * @category Mocks
+ */
+export const parseYaml = (yaml: string): unknown => parse(yaml);
+
+/**
+ * Mirrors Obsidian's `stringifyYaml`.
+ *
+ * @since 2.0.0
+ * @category Mocks
+ */
+export const stringifyYaml = (value: unknown): string => stringify(value);

@@ -61,6 +61,7 @@ const annotationFor = (
 	selectedText: text,
 	comment: null,
 	containsSpoiler: false,
+	selectedSlotIndex: 2,
 	...overrides,
 });
 
@@ -192,6 +193,7 @@ export class LiveKavita extends Context.Service<
 							pageNumber: a.chapterIndex + 1,
 							comment: a.comment,
 							containsSpoiler: a.containsSpoiler,
+							selectedSlotIndex: a.slot,
 						}),
 					);
 				}

@@ -5,7 +5,7 @@
  *
  * @module
  */
-import { crc32 } from "node:zlib";
+import { crc32, deflateSync } from "node:zlib";
 
 /**
  * A single chapter of fixture book content.
@@ -32,6 +32,7 @@ export interface EpubBook {
 	readonly series: string;
 	readonly seriesIndex: number;
 	readonly chapters: ReadonlyArray<EpubChapter>;
+	readonly coverColor: readonly [number, number, number];
 }
 
 const escapeXml = (value: string): string =>
@@ -76,12 +77,14 @@ const contentOpf = (book: EpubBook): string => {
     ${subjects}
     <dc:language>en</dc:language>
     <meta property="dcterms:modified">2024-01-01T00:00:00Z</meta>
+    <meta name="cover" content="cover-image"/>
     <meta property="belongs-to-collection" id="series">${escapeXml(book.series)}</meta>
     <meta refines="#series" property="collection-type">series</meta>
     <meta refines="#series" property="group-position">${book.seriesIndex}</meta>
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    <item id="cover-image" href="cover.png" media-type="image/png" properties="cover-image"/>
     ${manifest}
   </manifest>
   <spine>
@@ -131,6 +134,53 @@ const u32 = (n: number): Buffer => {
 	return b;
 };
 
+const pngChunk = (type: string, data: Buffer): Buffer => {
+	const body = Buffer.concat([Buffer.from(type, "ascii"), data]);
+	return Buffer.concat([u32be(data.length), body, u32be(crc32(body))]);
+};
+
+const u32be = (n: number): Buffer => {
+	const b = Buffer.alloc(4);
+	b.writeUInt32BE(n >>> 0);
+	return b;
+};
+
+const lighten = (channel: number) => Math.min(255, channel + 70);
+
+/**
+ * A 300×450 cover in `color` with a lighter band, as a PNG.
+ *
+ * @since 2.0.0
+ * @category Fixtures
+ */
+export const coverPng = (color: readonly [number, number, number]): Buffer => {
+	const width = 300;
+	const height = 450;
+	const [r, g, b] = color;
+	const rows: Array<Buffer> = [];
+	for (let y = 0; y < height; y++) {
+		const band = y > 150 && y < 230;
+		const row = Buffer.alloc(1 + width * 3);
+		for (let x = 0; x < width; x++) {
+			row[1 + x * 3] = band ? lighten(r) : r;
+			row[2 + x * 3] = band ? lighten(g) : g;
+			row[3 + x * 3] = band ? lighten(b) : b;
+		}
+		rows.push(row);
+	}
+	const header = Buffer.alloc(13);
+	header.writeUInt32BE(width, 0);
+	header.writeUInt32BE(height, 4);
+	header.writeUInt8(8, 8);
+	header.writeUInt8(2, 9);
+	return Buffer.concat([
+		Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+		pngChunk("IHDR", header),
+		pngChunk("IDAT", deflateSync(Buffer.concat(rows))),
+		pngChunk("IEND", Buffer.alloc(0)),
+	]);
+};
+
 /**
  * Pack entries into an uncompressed (STORE) ZIP archive.
  *
@@ -138,14 +188,15 @@ const u32 = (n: number): Buffer => {
  * @category Fixtures
  */
 export const storeZip = (
-	entries: ReadonlyArray<readonly [name: string, content: string]>,
+	entries: ReadonlyArray<readonly [name: string, content: string | Buffer]>,
 ): Buffer => {
 	const locals: Array<Buffer> = [];
 	const centrals: Array<Buffer> = [];
 	let offset = 0;
 	for (const [name, content] of entries) {
 		const nameBuf = Buffer.from(name, "utf8");
-		const data = Buffer.from(content, "utf8");
+		const data =
+			typeof content === "string" ? Buffer.from(content, "utf8") : content;
 		const crc = crc32(data);
 		const shared = Buffer.concat([
 			u16(20),
@@ -204,6 +255,7 @@ export const buildEpub = (book: EpubBook): Buffer =>
 		["META-INF/container.xml", containerXml],
 		["OEBPS/content.opf", contentOpf(book)],
 		["OEBPS/nav.xhtml", navXhtml(book)],
+		["OEBPS/cover.png", coverPng(book.coverColor)],
 		...book.chapters.map((chapter, i): readonly [string, string] => [
 			`OEBPS/ch${i + 1}.xhtml`,
 			chapterXhtml(chapter),

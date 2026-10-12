@@ -1,23 +1,37 @@
 /**
  * One command to try the current branch in a real Obsidian.
  *
- * Builds the plugin, starts and seeds the local Kavita test server, writes a
- * throwaway "Kavita Test Vault" with the plugin installed and configured
- * (plus pjeby/hot-reload, so later runs reload the plugin in a running
- * Obsidian), registers the vault with Obsidian, and opens it.
+ * Builds the plugin, starts and seeds the local Kavita test server, closes
+ * Obsidian if it is running, writes a throwaway "Kavita Test Vault" with the
+ * plugin installed and configured to sync on startup (its notes folder is
+ * cleared first, since re-seeding Kavita changes its ids) (plus pjeby/hot-reload
+ * for later edits), registers the vault, relaunches Obsidian on it, waits for
+ * the plugin to sync, and opens a book note. Nothing is left to click.
  *
- * Usage: bun run dev:vault
+ * Usage: bun run dev:vault [--fresh]
+ *
+ * `--fresh` clears the plugin's settings instead, so Obsidian opens on the
+ * first-run setup window; the URL and auth key to use are printed.
  *
  * Environment:
  * - OBSIDIAN_TEST_VAULT: vault folder (default: ~/Documents/Kavita Test Vault,
  *   or the Windows Documents folder under WSL)
  * - KAVITA_VERSION / KAVITA_PORT: forwarded to docker compose
+ * - KAVITA_SERVER + KAVITA_AUTH_KEY: use a real Kavita server instead of the
+ *   local one (nothing is seeded; the vault defaults to "Kavita Homelab")
+ * - OBSIDIAN_VAULT_NAME: vault name
  *
  * @module
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Effect, Schema } from "effect";
@@ -27,7 +41,14 @@ const PLUGIN_ID = "kavita-sync";
 const HOT_RELOAD_ID = "hot-reload";
 const HOT_RELOAD_URL =
 	"https://github.com/pjeby/hot-reload/releases/latest/download";
-const VAULT_NAME = "Kavita Test Vault";
+const remoteServer = process.env.KAVITA_SERVER;
+const remoteKey = process.env.KAVITA_AUTH_KEY ?? "";
+const VAULT_NAME =
+	process.env.OBSIDIAN_VAULT_NAME ??
+	(remoteServer === undefined ? "Kavita Test Vault" : "Kavita Homelab");
+const NOTES_FOLDER = "Kavita Annotations";
+const SHOWCASE_NOTE = `${NOTES_FOLDER}/The Lantern Cycle/Embers.md`;
+const fresh = process.argv.includes("--fresh");
 const isWsl = process.env.WSL_DISTRO_NAME !== undefined;
 
 const run = (command: string, args: ReadonlyArray<string>) => {
@@ -60,6 +81,35 @@ const obsidianConfig = isWsl
 				"obsidian.json",
 			)
 		: join(homedir(), ".config", "obsidian", "obsidian.json");
+
+const closeObsidian = (force = false) => {
+	if (isWsl) {
+		spawnSync("taskkill.exe", [
+			"/IM",
+			"Obsidian.exe",
+			...(force ? ["/F"] : []),
+		]);
+	} else {
+		spawnSync("pkill", [force ? "-KILL" : "-TERM", "-if", "obsidian"]);
+	}
+};
+
+const openUri = (uri: string) => {
+	if (isWsl) spawnSync("cmd.exe", ["/c", "start", "", uri]);
+	else if (process.platform === "darwin") spawnSync("open", [uri]);
+	else spawnSync("xdg-open", [uri]);
+};
+
+const waitFor = (condition: () => boolean, timeoutMs: number) =>
+	new Promise<boolean>((resolve) => {
+		const deadline = Date.now() + timeoutMs;
+		const tick = () => {
+			if (condition()) resolve(true);
+			else if (Date.now() > deadline) resolve(false);
+			else setTimeout(tick, 1000);
+		};
+		tick();
+	});
 
 const obsidianRunning = (): boolean => {
 	if (isWsl) {
@@ -99,32 +149,71 @@ const obsidianDir = join(vaultDir, ".obsidian");
 const pluginDir = join(obsidianDir, "plugins", PLUGIN_ID);
 const hotReloadDir = join(obsidianDir, "plugins", HOT_RELOAD_ID);
 
+const startedAt = new Date().toISOString();
+
 console.log("Building plugin…");
 run("bun", ["run", "build"]);
 
-console.log("Starting Kavita…");
-run("bun", ["run", "integration:up"]);
+const seedLocal = async () => {
+	console.log("Starting Kavita…");
+	run("bun", ["run", "integration:up"]);
+	console.log("Seeding Kavita…");
+	return Effect.runPromise(
+		Effect.gen(function* () {
+			const kavita = yield* LiveKavita;
+			return { url: kavita.url, authKey: kavita.authKey };
+		}).pipe(Effect.provide(LiveKavita.layer)),
+	);
+};
 
-console.log("Seeding Kavita…");
-const live = await Effect.runPromise(
-	Effect.gen(function* () {
-		return yield* LiveKavita;
-	}).pipe(Effect.provide(LiveKavita.layer)),
-);
+const live =
+	remoteServer === undefined
+		? await seedLocal()
+		: { url: remoteServer, authKey: remoteKey };
+
+const vaultPathForObsidian = isWsl ? windowsPath(vaultDir) : vaultDir;
+const vaultUri = (file?: string) =>
+	`obsidian://open?vault=${encodeURIComponent(VAULT_NAME)}${
+		file === undefined ? "" : `&file=${encodeURIComponent(file)}`
+	}`;
+
+if (obsidianRunning()) {
+	console.log("Closing Obsidian so the vault reloads cleanly…");
+	closeObsidian();
+	if (!(await waitFor(() => !obsidianRunning(), 20_000))) {
+		closeObsidian(true);
+		await waitFor(() => !obsidianRunning(), 10_000);
+	}
+}
 
 console.log(`Writing vault at ${vaultDir}…`);
 mkdirSync(pluginDir, { recursive: true });
+if (remoteServer === undefined) {
+	rmSync(join(vaultDir, NOTES_FOLDER), { recursive: true, force: true });
+}
+
+const dataPath = join(pluginDir, "data.json");
+if (fresh) {
+	rmSync(dataPath, { force: true });
+} else {
+	writeJson(dataPath, {
+		...readJson(dataPath, JsonRecord, {}),
+		kavitaUrl: live.url,
+		kavitaApiKey: live.authKey,
+		authKeySecret: "",
+		exportMode: "hierarchical",
+		downloadCovers: true,
+		createLibraryView: true,
+		includeSpoilers: true,
+		syncOnStartup: true,
+		setupDismissed: true,
+	});
+}
+
 for (const file of ["main.js", "manifest.json", "styles.css"]) {
 	writeFileSync(join(pluginDir, file), readFileSync(file));
 }
 writeFileSync(join(pluginDir, ".hotreload"), "");
-
-const dataPath = join(pluginDir, "data.json");
-writeJson(dataPath, {
-	...readJson(dataPath, JsonRecord, {}),
-	kavitaUrl: live.url,
-	kavitaApiKey: live.authKey,
-});
 
 if (!existsSync(join(hotReloadDir, "main.js"))) {
 	mkdirSync(hotReloadDir, { recursive: true });
@@ -139,47 +228,71 @@ const enabledPath = join(obsidianDir, "community-plugins.json");
 const enabled = readJson(enabledPath, JsonStrings, []);
 writeJson(enabledPath, [...new Set([...enabled, PLUGIN_ID, HOT_RELOAD_ID])]);
 
-const welcome = join(vaultDir, "Welcome.md");
-if (!existsSync(welcome)) {
-	writeFileSync(
-		welcome,
-		`# ${VAULT_NAME}\n\nClick the book icon in the left ribbon (or run "Kavita Sync: Sync annotations") to sync from the local test Kavita at ${live.url}.\n\nKavita web UI: ${live.url} (admin / Admin123!).\n`,
-	);
-}
+writeFileSync(
+	join(vaultDir, "Welcome.md"),
+	`# ${VAULT_NAME}
 
-const vaultPathForObsidian = isWsl ? windowsPath(vaultDir) : vaultDir;
-const config = readJson(obsidianConfig, ObsidianVaults, { vaults: {} });
-const registered = Object.values(config.vaults).some(
-	(v) => v.path === vaultPathForObsidian,
+This vault is synced from ${remoteServer === undefined ? `a local test Kavita at ${live.url} (admin / Admin123!)` : `Kavita at ${live.url}`}.
+
+Things to look at:
+
+- **Book notes** in \`Kavita Annotations/\`: cover, byline, chapter headings, and highlight callouts colored like Kavita. Each page link opens that highlight in Kavita.
+- **Library.base** in \`Kavita Annotations/\`: your books as cover cards.
+- **Settings → Kavita Sync**: status row with *Test connection* and *Sync now*, and the *Highlight template* page with a live preview.
+- **Status bar** (bottom right): when you last synced. Select it to sync.
+- **Your edits**: write anything under **My notes** in a book note, then sync; it stays.
+`,
 );
 
-if (!registered && obsidianRunning()) {
+const config = readJson(obsidianConfig, ObsidianVaults, { vaults: {} });
+if (
+	!Object.values(config.vaults).some((v) => v.path === vaultPathForObsidian)
+) {
+	writeJson(obsidianConfig, {
+		...readJson(obsidianConfig, JsonRecord, {}),
+		vaults: {
+			...config.vaults,
+			[randomBytes(8).toString("hex")]: {
+				path: vaultPathForObsidian,
+				ts: Date.now(),
+			},
+		},
+	});
+}
+
+console.log("Opening Obsidian…");
+openUri(vaultUri());
+
+const syncedSinceStart = () => {
+	const data = readJson(dataPath, JsonRecord, {});
+	const at = data.lastSyncedAt;
+	return typeof at === "string" && at > startedAt;
+};
+if (fresh) {
 	console.log(
-		`\nObsidian is running, so the vault can't be registered automatically.\nIn Obsidian: Open another vault → Open folder as vault → ${vaultPathForObsidian}`,
+		"Settings were cleared, so the setup window is open in Obsidian.",
+	);
+} else if (await waitFor(syncedSinceStart, 180_000)) {
+	openUri(
+		vaultUri(
+			remoteServer === undefined
+				? SHOWCASE_NOTE.replace(/\.md$/, "")
+				: `${NOTES_FOLDER}/Library.base`,
+		),
 	);
 } else {
-	if (!registered) {
-		writeJson(obsidianConfig, {
-			...readJson(obsidianConfig, JsonRecord, {}),
-			vaults: {
-				...config.vaults,
-				[randomBytes(8).toString("hex")]: {
-					path: vaultPathForObsidian,
-					ts: Date.now(),
-				},
-			},
-		});
-	}
-	const uri = `obsidian://open?vault=${encodeURIComponent(VAULT_NAME)}`;
-	if (isWsl) spawnSync("cmd.exe", ["/c", "start", "", uri]);
-	else if (process.platform === "darwin") spawnSync("open", [uri]);
-	else spawnSync("xdg-open", [uri]);
+	console.log(
+		'The plugin didn\'t finish syncing in time. If Obsidian asks, select "Trust author and enable plugins".',
+	);
 }
 
 console.log(`
 Ready.
-  Vault:   ${vaultPathForObsidian}
-  Kavita:  ${live.url} (admin / Admin123!)
-  Plugin:  rebuilt and copied; hot-reload picks up changes in a running Obsidian.
-First open only: click "Trust author and enable plugins" when Obsidian asks.
-Stop Kavita with: bun run integration:down`);
+  Vault:     ${vaultPathForObsidian}
+${
+	remoteServer === undefined
+		? `  Kavita:    ${live.url} (admin / Admin123!)
+  Auth key:  ${live.authKey}
+Stop Kavita with: bun run integration:down`
+		: `  Kavita:    ${live.url}`
+}`);

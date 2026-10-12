@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.3.0] - Unreleased
 
+### Added
+
+- **Setup window.** On first launch, connect to Kavita step by step: server URL, auth key, **Connect** (shows who you're connected as and how many highlights are ready, or exactly what's wrong), layout and folder, then **Sync now**. Reopen it with **Connect to Kavita**.
+- **Beautiful book notes.** Highlights are grouped by chapter in reading order, shown as callouts colored like your Kavita highlights, with your comment inside. Each highlight's page label opens that exact highlight in Kavita's reader. Spoilers appear collapsed.
+- **Book covers** downloaded into the vault and shown at the top of each note.
+- **Library view.** An optional base shows every book as a cover card, plus a table view grouped by series.
+- **Bases-friendly properties:** title, author, series, series index, genres, cover, highlight count, last highlighted, and a link to the book in Kavita.
+- **Your edits are kept.** Each note ends with a **My notes** heading; everything you write under it, and your own properties, survive every sync.
+- **Rename-safe.** Notes are found by their Kavita ID, so renaming or moving a book note doesn't create a duplicate.
+- **Live progress and summaries.** One notice shows progress, then a summary like "12 highlights from 4 books · 2 new" with a link to open your notes. Unchanged notes aren't rewritten.
+- **Status bar** (desktop) showing when you last synced; select it to sync.
+- **Automatic sync** when Obsidian starts and/or on an interval, quiet unless something new arrives.
+- **New settings tab**, searchable, with a status row (**Test connection**, **Sync now**), a folder picker, and a **Highlight template** page with clickable variables and a live preview of your own highlights.
+- **Commands:** **Open this book in Kavita**, **Open library**, and an `obsidian://kavita-sync` link that starts a sync.
+- The auth key is stored in Obsidian's secure secret storage instead of the vault; existing keys move over automatically.
+
 ### Fixed
 
 - **Other users' annotations no longer sync.** On Kavita servers where other users share their annotations, the plugin used to write their highlights into your vault. It now syncs only annotations owned by the auth key's user.
@@ -23,7 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Supports Kavita 0.8.8 through 0.9.x, including Kavita 0.9's auth keys. Settings and docs now say "auth key".
 - Settings changed by another device (e.g. through Obsidian Sync) are reloaded automatically.
 - Starting a sync while one is running shows a notice instead of running twice, and a running sync is cancelled when the plugin unloads.
-- Error notices are reworded; the troubleshooting guide matches them.
+- Every error now says exactly what's wrong (unreachable server, not a Kavita server, key rejected, server too old) in a single notice with a link to the fix.
+- Requires Obsidian 1.13.2 or newer.
+- The default highlight template is now a colored callout; settings still holding the old default are upgraded automatically, and custom templates keep working.
 
 ### Technical
 

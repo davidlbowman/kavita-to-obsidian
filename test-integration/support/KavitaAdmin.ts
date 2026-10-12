@@ -61,6 +61,7 @@ export const NewAnnotation = Schema.Struct({
 	selectedText: Schema.String,
 	comment: Schema.NullOr(Schema.String),
 	containsSpoiler: Schema.Boolean,
+	selectedSlotIndex: Schema.Int,
 });
 
 /**
@@ -212,7 +213,6 @@ export const makeKavitaAdmin = Effect.fnUntraced(function* (baseUrl: string) {
 						ownerUserId: session.id,
 						xPath: "//html[1]/BODY/APP-ROOT[1]/DIV[1]/P[1]",
 						highlightCount: annotation.selectedText.length,
-						selectedSlotIndex: 0,
 					}),
 				),
 			)

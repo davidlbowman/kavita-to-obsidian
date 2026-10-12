@@ -7,8 +7,11 @@ import { describe, expect, it } from "@effect/vitest";
 import { Schema } from "effect";
 import {
 	buildBookPath,
+	buildCoverPath,
+	buildLibraryPath,
 	buildSeriesPath,
 	buildUniqueBookPath,
+	COVERS_FOLDER,
 	sanitizePathSegment,
 } from "./paths.js";
 
@@ -98,4 +101,25 @@ describe("buildUniqueBookPath", () => {
 			).toBe(`${base.slice(0, -".md".length)} (ch-${chapterId}).md`);
 		},
 	);
+});
+
+describe("buildCoverPath", () => {
+	it("files covers by chapter id in the covers folder", () => {
+		expect(COVERS_FOLDER).toBe("Covers");
+		expect(buildCoverPath("Kavita Annotations", 4, "png")).toBe(
+			"Kavita Annotations/Covers/4.png",
+		);
+		expect(buildCoverPath("Books//", 12, "jpg")).toBe("Books/Covers/12.jpg");
+	});
+});
+
+describe("buildLibraryPath", () => {
+	it("puts the library base in the root folder", () => {
+		expect(buildLibraryPath("Kavita Annotations")).toBe(
+			"Kavita Annotations/Library.base",
+		);
+		expect(buildLibraryPath("Reading/Kavita/")).toBe(
+			"Reading/Kavita/Library.base",
+		);
+	});
 });

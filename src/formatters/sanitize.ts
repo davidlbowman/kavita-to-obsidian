@@ -122,7 +122,7 @@ export type CommentFields = Pick<
  */
 export const resolveComment = (annotation: CommentFields): string | null => {
 	if (annotation.commentPlainText !== null) {
-		const trimmed = annotation.commentPlainText.trim();
+		const trimmed = decodeHtmlEntities(annotation.commentPlainText).trim();
 		if (trimmed !== "" && trimmed !== "{}") {
 			return trimmed;
 		}

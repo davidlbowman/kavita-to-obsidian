@@ -39,9 +39,11 @@ feature branch ──PR──▶ staging ──PR──▶ main ──▶ GitHub
 ```
 
 1. Branch from `staging` (`feat/…`, `fix/…`, `chore/…`) and open a PR **into `staging`**. Reference issues with `Refs #N`.
-2. CI must be green: the `check` job and the live Kavita jobs (0.8.8 and 0.9.1).
-3. When `staging` is ready to ship, bump the version (below) and open a PR **from `staging` into `main`**, with `Closes #N` for the issues it delivers. CI rejects PRs into `main` from any other branch.
+2. CI must be green: the `check` job and the live Kavita jobs (0.8.8 and 0.9.1). Feature PRs are **squash-merged** into `staging` (the only method GitHub allows there).
+3. Before a release, try it by hand with `bun run dev:vault` (see below). Then bump the version and open a PR **from `staging` into `main`**, with `Closes #N` for the issues it delivers. CI rejects PRs into `main` from any other branch, and they land as a **merge commit** (the only method allowed on `main`).
 4. Merging into `main` publishes the release automatically: the `Release` workflow builds, attests, and creates a GitHub release tagged with the manifest version (Obsidian requires the tag to equal the version, no `v` prefix). If that version is already released, the workflow does nothing.
+
+Both branches are protected by rulesets: changes land only through PRs, and force-pushes and deletion are blocked.
 
 ### Bumping the version
 
@@ -57,21 +59,22 @@ Then add a `CHANGELOG.md` entry.
 
 ```
 src/
-  main.ts                    Plugin entry: settings load/save, ribbon, command, runs syncs
-  sync.ts                    Wires layers together and turns results into notices
-  schemas.ts                 Every data type: Kavita payloads, settings, sync results
+  main.ts                    Plugin entry: settings, commands, ribbon, status bar, auto-sync
+  sync.ts                    Wires layers for a sync or connection check; summary text
+  schemas.ts                 Every data type: Kavita payloads, settings, books, summaries
   errors.ts                  Tagged errors (Schema.TaggedError)
   services/
     PluginConfig.ts          Validates settings into a SyncConfig (URL, redacted key)
-    KavitaClient.ts          Auth-key exchange, current user, annotations, volumes
-    ChapterCatalog.ts        Book titles, authors, genres per chapter
-    AnnotationSyncer.ts      Single-file export
-    HierarchicalSyncer.ts    Root/Series/Book.md export + orphan cleanup
-    ObsidianVault.ts         Vault file operations
+    KavitaClient.ts          Auth-key exchange, current user, annotations, volumes, covers
+    ChapterCatalog.ts        Book titles, authors, genres; groups highlights into books
+    NoteSync.ts              Writes book notes or the single note, covers, library, cleanup
+    SyncProgress.ts          Progress messages for the live notice
+    ObsidianVault.ts         Vault reads/writes, book-note index by Kavita ID
     ObsidianApp.ts           The narrow slice of Obsidian's App the plugin uses
     ObsidianHttpClient.ts    HttpClient over Obsidian's requestUrl (bypasses CORS)
-  formatters/                Pure functions: markdown, book notes, paths, templates, sanitizing
-  ui/                        Settings tab and error notices
+  formatters/                Pure: highlights, book/single notes, note merging, links, library base
+  ui/                        Setup window, settings tab, template page, sync controller, errors
+styles.css                   Highlight-color callouts and plugin UI styles
 test-support/FakeApp.ts      In-memory vault used by unit and integration tests
 test-integration/            Live Kavita harness (fixtures, seeding, tests, docker-compose)
 ```
@@ -136,6 +139,8 @@ bun run dev:vault
 ```
 
 This builds the plugin, starts and seeds Kavita, and opens a throwaway **Kavita Test Vault** in Obsidian with the plugin installed, configured, and hot-reloading. Re-run it after changes. Do this before every `staging` → `main` release.
+
+`bun run dev:vault --fresh` clears the plugin's settings so the first-run setup window appears; the URL and auth key to use are printed at the end.
 
 ## Pull request checklist
 

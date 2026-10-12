@@ -111,6 +111,17 @@ describe("extractTextFromQuillDelta", () => {
 });
 
 describe("resolveComment", () => {
+	it("decodes HTML entities Kavita leaves in plain-text comments", () => {
+		expect(
+			resolveComment({
+				comment: '{"ops":[{"insert":"We don\'t need to mock it.\\n"}]}',
+				commentHtml:
+					"<p>We&nbsp;don&#39;t&nbsp;need&nbsp;to&nbsp;mock&nbsp;it.</p>",
+				commentPlainText: "We don&#39;t need to mock it.",
+			}),
+		).toBe("We don't need to mock it.");
+	});
+
 	it("prefers trimmed plain text", () => {
 		expect(
 			resolveComment({

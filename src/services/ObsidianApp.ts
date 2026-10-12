@@ -18,7 +18,13 @@ export class ObsidianApp extends Context.Service<
 	{
 		readonly vault: Pick<
 			Vault,
-			"getAbstractFileByPath" | "create" | "modify" | "createFolder"
+			| "getAbstractFileByPath"
+			| "getMarkdownFiles"
+			| "read"
+			| "create"
+			| "createBinary"
+			| "modify"
+			| "createFolder"
 		>;
 		readonly fileManager: Pick<FileManager, "trashFile">;
 		readonly metadataCache: Pick<MetadataCache, "getFileCache">;
