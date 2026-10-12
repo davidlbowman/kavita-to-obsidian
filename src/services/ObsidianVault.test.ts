@@ -147,14 +147,32 @@ describe("ObsidianVault", () => {
 			fake.seed("Root/plain.md", "---\ntags: x\n---\n");
 			fake.seed("Moved/elsewhere.md", managed(5));
 			fake.seed("Root/data.txt", managed(2));
+			fake.seed(
+				"Root/full.md",
+				"---\ntitle: Embers\nkavita_chapter_id: 6\nkavita_added: 2026-01-02T03:04:05\nkavita_url: http://kavita.test/library/1/series/1/book/6\n---\n",
+			);
 			const notes = yield* withVault(fake.app, (v) => v.bookNotes);
 			assert.sameDeepMembers(
 				[...notes],
 				[
-					{ path: "Root/Series/book.md", chapterId: 1 },
-					{ path: "Root/Series/Deep/nested.md", chapterId: 3 },
-					{ path: "Root/quoted.md", chapterId: 4 },
-					{ path: "Moved/elsewhere.md", chapterId: 5 },
+					...[
+						{ path: "Root/Series/book.md", chapterId: 1 },
+						{ path: "Root/Series/Deep/nested.md", chapterId: 3 },
+						{ path: "Root/quoted.md", chapterId: 4 },
+						{ path: "Moved/elsewhere.md", chapterId: 5 },
+					].map((ref) => ({
+						...ref,
+						added: undefined,
+						title: undefined,
+						url: undefined,
+					})),
+					{
+						path: "Root/full.md",
+						chapterId: 6,
+						added: "2026-01-02T03:04:05",
+						title: "Embers",
+						url: "http://kavita.test/library/1/series/1/book/6",
+					},
 				],
 			);
 		}),

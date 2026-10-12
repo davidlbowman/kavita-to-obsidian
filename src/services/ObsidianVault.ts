@@ -6,7 +6,8 @@
 import { Context, Effect, Layer, Option, Predicate } from "effect";
 import { TFile, TFolder } from "obsidian";
 import { ObsidianFolderError, ObsidianWriteError } from "../errors.js";
-import { MANAGED_NOTE_KEY } from "../formatters/bookNote.js";
+import { ADDED_KEY, MANAGED_NOTE_KEY } from "../formatters/bookNote.js";
+import type { BookNoteRef } from "../schemas.js";
 import { ObsidianApp } from "./ObsidianApp.js";
 
 /**
@@ -16,17 +17,6 @@ import { ObsidianApp } from "./ObsidianApp.js";
  * @category Vault
  */
 export type WriteOutcome = "created" | "updated" | "unchanged";
-
-/**
- * A book note found in the vault by its Kavita chapter id.
- *
- * @since 2.0.0
- * @category Vault
- */
-export interface BookNoteRef {
-	readonly path: string;
-	readonly chapterId: number;
-}
 
 /**
  * Vault adapter.
@@ -124,15 +114,26 @@ export class ObsidianVault extends Context.Service<
 
 			const bookNotes = Effect.sync(() =>
 				vault.getMarkdownFiles().flatMap((file): Array<BookNoteRef> => {
-					const id: unknown =
-						metadataCache.getFileCache(file)?.frontmatter?.[MANAGED_NOTE_KEY];
+					const frontmatter = metadataCache.getFileCache(file)?.frontmatter;
+					const id: unknown = frontmatter?.[MANAGED_NOTE_KEY];
+					const added: unknown = frontmatter?.[ADDED_KEY];
+					const title: unknown = frontmatter?.title;
+					const url: unknown = frontmatter?.kavita_url;
 					const chapterId = Predicate.isNumber(id)
 						? id
 						: Predicate.isString(id)
 							? Number(id)
 							: Number.NaN;
 					return Number.isInteger(chapterId)
-						? [{ path: file.path, chapterId }]
+						? [
+								{
+									path: file.path,
+									chapterId,
+									added: Predicate.isString(added) ? added : undefined,
+									title: Predicate.isString(title) ? title : undefined,
+									url: Predicate.isString(url) ? url : undefined,
+								},
+							]
 						: [];
 				}),
 			);

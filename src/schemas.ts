@@ -92,6 +92,7 @@ export const Genre = Schema.Struct({
  */
 export const Chapter = Schema.Struct({
 	id: Schema.Int,
+	createdUtc: Schema.optionalKey(Schema.NullOr(Schema.String)),
 	titleName: Schema.optionalKey(Schema.NullOr(Schema.String)),
 	writers: Schema.optionalKey(NullableArray(Person)),
 	genres: Schema.optionalKey(NullableArray(Genre)),
@@ -169,6 +170,7 @@ export type CurrentUser = typeof CurrentUser.Type;
  */
 export const ChapterInfo = Schema.Struct({
 	chapterId: Schema.Int,
+	added: Schema.String,
 	bookTitle: Schema.String,
 	sortOrder: Schema.Finite,
 	authors: Schema.Array(Schema.String),
@@ -194,6 +196,7 @@ export const Book = Schema.Struct({
 	seriesId: Schema.Int,
 	chapterId: Schema.Int,
 	libraryId: Schema.Int,
+	added: Schema.String,
 	authors: Schema.Array(Schema.String),
 	genres: Schema.Array(Schema.String),
 	annotations: Schema.Array(Annotation),
@@ -204,6 +207,26 @@ export const Book = Schema.Struct({
  * @category Sync Schemas
  */
 export type Book = typeof Book.Type;
+
+/**
+ * A book note found in the vault, with the identity it carries.
+ *
+ * @since 2.0.0
+ * @category Sync Schemas
+ */
+export const BookNoteRef = Schema.Struct({
+	path: Schema.String,
+	chapterId: Schema.Int,
+	added: Schema.UndefinedOr(Schema.String),
+	title: Schema.UndefinedOr(Schema.String),
+	url: Schema.UndefinedOr(Schema.String),
+});
+
+/**
+ * @since 2.0.0
+ * @category Sync Schemas
+ */
+export type BookNoteRef = typeof BookNoteRef.Type;
 
 /**
  * Kavita's five highlight colors, in highlight-slot order.

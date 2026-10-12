@@ -40,6 +40,7 @@ export const toChapterInfo = (
 	volumes.flatMap((volume) =>
 		volume.chapters.map((chapter): ChapterInfo => ({
 			chapterId: chapter.id,
+			added: chapter.createdUtc ?? "",
 			bookTitle:
 				nonEmpty(chapter.titleName) ??
 				nonEmpty(volume.name) ??
@@ -112,6 +113,7 @@ export const toBooks = (
 				seriesId: first.seriesId,
 				chapterId: first.chapterId,
 				libraryId: first.libraryId,
+				added: info?.added ?? "",
 				authors: info?.authors ?? [],
 				genres: info?.genres ?? [],
 				annotations: group,

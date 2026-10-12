@@ -144,7 +144,10 @@ const trash = (fake: FakeApp, path: string) =>
 	});
 
 const managedNote = (chapterId: number) =>
-	`---\nkavita_chapter_id: ${chapterId}\n---\n\n${SECTION_START}\n\nold\n\n${SECTION_END}\n`;
+	`---\nkavita_chapter_id: ${chapterId}\nkavita_added: 2000-01-01T00:00:00\nkavita_url: http://kavita.test/library/1/series/1/book/${chapterId}\n---\n\n${SECTION_START}\n\nold\n\n${SECTION_END}\n`;
+
+const legacyNote = (chapterId: number) =>
+	`---\nkavita_chapter_id: ${chapterId}\n---\n\n# Old\n`;
 
 describe("NoteSync, one note per book", () => {
 	it.effect(
@@ -323,6 +326,14 @@ describe("NoteSync, one note per book", () => {
 				fake.seed(`${ROOT}/Kept/mine.md`, "# Mine\n");
 				fake.seed(`${ROOT}/mine.md`, "# Also mine\n");
 				fake.seed("Elsewhere/old.md", managedNote(at(ids, 2)));
+				fake.seed(`${ROOT}/Legacy/old.md`, legacyNote(at(ids, 3)));
+				fake.seed(
+					`${ROOT}/Other server/book.md`,
+					managedNote(at(ids, 5)).replace(
+						"http://kavita.test",
+						"http://other-kavita.test",
+					),
+				);
 				const { client } = stubKavita(() => annotations);
 				const summary = yield* sync(fake, client);
 
@@ -334,6 +345,8 @@ describe("NoteSync, one note per book", () => {
 				assert.isDefined(fake.read(`${ROOT}/Kept/mine.md`));
 				assert.isDefined(fake.read(`${ROOT}/mine.md`));
 				assert.isDefined(fake.read("Elsewhere/old.md"));
+				assert.isDefined(fake.read(`${ROOT}/Legacy/old.md`));
+				assert.isDefined(fake.read(`${ROOT}/Other server/book.md`));
 			}),
 	);
 

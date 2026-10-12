@@ -11,6 +11,7 @@ import {
 	type FormatOptions,
 } from "../schemas.js";
 import {
+	ADDED_KEY,
 	BOOK_NOTE_KEYS,
 	bookNote,
 	bookProperties,
@@ -137,6 +138,7 @@ describe("bookProperties", () => {
 			kavita_url: bookUrl(BASE, b),
 			kavita_series_id: b.seriesId,
 			[MANAGED_NOTE_KEY]: b.chapterId,
+			...(b.added === "" ? {} : { [ADDED_KEY]: b.added }),
 			tags: bookTags(b, options),
 		});
 	});

@@ -83,6 +83,9 @@ const read = (fake: FakeApp, path: string): string => {
 	return content ?? "";
 };
 
+const legacyNote = (chapterId: number, title: string) =>
+	`---\ntags:\n  - kavita\nkavita_series_id: 99\nkavita_chapter_id: ${chapterId}\nupdated: 2025-01-01T00:00:00.000Z\n---\n\n# ${title}\n\n## Annotations\n\n> old text\n`;
+
 const linkedAnnotationIds = (note: string): Array<number> =>
 	[...note.matchAll(/\?annotation=(\d+)\)/g)].map((m) => Number(m[1]));
 
@@ -341,6 +344,63 @@ layer(LiveKavita.layer, {
 				assert.include(
 					read(fake, "Reading/Embers (my copy).md"),
 					"> Every fire begins as a single spark",
+				);
+			}),
+		);
+
+		it.effect("upgrades old notes even when Kavita ids were reshuffled", () =>
+			Effect.gen(function* () {
+				const embers = yield* bookTitled("Embers");
+				const cinders = yield* bookTitled("Cinders");
+				const fake = makeFakeApp();
+				fake.seed(EMBERS, legacyNote(cinders.chapterId, "Embers"));
+				fake.seed(CINDERS, legacyNote(embers.chapterId, "Cinders"));
+
+				const summary = yield* sync(yield* settingsFor(), fake);
+
+				assert.strictEqual(summary.notesDeleted, 0);
+				assert.sameMembers([...fake.files().keys()], NOTES);
+				assert.include(read(fake, EMBERS), "title: Embers");
+				assert.include(
+					read(fake, EMBERS),
+					"> Every fire begins as a single spark",
+				);
+				assert.include(read(fake, CINDERS), "title: Cinders");
+				assert.include(read(fake, CINDERS), "> Café owners along the río");
+				assert.notInclude(read(fake, EMBERS), "> old text");
+			}),
+		);
+
+		it.effect("never mixes up books that share an id across libraries", () =>
+			Effect.gen(function* () {
+				const fake = makeFakeApp();
+				const settings = yield* settingsFor();
+				yield* sync(settings, fake);
+				const embers = yield* bookTitled("Embers");
+				const cinders = yield* bookTitled("Cinders");
+				const swapped = (path: string, from: number, to: number) =>
+					read(fake, path)
+						.replace(`kavita_chapter_id: ${from}`, `kavita_chapter_id: ${to}`)
+						.replace(/kavita_added: .*/, "kavita_added: 2001-01-01T00:00:00");
+				const embersNote = swapped(EMBERS, embers.chapterId, cinders.chapterId);
+				const cindersNote = swapped(
+					CINDERS,
+					cinders.chapterId,
+					embers.chapterId,
+				);
+				fake.move(EMBERS, "Archive/embers.txt");
+				fake.move(CINDERS, "Archive/cinders.txt");
+				fake.seed(EMBERS, embersNote);
+				fake.seed(CINDERS, cindersNote);
+
+				const summary = yield* sync(settings, fake);
+				assert.strictEqual(summary.notesCreated, 0);
+				assert.strictEqual(summary.notesDeleted, 0);
+				assert.include(read(fake, EMBERS), "title: Embers");
+				assert.include(read(fake, CINDERS), "title: Cinders");
+				assert.include(
+					read(fake, EMBERS),
+					`kavita_chapter_id: ${embers.chapterId}`,
 				);
 			}),
 		);

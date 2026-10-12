@@ -20,6 +20,16 @@ import type { NoteContent } from "./note.js";
 export const MANAGED_NOTE_KEY = "kavita_chapter_id";
 
 /**
+ * Frontmatter key holding when Kavita added the book. Together with
+ * {@link MANAGED_NOTE_KEY} it identifies the book across Kavita servers and
+ * library rebuilds, which reuse chapter ids.
+ *
+ * @since 2.0.0
+ * @category Book Note
+ */
+export const ADDED_KEY = "kavita_added";
+
+/**
  * Every frontmatter key the plugin writes to book notes, plus retired ones it
  * cleans up. Any other key belongs to the user.
  *
@@ -38,6 +48,7 @@ export const BOOK_NOTE_KEYS: ReadonlyArray<string> = [
 	"kavita_url",
 	"kavita_series_id",
 	MANAGED_NOTE_KEY,
+	ADDED_KEY,
 	"updated",
 ];
 
@@ -134,6 +145,7 @@ export const bookProperties = (
 	properties.kavita_url = bookUrl(kavitaUrl, book);
 	properties.kavita_series_id = book.seriesId;
 	properties[MANAGED_NOTE_KEY] = book.chapterId;
+	if (book.added !== "") properties[ADDED_KEY] = book.added;
 	const tags = bookTags(book, options);
 	if (tags.length > 0) properties.tags = tags;
 	return properties;

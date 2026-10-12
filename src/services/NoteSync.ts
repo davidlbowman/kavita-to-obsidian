@@ -25,9 +25,10 @@ import {
 	buildSeriesPath,
 	buildUniqueBookPath,
 	COVERS_FOLDER,
+	sanitizePathSegment,
 } from "../formatters/paths.js";
 import { singleNote } from "../formatters/singleNote.js";
-import type { Book, SyncSummary } from "../schemas.js";
+import type { Book, BookNoteRef, SyncSummary } from "../schemas.js";
 import { fetchChapterInfo, toBooks } from "./ChapterCatalog.js";
 import { KavitaClient } from "./KavitaClient.js";
 import { ObsidianVault, type WriteOutcome } from "./ObsidianVault.js";
@@ -41,6 +42,55 @@ const parentFolder = (path: string): string =>
 
 const isInside = (folder: string) => (path: string) =>
 	path.startsWith(`${folder}/`);
+
+const noteTitle = (ref: BookNoteRef): string =>
+	ref.title ??
+	(ref.path.split("/").at(-1) ?? "")
+		.replace(/\.md$/, "")
+		.replace(/ \(ch-\d+\)$/, "");
+
+const folderName = (path: string): string =>
+	path.split("/").slice(-2, -1)[0] ?? "";
+
+const sameServer = (url: string | undefined, server: URL): boolean =>
+	url !== undefined &&
+	URL.canParse(url) &&
+	new URL(url).origin === server.origin;
+
+/**
+ * The existing note for a book, if any.
+ *
+ * A note is the same book when it carries the same Kavita chapter id and the
+ * same date Kavita added the book. Chapter ids alone are reused when a
+ * library is rebuilt or a different server is used, so they never match on
+ * their own. Failing that, an unclaimed note with the book's title (in the
+ * book's series folder, or with its chapter id) is adopted, which upgrades
+ * notes from older versions and follows a book through a library rebuild.
+ *
+ * @since 2.0.0
+ * @category Note Sync
+ */
+export const findBookNote = (
+	refs: ReadonlyArray<BookNoteRef>,
+	claimed: ReadonlySet<string>,
+	book: Book,
+): BookNoteRef | undefined => {
+	const open = refs.filter((ref) => !claimed.has(ref.path));
+	const exact = open.find(
+		(ref) =>
+			book.added !== "" &&
+			ref.chapterId === book.chapterId &&
+			ref.added === book.added,
+	);
+	if (exact !== undefined) return exact;
+	const titles = new Set([book.bookTitle, sanitizePathSegment(book.bookTitle)]);
+	return open.find(
+		(ref) =>
+			titles.has(noteTitle(ref)) &&
+			(ref.chapterId === book.chapterId ||
+				folderName(ref.path) === sanitizePathSegment(book.seriesName)),
+	);
+};
 
 interface NoteWrite {
 	readonly outcome: WriteOutcome;
@@ -156,9 +206,8 @@ export class NoteSync extends Context.Service<
 				const progress = yield* SyncProgress;
 				const books = yield* loadBooks;
 				yield* vault.ensureFolder(root);
-				const existing = new Map(
-					(yield* vault.bookNotes).map((ref) => [ref.chapterId, ref.path]),
-				);
+				const refs = yield* vault.bookNotes;
+				const claimed = new Set<string>();
 				const written = new Set<string>();
 				const writes: Array<NoteWrite> = [];
 
@@ -169,8 +218,8 @@ export class NoteSync extends Context.Service<
 					const cover = config.downloadCovers
 						? Option.getOrUndefined(yield* safeCover(book))
 						: undefined;
-					const known = existing.get(book.chapterId);
-					let path = known;
+					const known = findBookNote(refs, claimed, book);
+					let path = known?.path;
 					if (path === undefined) {
 						const base = buildBookPath(root, book.seriesName, book.bookTitle);
 						const taken = written.has(base) || (yield* vault.exists(base));
@@ -186,6 +235,7 @@ export class NoteSync extends Context.Service<
 						yield* vault.ensureFolder(buildSeriesPath(root, book.seriesName));
 					}
 					written.add(path);
+					claimed.add(path);
 					writes.push(
 						yield* writeNote(
 							path,
@@ -194,12 +244,16 @@ export class NoteSync extends Context.Service<
 					);
 				}
 
-				const synced = new Set(books.map((b) => b.chapterId));
 				const orphans =
 					config.deleteOrphanedFiles && books.length > 0
-						? [...existing]
-								.filter(([chapterId]) => !synced.has(chapterId))
-								.map(([, path]) => path)
+						? refs
+								.filter(
+									(ref) =>
+										!claimed.has(ref.path) &&
+										ref.added !== undefined &&
+										sameServer(ref.url, config.kavitaUrl),
+								)
+								.map((ref) => ref.path)
 								.filter(isInside(root))
 						: [];
 				yield* trashOrphans(orphans);

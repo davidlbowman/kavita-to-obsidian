@@ -39,6 +39,7 @@ export default class KavitaSyncPlugin
 	override settings: PluginSettings = DEFAULT_SETTINGS;
 	private readonly controller = new SyncController(this);
 	private autoSyncTimer: number | undefined;
+	private setupModal: SetupModal | undefined;
 
 	override async onload(): Promise<void> {
 		await this.loadSettings();
@@ -117,6 +118,7 @@ export default class KavitaSyncPlugin
 
 	override onunload(): void {
 		this.controller.stop();
+		this.setupModal?.close();
 	}
 
 	private async loadSettings(): Promise<void> {
@@ -171,7 +173,9 @@ export default class KavitaSyncPlugin
 	}
 
 	openSetup(): void {
-		new SetupModal(this.app, this).open();
+		this.setupModal?.close();
+		this.setupModal = new SetupModal(this.app, this);
+		this.setupModal.open();
 	}
 
 	syncNow(): void {
