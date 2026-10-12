@@ -11,7 +11,7 @@ import { assert, beforeAll, describe, layer } from "@effect/vitest";
 import { Effect, Layer, Option } from "effect";
 import { parse } from "yaml";
 import { requestUrl } from "../src/__mocks__/obsidian.js";
-import { SECTION_END, SECTION_START } from "../src/formatters/note.js";
+import { MY_NOTES_HEADING } from "../src/formatters/note.js";
 import { DEFAULT_SETTINGS, type PluginSettings } from "../src/schemas.js";
 import { fetchChapterInfo } from "../src/services/ChapterCatalog.js";
 import { KavitaClient } from "../src/services/KavitaClient.js";
@@ -242,8 +242,9 @@ layer(LiveKavita.layer, {
 					embers,
 					`kavita_url: ${live.url}/library/${book.libraryId}/series/${book.seriesId}/book/${book.chapterId}`,
 				);
-				assert.include(embers, SECTION_START);
-				assert.include(embers, SECTION_END);
+				assert.include(embers, `\n${MY_NOTES_HEADING}\n`);
+				assert.notInclude(embers, "%%");
+				assert.notInclude(embers, "^kavita");
 				assert.include(embers, `![[${ROOT}/Covers/${book.chapterId}.png|160]]`);
 				assert.include(
 					embers,
@@ -268,7 +269,7 @@ layer(LiveKavita.layer, {
 				assert.lengthOf(linked, 2);
 				for (const id of linked) {
 					assert.isTrue(owned.has(id), `link to annotation ${id}`);
-					assert.include(embers, `\n^kavita-${id}\n`);
+					assert.include(embers, `?annotation=${id})`);
 				}
 
 				const cinders = read(fake, CINDERS);

@@ -1,8 +1,9 @@
 /**
  * Merge synced content into a note without touching what the user wrote.
  *
- * The plugin owns a set of frontmatter keys and one marked section of the
- * body. Everything else in the note is kept exactly as it is.
+ * The plugin owns a set of frontmatter keys and the body above the
+ * "My notes" heading. The user's own properties and everything from that
+ * heading down are kept exactly as they are.
  *
  * @module
  */
@@ -10,24 +11,15 @@ import { Predicate } from "effect";
 import { parseYaml, stringifyYaml } from "obsidian";
 
 /**
- * Opens the plugin-managed section of a note.
+ * The heading that ends the synced part of a note. Everything from this
+ * heading to the end of the note belongs to the user.
  *
  * @since 2.0.0
  * @category Note
  */
-export const SECTION_START =
-	"%% kavita-sync:start · synced from Kavita, edits inside this section are replaced on the next sync %%";
+export const MY_NOTES_HEADING = "## My notes";
 
-/**
- * Closes the plugin-managed section of a note.
- *
- * @since 2.0.0
- * @category Note
- */
-export const SECTION_END = "%% kavita-sync:end %%";
-
-const START_PATTERN = /^%% kavita-sync:start\b.*%%$/m;
-const END_PATTERN = /^%% kavita-sync:end %%$/m;
+const MY_NOTES_PATTERN = /^## My notes[ \t]*$/gm;
 const FRONTMATTER_PATTERN = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
 /**
@@ -99,27 +91,23 @@ const mergeFrontmatter = (
 	return merged;
 };
 
-const wrapSection = (section: string): string =>
-	`${SECTION_START}\n\n${section.trim()}\n\n${SECTION_END}`;
-
 const mergeBody = (body: string, section: string): string => {
-	const start = START_PATTERN.exec(body);
-	const end = END_PATTERN.exec(body);
-	if (start === null || end === null || end.index < start.index) {
-		return `${wrapSection(section)}\n`;
-	}
-	const before = body.slice(0, start.index);
-	const after = body.slice(end.index + end[0].length);
-	return `${before}${wrapSection(section)}${after.length === 0 ? "\n" : after}`;
+	const headings = [...body.matchAll(MY_NOTES_PATTERN)];
+	const last = headings.at(-1);
+	const mine =
+		last === undefined
+			? `${MY_NOTES_HEADING}\n`
+			: body.slice(last.index).replace(/\n*$/, "\n");
+	return `${section.trim()}\n\n${mine}`;
 };
 
 /**
  * Produce the note's new text.
  *
- * For a new note this is the plugin's frontmatter and section. For an
- * existing note, plugin-owned keys and the marked section are replaced and
- * everything else is kept. A note without markers predates them and was
- * fully plugin-generated, so its whole body becomes the section.
+ * The note is the plugin's properties merged with the user's, the synced
+ * section, then the "My notes" heading and whatever the user wrote under
+ * it. A note without the heading (new, or from an older version) gets an
+ * empty one.
  *
  * @since 2.0.0
  * @category Note
@@ -137,12 +125,13 @@ export const mergeNote = (
 };
 
 /**
- * Ids of the highlights an existing note already shows.
+ * Ids of the highlights an existing note already shows, read from their
+ * links back to Kavita.
  *
  * @since 2.0.0
  * @category Note
  */
 export const syncedHighlightIds = (note: string): ReadonlySet<number> =>
 	new Set(
-		[...note.matchAll(/^\^kavita-(\d+)$/gm)].map((m) => Number(m[1] ?? 0)),
+		[...note.matchAll(/[?&]annotation=(\d+)\b/g)].map((m) => Number(m[1] ?? 0)),
 	);

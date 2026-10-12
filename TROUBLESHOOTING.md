@@ -229,4 +229,4 @@ The auth key lives in Obsidian's secure secret storage, not in the vault's `data
 
 ## My Edits Disappeared
 
-Each book note has a section between `%% kavita-sync:start %%` and `%% kavita-sync:end %%`. That section is rewritten on every sync. Everything outside it, including your own properties, headings, and text above or below the section, is never touched. Write your own notes outside the markers, and don't delete the markers themselves: without them the plugin treats the whole note body as its own.
+Each book note ends with a **## My notes** heading. Everything above it (cover, byline, and highlights) is rewritten on every sync. Everything from **My notes** down, and any properties you add, is never touched. Write your own notes under that heading, and keep the heading itself: without it the plugin treats the whole note body as its own.

@@ -31,15 +31,6 @@ const COLORS: ReadonlyArray<HighlightColor> = [
 export const highlightColor = (slot: number): HighlightColor =>
 	COLORS[((slot % COLORS.length) + COLORS.length) % COLORS.length] ?? "yellow";
 
-/**
- * Block id that links to a highlight, stable across syncs.
- *
- * @since 2.0.0
- * @category Highlights
- */
-export const blockId = (annotation: Pick<Annotation, "id">): string =>
-	`kavita-${annotation.id}`;
-
 const quoteLines = (text: string): string =>
 	text
 		.split("\n")
@@ -107,8 +98,8 @@ export const TEMPLATE_VARIABLES: ReadonlyArray<readonly [string, string]> = [
 ];
 
 /**
- * Render one highlight with the configured template, followed by its block
- * id. `None` for hidden spoilers and highlights that render to nothing.
+ * Render one highlight with the configured template. `None` for hidden
+ * spoilers and highlights that render to nothing.
  *
  * @since 2.0.0
  * @category Highlights
@@ -125,9 +116,7 @@ export const renderHighlight = (
 		options.annotationTemplate || DEFAULT_ANNOTATION_TEMPLATE,
 		highlightVariables(annotation, options, kavitaUrl),
 	);
-	return rendered === ""
-		? Option.none()
-		: Option.some(`${rendered}\n\n^${blockId(annotation)}`);
+	return rendered === "" ? Option.none() : Option.some(rendered);
 };
 
 /**

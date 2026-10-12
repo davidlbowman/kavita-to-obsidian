@@ -12,7 +12,6 @@ import {
 	HighlightColor,
 } from "../schemas.js";
 import {
-	blockId,
 	chapters,
 	highlightColor,
 	highlightVariables,
@@ -67,12 +66,6 @@ describe("highlightColor", () => {
 	it.prop("always yields a known color", [Schema.Int], ([slot]) => {
 		expect(Schema.is(HighlightColor)(highlightColor(slot))).toBe(true);
 		expect(highlightColor(slot)).toBe(highlightColor(slot + 5));
-	});
-});
-
-describe("blockId", () => {
-	it.prop("derives from the annotation id", [Annotation], ([annotation]) => {
-		expect(blockId(annotation)).toBe(`kavita-${annotation.id}`);
 	});
 });
 
@@ -201,8 +194,6 @@ describe("renderHighlight", () => {
 						"> Every fire begins.",
 						">",
 						"> **Note:** Opening line",
-						"",
-						`^kavita-${a.id}`,
 					].join("\n"),
 				),
 			);
@@ -216,7 +207,7 @@ describe("renderHighlight", () => {
 			const a = plain(annotation);
 			expect(renderHighlight(a, options, BASE)).toEqual(
 				Option.some(
-					`> [!kavita-yellow] [Page 12](${annotationUrl(BASE, a)})\n> Every fire begins.\n\n^kavita-${a.id}`,
+					`> [!kavita-yellow] [Page 12](${annotationUrl(BASE, a)})\n> Every fire begins.`,
 				),
 			);
 		},
@@ -258,9 +249,7 @@ describe("renderHighlight", () => {
 				{ ...options, annotationTemplate: "{{selectedText}} ({{date}})" },
 				BASE,
 			),
-		).toEqual(
-			Option.some(`Every fire begins. (2026-10-12)\n\n^kavita-${a.id}`),
-		);
+		).toEqual(Option.some("Every fire begins. (2026-10-12)"));
 	});
 
 	it.prop(
@@ -360,7 +349,8 @@ describe("renderChapters", () => {
 		expect(rendered.startsWith("### The Spark\n\n> [!kavita-yellow]")).toBe(
 			true,
 		);
-		expect(rendered.endsWith(`^kavita-${a.id}`)).toBe(true);
+		expect(rendered.endsWith("> Every fire begins.")).toBe(true);
+		expect(rendered).not.toContain("^kavita");
 	});
 
 	it.prop(
@@ -376,8 +366,8 @@ describe("renderChapters", () => {
 				chapterTitle: "Two",
 			};
 			const rendered = renderChapters([one, two, three], options, BASE, 2);
-			expect(rendered).toContain("^kavita-1\n\n> [!kavita-yellow]");
-			expect(rendered).toContain("^kavita-2\n\n## Two\n\n");
+			expect(rendered).toContain("> Every fire begins.\n\n> [!kavita-yellow]");
+			expect(rendered).toContain("> Every fire begins.\n\n## Two\n\n");
 		},
 	);
 

@@ -9,7 +9,7 @@ import { TFile } from "obsidian";
 import { type FakeApp, makeFakeApp } from "../../test-support/FakeApp.js";
 import { KavitaNetworkError } from "../errors.js";
 import { libraryBase } from "../formatters/library.js";
-import { SECTION_END, SECTION_START } from "../formatters/note.js";
+import { MY_NOTES_HEADING } from "../formatters/note.js";
 import {
 	buildBookPath,
 	buildCoverPath,
@@ -144,7 +144,7 @@ const trash = (fake: FakeApp, path: string) =>
 	});
 
 const managedNote = (chapterId: number) =>
-	`---\nkavita_chapter_id: ${chapterId}\nkavita_added: 2000-01-01T00:00:00\nkavita_url: http://kavita.test/library/1/series/1/book/${chapterId}\n---\n\n${SECTION_START}\n\nold\n\n${SECTION_END}\n`;
+	`---\nkavita_chapter_id: ${chapterId}\nkavita_added: 2000-01-01T00:00:00\nkavita_url: http://kavita.test/library/1/series/1/book/${chapterId}\n---\n\nold\n\n${MY_NOTES_HEADING}\n`;
 
 const legacyNote = (chapterId: number) =>
 	`---\nkavita_chapter_id: ${chapterId}\n---\n\n# Old\n`;
@@ -163,10 +163,11 @@ describe("NoteSync, one note per book", () => {
 				const embers = fake.read(EMBERS) ?? "";
 				assert.include(embers, `kavita_chapter_id: ${at(ids, 4)}`);
 				assert.include(embers, "highlights: 2");
-				assert.include(embers, SECTION_START);
-				assert.include(embers, SECTION_END);
-				assert.include(embers, `^kavita-${at(ids, 0)}`);
-				assert.include(embers, `^kavita-${at(ids, 1)}`);
+				assert.include(embers, MY_NOTES_HEADING);
+				assert.include(embers, `annotation=${at(ids, 0)})`);
+				assert.include(embers, `annotation=${at(ids, 1)})`);
+				assert.notInclude(embers, "%%");
+				assert.notInclude(embers, "^kavita");
 				assert.deepStrictEqual(summary, {
 					highlights: 3,
 					newHighlights: 3,
@@ -225,10 +226,10 @@ describe("NoteSync, one note per book", () => {
 			const embers = fake.read(EMBERS) ?? "";
 			assert.include(embers, "rating: 5");
 			assert.include(embers, "My own thoughts on this book.");
-			assert.include(embers, `^kavita-${at(ids, 3)}`);
+			assert.include(embers, `annotation=${at(ids, 3)})`);
 			assert.isAbove(
 				embers.indexOf("My own thoughts"),
-				embers.indexOf(SECTION_END),
+				embers.indexOf(MY_NOTES_HEADING),
 			);
 		}),
 	);
@@ -249,7 +250,7 @@ describe("NoteSync, one note per book", () => {
 
 			assert.strictEqual(summary.notesCreated, 0);
 			assert.isUndefined(fake.read(EMBERS));
-			assert.include(fake.read(moved) ?? "", `^kavita-${at(ids, 3)}`);
+			assert.include(fake.read(moved) ?? "", `annotation=${at(ids, 3)})`);
 		}),
 	);
 
@@ -443,7 +444,7 @@ describe("NoteSync, one note for everything", () => {
 			);
 
 			const note = fake.read("Reading/Kavita.md") ?? "";
-			assert.include(note, SECTION_START);
+			assert.include(note, MY_NOTES_HEADING);
 			assert.include(note, "### Embers");
 			assert.include(note, "### Cinders");
 			assert.include(note, "highlights: 3");

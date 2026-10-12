@@ -11,11 +11,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Setup window.** On first launch, connect to Kavita step by step: server URL, auth key, **Connect** (shows who you're connected as and how many highlights are ready, or exactly what's wrong), layout and folder, then **Sync now**. Reopen it with **Connect to Kavita**.
 - **Beautiful book notes.** Highlights are grouped by chapter in reading order, shown as callouts colored like your Kavita highlights, with your comment inside. Each highlight's page label opens that exact highlight in Kavita's reader. Spoilers appear collapsed.
-- **Linkable highlights.** Every highlight has a stable block ID (`^kavita-<id>`), so you can link or embed a single highlight anywhere.
 - **Book covers** downloaded into the vault and shown at the top of each note.
 - **Library view.** An optional base shows every book as a cover card, plus a table view grouped by series.
 - **Bases-friendly properties:** title, author, series, series index, genres, cover, highlight count, last highlighted, and a link to the book in Kavita.
-- **Your edits are kept.** The plugin only rewrites its own marked section of each note; your text around it and your own properties survive every sync.
+- **Your edits are kept.** Each note ends with a **My notes** heading; everything you write under it, and your own properties, survive every sync.
 - **Rename-safe.** Notes are found by their Kavita ID, so renaming or moving a book note doesn't create a duplicate.
 - **Live progress and summaries.** One notice shows progress, then a summary like "12 highlights from 4 books · 2 new" with a link to open your notes. Unchanged notes aren't rewritten.
 - **Status bar** (desktop) showing when you last synced; select it to sync.

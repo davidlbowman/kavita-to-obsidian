@@ -5,8 +5,8 @@ Bring your reading highlights and notes from [Kavita](https://www.kavitareader.c
 - **One note per book.** Highlights are grouped by chapter in reading order and colored to match your Kavita highlight colors.
 - **Back to the page.** Every highlight links straight to its exact spot in Kavita's reader, and each book links to the book.
 - **Covers and a library.** Each note can show the book's cover, and an optional library view (an Obsidian base) shows all your books as cover cards.
-- **Your notes stay yours.** The plugin only rewrites its own marked section. Anything you write around it, and any properties you add, are kept on every sync.
-- **Native and searchable.** Properties work with Bases and Dataview, each highlight has a stable block link, and the settings are searchable.
+- **Your notes stay yours.** Each note ends with a **My notes** heading. Anything you write under it, and any properties you add, are kept on every sync.
+- **Native and searchable.** Properties work with Bases and Dataview, and the settings are searchable.
 
 ## What a book note looks like
 
@@ -32,10 +32,6 @@ tags:
   - genre/fiction
 ---
 
-My own thoughts go here, outside the synced section, and are never touched.
-
-%% kavita-sync:start · synced from Kavita, edits inside this section are replaced on the next sync %%
-
 ![[Kavita Annotations/Covers/123.png|160]]
 
 by [[F. Scott Fitzgerald]] · [Open in Kavita](https://kavita.example.com/library/1/series/42/book/123)
@@ -47,12 +43,12 @@ by [[F. Scott Fitzgerald]] · [Open in Kavita](https://kavita.example.com/librar
 >
 > **Note:** The narrator sets up his own reliability here.
 
-^kavita-987
+## My notes
 
-%% kavita-sync:end %%
+Anything I write here is kept on every sync.
 ```
 
-In Obsidian each highlight renders as a colored callout. Link to a single highlight from anywhere with `[[The Great Gatsby#^kavita-987]]`, or embed it with `![[The Great Gatsby#^kavita-987]]`. Spoilers, if you include them, appear collapsed.
+In Obsidian each highlight renders as a colored callout, and its page label opens that exact spot in Kavita. Spoilers, if you include them, appear collapsed. Everything above **My notes** is refreshed on each sync; write your own thoughts under it.
 
 Prefer everything in one place? Choose **One note for everything** and all highlights go into a single note, grouped by series, book, and chapter.
 

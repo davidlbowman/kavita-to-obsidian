@@ -222,7 +222,7 @@ Things to look at:
 - **Library.base** in \`Kavita Annotations/\`: your books as cover cards.
 - **Settings → Kavita Sync**: status row with *Test connection* and *Sync now*, and the *Highlight template* page with a live preview.
 - **Status bar** (bottom right): when you last synced. Select it to sync.
-- **Your edits**: write anything outside the \`%% kavita-sync %%\` markers, then sync; it stays.
+- **Your edits**: write anything under **My notes** in a book note, then sync; it stays.
 `,
 );
 

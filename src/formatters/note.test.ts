@@ -9,9 +9,8 @@ import { Book, DEFAULT_SETTINGS } from "../schemas.js";
 import { bookNote } from "./bookNote.js";
 import {
 	mergeNote,
+	MY_NOTES_HEADING,
 	type NoteContent,
-	SECTION_END,
-	SECTION_START,
 	splitNote,
 	syncedHighlightIds,
 } from "./note.js";
@@ -36,13 +35,11 @@ const fresh = [
 	"  - kavita",
 	"---",
 	"",
-	SECTION_START,
-	"",
 	"## The Spark",
 	"",
 	"Highlight text",
 	"",
-	SECTION_END,
+	MY_NOTES_HEADING,
 	"",
 ].join("\n");
 
@@ -81,35 +78,40 @@ describe("splitNote", () => {
 });
 
 describe("mergeNote", () => {
-	it("writes a new note as frontmatter plus the marked section", () => {
+	it("writes a new note as frontmatter, the section, and My notes", () => {
 		expect(mergeNote(undefined, content)).toBe(fresh);
 	});
 
-	it("keeps user text around the section byte for byte", () => {
+	it("keeps everything under My notes byte for byte", () => {
 		const existing = [
 			"---",
 			"title: Old",
 			"---",
 			"",
-			"My intro, *with* formatting.",
-			"",
-			SECTION_START,
-			"",
 			"old highlights",
 			"",
-			SECTION_END,
+			MY_NOTES_HEADING,
 			"",
-			"## My thoughts",
+			"My thoughts, *with* formatting.",
+			"",
+			"### Quotes I love",
 			"",
 			"- keep me",
 			"",
 		].join("\n");
 		const merged = mergeNote(existing, content);
 		expect(merged).toContain(
-			`\n\nMy intro, *with* formatting.\n\n${SECTION_START}\n\n## The Spark\n\nHighlight text\n\n${SECTION_END}\n\n## My thoughts\n\n- keep me\n`,
+			`## The Spark\n\nHighlight text\n\n${MY_NOTES_HEADING}\n\nMy thoughts, *with* formatting.\n\n### Quotes I love\n\n- keep me\n`,
 		);
 		expect(merged.endsWith("- keep me\n")).toBe(true);
 		expect(merged).not.toContain("old highlights");
+	});
+
+	it("uses the last My notes heading as the boundary", () => {
+		const existing = `---\ntitle: x\n---\n\n## My notes\n\nold chapter\n\n${MY_NOTES_HEADING}\n\nmine\n`;
+		const merged = mergeNote(existing, content);
+		expect(merged).toContain(`Highlight text\n\n${MY_NOTES_HEADING}\n\nmine\n`);
+		expect(merged).not.toContain("old chapter");
 	});
 
 	it("keeps user properties and tags, replacing only owned ones", () => {
@@ -125,8 +127,7 @@ describe("mergeNote", () => {
 			"status: reading",
 			"---",
 			"",
-			SECTION_START,
-			SECTION_END,
+			MY_NOTES_HEADING,
 			"",
 		].join("\n");
 		expect(frontmatterOf(mergeNote(existing, content))).toEqual({
@@ -153,31 +154,15 @@ describe("mergeNote", () => {
 		expect(frontmatterOf(merged)).toEqual({ title: "Embers" });
 	});
 
-	it("ends with a newline when the end marker closes the file", () => {
-		const existing = `---\ntitle: x\n---\n\nIntro\n\n${SECTION_START}\nold\n${SECTION_END}`;
-		expect(
-			mergeNote(existing, content).endsWith(
-				`Highlight text\n\n${SECTION_END}\n`,
-			),
-		).toBe(true);
+	it("ends with exactly one newline", () => {
+		const existing = `---\ntitle: x\n---\n\nold\n\n${MY_NOTES_HEADING}\n\nmine\n\n\n`;
+		expect(mergeNote(existing, content).endsWith("mine\n")).toBe(true);
 	});
 
-	it("replaces the whole body of notes written before the markers", () => {
+	it("replaces the whole body of notes from older versions", () => {
 		const existing =
 			"---\nkavita_chapter_id: 5\nupdated: 2024-01-01\n---\n\n# Embers\n\nOld generated body\n";
 		expect(mergeNote(existing, content)).toBe(fresh);
-	});
-
-	it("replaces the body when the markers are out of order", () => {
-		const existing = `---\ntitle: x\n---\n\n${SECTION_END}\n\nstuff\n\n${SECTION_START}\n`;
-		expect(mergeNote(existing, content)).toBe(fresh);
-	});
-
-	it("recognizes the start marker regardless of its explanatory text", () => {
-		const existing = `---\ntitle: x\n---\n\nIntro\n\n%% kavita-sync:start %%\nold\n${SECTION_END}\n`;
-		expect(mergeNote(existing, content)).toContain(
-			`Intro\n\n${SECTION_START}\n\n## The Spark`,
-		);
 	});
 
 	it.prop(
@@ -185,7 +170,6 @@ describe("mergeNote", () => {
 		[Book],
 		([book]) => {
 			const note = bookNote(book, DEFAULT_SETTINGS, BASE, undefined);
-			if (note.section.includes("%%")) return;
 			const once = mergeNote(undefined, note);
 			expect(mergeNote(once, note)).toBe(once);
 		},
@@ -194,10 +178,10 @@ describe("mergeNote", () => {
 });
 
 describe("syncedHighlightIds", () => {
-	it("finds block ids on their own lines only", () => {
+	it("finds annotation ids in links back to Kavita", () => {
 		expect(
 			syncedHighlightIds(
-				"> quote\n\n^kavita-1\n\n> another\n\n^kavita-22\n\ninline ^kavita-3\n^kavita-x\n",
+				"> [!kavita-cyan] [Page 1](https://k/book/2?annotation=1)\n[x](https://k/book/2?a=b&annotation=22) annotation=3 ?annotation=x",
 			),
 		).toEqual(new Set([1, 22]));
 	});

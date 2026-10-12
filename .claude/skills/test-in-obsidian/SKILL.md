@@ -28,7 +28,7 @@ Other versions: `KAVITA_VERSION=0.8.8 bun run dev:vault` (run `bun run integrati
 
 - Obsidian is open on **Kavita Test Vault**, already synced, showing the Embers note. (Only on a brand-new vault does Obsidian ask once to trust its plugins; if the script reports the sync didn't finish, that prompt is why.)
 - Expected result in hierarchical mode: `Kavita Annotations/The Lantern Cycle/Embers.md`, `…/Cinders.md`, and `Kavita Annotations/What If- Questions- Answered/What If- Questions- Answered.md`, each with a cover, a byline, chapter headings, and colored highlight callouts whose page links open Kavita at that highlight. `Kavita Annotations/Library.base` shows the books as cover cards. The reader's highlight ("Iron remembers the shape…") must not appear, and the spoiler only appears (collapsed) with **Include spoilers** on.
-- Things worth trying: write text outside the `%% kavita-sync %%` markers and re-sync (it stays); rename or move a book note and re-sync (no duplicate); the settings status row's **Test connection**; the **Highlight template** page's live preview; the status bar; the **Open this book in Kavita** command.
+- Things worth trying: write text under **My notes** and re-sync (it stays); rename or move a book note and re-sync (no duplicate); the settings status row's **Test connection**; the **Highlight template** page's live preview; the status bar; the **Open this book in Kavita** command.
 - Kavita web UI: http://localhost:5055 (`admin` / `Admin123!`), for adding or deleting highlights and re-syncing (for example, to check orphan cleanup).
 - After further code changes, re-run `bun run dev:vault`; hot-reload swaps the plugin in place.
 - When finished: `bun run integration:down`.
