@@ -3,376 +3,217 @@
  *
  * @module
  */
-import { Effect, Layer } from "effect";
-import { type App, Notice, Plugin, PluginSettingTab, Setting } from "obsidian";
-import { validateTemplate } from "./formatters/template.js";
-import { DEFAULT_ANNOTATION_TEMPLATE, DEFAULT_SETTINGS } from "./schemas.js";
-import { AnnotationSyncer } from "./services/AnnotationSyncer.js";
-import { showErrorNotice } from "./services/ErrorHandler.js";
-import { HierarchicalSyncer } from "./services/HierarchicalSyncer.js";
-import { KavitaClient } from "./services/KavitaClient.js";
-import { ObsidianAdapter } from "./services/ObsidianAdapter.js";
-import { ObsidianApp } from "./services/ObsidianApp.js";
+import { Effect } from "effect";
+import { Platform, Plugin, TFile } from "obsidian";
+import { buildLibraryPath } from "./formatters/paths.js";
+import {
+	type Annotation,
+	DEFAULT_SETTINGS,
+	decodePluginSettings,
+	type PluginSettings,
+} from "./schemas.js";
 import { ObsidianHttpClient } from "./services/ObsidianHttpClient.js";
-import { PluginConfig } from "./services/PluginConfig.js";
+import { recentHighlights } from "./sync.js";
+import { KavitaSettingTab, type SettingsHost } from "./ui/SettingsTab.js";
+import { SetupModal, type SetupHost } from "./ui/SetupModal.js";
+import {
+	type ConnectionResult,
+	SyncController,
+	type SyncHost,
+} from "./ui/SyncController.js";
 
 /**
- * Mutable settings interface for plugin storage.
+ * Name of the secret holding the Kavita auth key.
+ *
+ * @since 2.0.0
+ * @category Constants
  */
-interface PluginSettingsData {
-	kavitaUrl: string;
-	kavitaApiKey: string;
-	outputPath: string;
-	matchThreshold: number;
-	includeComments: boolean;
-	includeSpoilers: boolean;
-	includeTags: boolean;
-	tagPrefix: string;
-	includeWikilinks: boolean;
-	exportMode: "single-file" | "hierarchical";
-	rootFolderName: string;
-	deleteOrphanedFiles: boolean;
-	annotationTemplate: string;
-}
+export const AUTH_KEY_SECRET = "kavita-sync-auth-key";
 
-export default class KavitaToObsidianPlugin extends Plugin {
-	settings: PluginSettingsData = { ...DEFAULT_SETTINGS };
+const STATUS_REFRESH_MS = 60_000;
 
-	override async onload() {
+export default class KavitaSyncPlugin
+	extends Plugin
+	implements SyncHost, SettingsHost, SetupHost
+{
+	override settings: PluginSettings = DEFAULT_SETTINGS;
+	private readonly controller = new SyncController(this);
+	private autoSyncTimer: number | undefined;
+	private setupModal: SetupModal | undefined;
+
+	override async onload(): Promise<void> {
 		await this.loadSettings();
 
-		this.addRibbonIcon("book-open", "Sync annotations", () => {
-			this.syncAnnotations();
-		});
+		this.addSettingTab(new KavitaSettingTab(this.app, this, this));
+
+		this.addRibbonIcon("book-open", "Sync Kavita highlights", () =>
+			this.controller.sync("manual"),
+		);
 
 		this.addCommand({
-			id: "sync-kavita-annotations",
-			name: "Sync annotations",
-			callback: () => {
-				this.syncAnnotations();
+			id: "sync-highlights",
+			name: "Sync highlights",
+			icon: "refresh-cw",
+			callback: () => this.controller.sync("manual"),
+		});
+		this.addCommand({
+			id: "connect",
+			name: "Connect to Kavita",
+			icon: "plug",
+			callback: () => this.openSetup(),
+		});
+		this.addCommand({
+			id: "open-in-kavita",
+			name: "Open this book in Kavita",
+			icon: "external-link",
+			checkCallback: (checking) => {
+				const url = this.activeKavitaUrl();
+				if (url === undefined) return false;
+				if (!checking) window.open(url);
+				return true;
+			},
+		});
+		this.addCommand({
+			id: "open-library",
+			name: "Open library",
+			icon: "library",
+			checkCallback: (checking) => {
+				const library = this.app.vault.getAbstractFileByPath(
+					buildLibraryPath(this.settings.rootFolderName),
+				);
+				if (!(library instanceof TFile)) return false;
+				if (!checking) void this.app.workspace.getLeaf(false).openFile(library);
+				return true;
 			},
 		});
 
-		this.addSettingTab(new KavitaSettingTab(this.app, this));
+		this.registerObsidianProtocolHandler("kavita-sync", () =>
+			this.controller.sync("manual"),
+		);
+
+		if (!Platform.isMobile) {
+			this.controller.attachStatusBar(this.addStatusBarItem());
+			this.registerInterval(
+				window.setInterval(
+					() => this.controller.refreshStatus(),
+					STATUS_REFRESH_MS,
+				),
+			);
+		}
+
+		this.app.workspace.onLayoutReady(() => {
+			if (!this.isConfigured() && !this.settings.setupDismissed) {
+				this.openSetup();
+			} else if (this.settings.syncOnStartup) {
+				this.controller.sync("automatic");
+			}
+		});
+		this.scheduleAutoSync();
 	}
 
-	async loadSettings() {
-		const data = (await this.loadData()) as Partial<PluginSettingsData> | null;
-		this.settings = Object.assign({}, DEFAULT_SETTINGS, data ?? {});
+	override async onExternalSettingsChange(): Promise<void> {
+		await this.loadSettings();
+		this.settingsChanged();
 	}
 
-	async saveSettings() {
+	override onunload(): void {
+		this.controller.stop();
+		this.setupModal?.close();
+	}
+
+	private async loadSettings(): Promise<void> {
+		const loaded = decodePluginSettings(await this.loadData());
+		if (loaded.kavitaApiKey !== "" && loaded.authKeySecret === "") {
+			this.app.secretStorage.setSecret(AUTH_KEY_SECRET, loaded.kavitaApiKey);
+			this.settings = {
+				...loaded,
+				authKeySecret: AUTH_KEY_SECRET,
+				kavitaApiKey: "",
+			};
+			await this.saveData(this.settings);
+			return;
+		}
+		this.settings = loaded;
+	}
+
+	async updateSettings(patch: Partial<PluginSettings>): Promise<void> {
+		this.settings = { ...this.settings, ...patch };
 		await this.saveData(this.settings);
+		this.controller.refreshStatus();
 	}
 
-	/**
-	 * Run the annotation sync using Effect.
-	 */
-	private syncAnnotations() {
-		if (!this.settings.kavitaUrl) {
-			new Notice("Please configure server URL in plugin settings");
-			return;
-		}
-		if (!this.settings.kavitaApiKey) {
-			new Notice("Please configure API key in plugin settings");
-			return;
-		}
+	settingsChanged(): void {
+		this.scheduleAutoSync();
+		this.controller.refreshStatus();
+	}
 
-		new Notice("Syncing annotations…");
+	private authKey(settings: PluginSettings): string {
+		return settings.authKeySecret === ""
+			? settings.kavitaApiKey
+			: (this.app.secretStorage.getSecret(settings.authKeySecret) ?? "");
+	}
 
-		const isHierarchical = this.settings.exportMode === "hierarchical";
+	withAuthKey(settings: PluginSettings): PluginSettings {
+		return { ...settings, kavitaApiKey: this.authKey(settings) };
+	}
 
-		const ConfigLayer = PluginConfig.fromSettings(this.settings);
-		const ObsidianAppLayer = Layer.succeed(ObsidianApp, this.app);
+	resolvedSettings(): PluginSettings {
+		return this.withAuthKey(this.settings);
+	}
 
-		const ObsidianAdapterLayer = ObsidianAdapter.layerNoDeps.pipe(
-			Layer.provide(ObsidianAppLayer),
+	isConfigured(): boolean {
+		return (
+			this.settings.kavitaUrl.trim() !== "" &&
+			this.authKey(this.settings).trim() !== ""
 		);
+	}
 
-		const KavitaClientLayer = KavitaClient.layerNoDeps.pipe(
-			Layer.provide(ConfigLayer),
-			Layer.provide(ObsidianHttpClient),
+	isSyncing(): boolean {
+		return this.controller.isRunning;
+	}
+
+	openSetup(): void {
+		this.setupModal?.close();
+		this.setupModal = new SetupModal(this.app, this);
+		this.setupModal.open();
+	}
+
+	syncNow(): void {
+		this.controller.sync("manual");
+	}
+
+	checkConnection(settings: PluginSettings): Promise<ConnectionResult> {
+		return this.controller.checkConnection(settings);
+	}
+
+	previewHighlights(): Promise<ReadonlyArray<Annotation>> {
+		if (!this.isConfigured()) return Promise.resolve([]);
+		return Effect.runPromise(
+			recentHighlights(this.resolvedSettings(), ObsidianHttpClient, 3).pipe(
+				Effect.orElseSucceed((): ReadonlyArray<Annotation> => []),
+			),
 		);
-
-		if (isHierarchical) {
-			const program = Effect.gen(function* () {
-				const syncer = yield* HierarchicalSyncer;
-				return yield* syncer.syncAll;
-			});
-
-			const SyncerLayer = HierarchicalSyncer.layerNoDeps.pipe(
-				Layer.provide(KavitaClientLayer),
-				Layer.provide(ObsidianAdapterLayer),
-				Layer.provide(ConfigLayer),
-			);
-
-			const runnable = program.pipe(
-				Effect.provide(SyncerLayer),
-				Effect.match({
-					onSuccess: (result) => {
-						new Notice(
-							`Synced ${result.totalAnnotations} annotations across ${result.seriesCount} series (${result.bookCount} books)`,
-						);
-					},
-					onFailure: (error) => {
-						showErrorNotice(error);
-					},
-				}),
-			);
-
-			Effect.runPromise(runnable).catch((defect: unknown) => {
-				console.error("Kavita sync defect:", defect);
-				new Notice("Sync failed unexpectedly. Check the developer console.");
-			});
-		} else {
-			const program = Effect.gen(function* () {
-				const syncer = yield* AnnotationSyncer;
-				return yield* syncer.syncToFile;
-			});
-
-			const SyncerLayer = AnnotationSyncer.layerNoDeps.pipe(
-				Layer.provide(KavitaClientLayer),
-				Layer.provide(ObsidianAdapterLayer),
-				Layer.provide(ConfigLayer),
-			);
-
-			const runnable = program.pipe(
-				Effect.provide(SyncerLayer),
-				Effect.match({
-					onSuccess: (result) => {
-						new Notice(
-							`Synced ${result.count} annotations to ${result.outputPath}`,
-						);
-					},
-					onFailure: (error) => {
-						showErrorNotice(error);
-					},
-				}),
-			);
-
-			Effect.runPromise(runnable).catch((defect: unknown) => {
-				console.error("Kavita sync defect:", defect);
-				new Notice("Sync failed unexpectedly. Check the developer console.");
-			});
-		}
-	}
-}
-
-class KavitaSettingTab extends PluginSettingTab {
-	plugin: KavitaToObsidianPlugin;
-
-	constructor(app: App, plugin: KavitaToObsidianPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
 	}
 
-	display(): void {
-		const { containerEl } = this;
-		containerEl.empty();
+	private activeKavitaUrl(): string | undefined {
+		const file = this.app.workspace.getActiveFile();
+		if (file === null) return undefined;
+		const url: unknown =
+			this.app.metadataCache.getFileCache(file)?.frontmatter?.kavita_url;
+		return typeof url === "string" && url.startsWith("http") ? url : undefined;
+	}
 
-		new Setting(containerEl)
-			.setName("Kavita URL")
-			.setDesc("The URL of your Kavita server (e.g., http://localhost:5000).")
-			.addText((text) =>
-				text
-					.setPlaceholder("Enter URL")
-					.setValue(this.plugin.settings.kavitaUrl)
-					.onChange(async (value) => {
-						this.plugin.settings.kavitaUrl = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Kavita API key")
-			.setDesc("API key for your server.")
-			.addText((text) => {
-				text
-					.setPlaceholder("Enter your API key")
-					.setValue(this.plugin.settings.kavitaApiKey)
-					.onChange(async (value) => {
-						this.plugin.settings.kavitaApiKey = value;
-						await this.plugin.saveSettings();
-					});
-				text.inputEl.setAttribute("type", "password");
-			});
-
-		new Setting(containerEl).setName("Export").setHeading();
-
-		new Setting(containerEl)
-			.setName("Export mode")
-			.setDesc(
-				"Single file exports all annotations to one file. Hierarchical creates folders for each series with separate book files.",
-			)
-			.addDropdown((dropdown) =>
-				dropdown
-					.addOption("single-file", "Single file")
-					.addOption("hierarchical", "Hierarchical folders")
-					.setValue(this.plugin.settings.exportMode ?? "hierarchical")
-					.onChange(async (value) => {
-						this.plugin.settings.exportMode = value as
-							| "single-file"
-							| "hierarchical";
-						await this.plugin.saveSettings();
-						this.display();
-					}),
-			);
-
-		if (this.plugin.settings.exportMode === "single-file") {
-			new Setting(containerEl)
-				.setName("Output path")
-				.setDesc("Path to the Markdown file where annotations will be saved.")
-				.addText((text) =>
-					text
-						.setPlaceholder("Enter file path")
-						.setValue(
-							this.plugin.settings.outputPath ?? "kavita-annotations.md",
-						)
-						.onChange(async (value) => {
-							this.plugin.settings.outputPath = value;
-							await this.plugin.saveSettings();
-						}),
-				);
-		} else {
-			new Setting(containerEl)
-				.setName("Root folder")
-				.setDesc("Name of the folder where series folders will be created.")
-				.addText((text) =>
-					text
-						.setPlaceholder("Enter folder name")
-						.setValue(
-							this.plugin.settings.rootFolderName ?? "Kavita Annotations",
-						)
-						.onChange(async (value) => {
-							this.plugin.settings.rootFolderName = value;
-							await this.plugin.saveSettings();
-						}),
-				);
-
-			new Setting(containerEl)
-				.setName("Delete orphaned files")
-				.setDesc(
-					"Automatically remove files when their source annotations are deleted.",
-				)
-				.addToggle((toggle) =>
-					toggle
-						.setValue(this.plugin.settings.deleteOrphanedFiles ?? true)
-						.onChange(async (value) => {
-							this.plugin.settings.deleteOrphanedFiles = value;
-							await this.plugin.saveSettings();
-						}),
-				);
-
-			containerEl.createEl("p", {
-				text: "Files in hierarchical mode are fully managed by this plugin and regenerated on each sync. Any manual edits will be lost.",
-				cls: "setting-item-description",
-			});
+	private scheduleAutoSync(): void {
+		if (this.autoSyncTimer !== undefined) {
+			window.clearInterval(this.autoSyncTimer);
+			this.autoSyncTimer = undefined;
 		}
-
-		new Setting(containerEl).setName("Content").setHeading();
-
-		new Setting(containerEl)
-			.setName("Include comments")
-			.setDesc("Include your comments and notes with each annotation.")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.includeComments ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.includeComments = value;
-						await this.plugin.saveSettings();
-					}),
+		if (this.settings.syncInterval > 0) {
+			this.autoSyncTimer = window.setInterval(
+				() => this.controller.sync("automatic"),
+				this.settings.syncInterval * 60_000,
 			);
-
-		new Setting(containerEl)
-			.setName("Include spoilers")
-			.setDesc("Include annotations marked as spoilers.")
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.includeSpoilers ?? false)
-					.onChange(async (value) => {
-						this.plugin.settings.includeSpoilers = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl).setName("Formatting").setHeading();
-
-		new Setting(containerEl)
-			.setName("Include tags")
-			.setDesc(
-				"Generate Obsidian tags from series, author, and library names (e.g., #kavita/series/the-great-gatsby).",
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.includeTags ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.includeTags = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Tag prefix")
-			.setDesc(
-				"Optional prefix for genre tags (e.g., 'genre/' produces #genre/fiction).",
-			)
-			.addText((text) =>
-				text
-					.setPlaceholder("")
-					.setValue(this.plugin.settings.tagPrefix ?? "")
-					.onChange(async (value) => {
-						this.plugin.settings.tagPrefix = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Include wikilinks")
-			.setDesc(
-				"Create [[wikilinks]] for series and author names to link to existing notes.",
-			)
-			.addToggle((toggle) =>
-				toggle
-					.setValue(this.plugin.settings.includeWikilinks ?? true)
-					.onChange(async (value) => {
-						this.plugin.settings.includeWikilinks = value;
-						await this.plugin.saveSettings();
-					}),
-			);
-
-		new Setting(containerEl)
-			.setName("Annotation template")
-			.setDesc(
-				"Customize how each annotation is formatted. Variables: {{blockquote}} (blockquoted text), {{selectedText}} (raw text), {{comment}}, {{pageNumber}}, {{chapterTitle}}, {{seriesName}}, {{createdUtc}}. Use {{#if variable}}...{{/if}} for conditionals.",
-			)
-			.addTextArea((text) => {
-				text
-					.setPlaceholder(DEFAULT_ANNOTATION_TEMPLATE)
-					.setValue(this.plugin.settings.annotationTemplate ?? "")
-					.onChange(async (value) => {
-						if (value.trim() !== "") {
-							const result = validateTemplate(value);
-							if (!result.valid) {
-								new Notice(`Template error: ${result.error}`);
-								return;
-							}
-						}
-						this.plugin.settings.annotationTemplate = value;
-						await this.plugin.saveSettings();
-					});
-				text.inputEl.rows = 8;
-				text.inputEl.cols = 40;
-			})
-			.addExtraButton((button) =>
-				button
-					.setIcon("reset")
-					.setTooltip("Reset to default template")
-					.onClick(async () => {
-						this.plugin.settings.annotationTemplate =
-							DEFAULT_ANNOTATION_TEMPLATE;
-						await this.plugin.saveSettings();
-						this.display();
-					}),
-			);
+			this.registerInterval(this.autoSyncTimer);
+		}
 	}
 }

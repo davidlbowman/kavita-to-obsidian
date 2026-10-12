@@ -1,392 +1,257 @@
 /**
- * Kavita API client service for fetching annotations.
+ * Read-only Kavita API client for the data a sync needs.
  *
  * @module
  */
-import { Effect, Layer, Redacted, Schema, ServiceMap } from "effect";
+import {
+	Context,
+	Effect,
+	flow,
+	Layer,
+	Option,
+	Redacted,
+	type Schema,
+} from "effect";
 import {
 	HttpClient,
+	type HttpClientError,
 	HttpClientRequest,
 	HttpClientResponse,
-} from "effect/unstable/http";
+} from "effect/http";
 import {
 	KavitaAuthError,
+	type KavitaError,
 	KavitaNetworkError,
 	KavitaParseError,
 } from "../errors.js";
 import {
-	AnnotationDto,
-	AnnotationsResponse,
-	type BrowseAnnotationFilterDto,
-	type CreateAnnotationDto,
-	type CreateLibraryDto,
-	LibraryDto,
-	SeriesDto,
-	SeriesMetadataDto,
-	SeriesPagedResponse,
-	VolumeDto,
+	type Annotation,
+	Annotations,
+	CurrentUser,
+	PluginSession,
+	type Volume,
+	Volumes,
 } from "../schemas.js";
 import { PluginConfig } from "./PluginConfig.js";
 
 /**
- * Kavita API client service.
+ * Name this plugin reports to Kavita when exchanging the auth key.
  *
- * Provides methods to fetch annotations from a Kavita server.
+ * @since 2.0.0
+ * @category Constants
+ */
+export const PLUGIN_NAME = "kavita-to-obsidian";
+
+/**
+ * A downloaded cover image.
+ *
+ * @since 2.0.0
+ * @category Covers
+ */
+export interface CoverImage {
+	readonly data: ArrayBuffer;
+	readonly extension: string;
+}
+
+/**
+ * File extension for an image content type.
+ *
+ * @since 2.0.0
+ * @category Covers
+ */
+export const imageExtension = (contentType: string | undefined): string => {
+	const subtype = contentType?.split(";")[0]?.split("/")[1]?.trim();
+	if (subtype === "jpeg") return "jpg";
+	if (subtype === "png" || subtype === "webp" || subtype === "gif") {
+		return subtype;
+	}
+	return "png";
+};
+
+const OWNER_FILTER_FIELD = 1;
+const EQUAL_COMPARISON = 0;
+const AND_COMBINATION = 1;
+
+/**
+ * Map an HTTP or decoding failure on `endpoint` to a Kavita error.
+ *
+ * @since 2.0.0
+ * @category Errors
+ */
+export const toKavitaError =
+	(endpoint: string) =>
+	(
+		error: HttpClientError.HttpClientError | Schema.SchemaError,
+	): KavitaError => {
+		if (error._tag === "SchemaError") {
+			return new KavitaParseError({ endpoint, cause: error });
+		}
+		if (error.reason._tag === "DecodeError") {
+			return new KavitaParseError({ endpoint, cause: error });
+		}
+		const status = error.response?.status;
+		if (status === 401 || status === 403) {
+			return new KavitaAuthError({ endpoint, statusCode: status });
+		}
+		return new KavitaNetworkError({
+			endpoint,
+			cause: error,
+			...(status === undefined ? {} : { statusCode: status }),
+		});
+	};
+
+const request = <S extends Schema.Decoder<unknown>>(
+	endpoint: string,
+	client: HttpClient.HttpClient,
+	req: HttpClientRequest.HttpClientRequest,
+	schema: S,
+) =>
+	client
+		.execute(req)
+		.pipe(
+			Effect.flatMap(HttpClientResponse.schemaBodyJson(schema)),
+			Effect.mapError(toKavitaError(endpoint)),
+		);
+
+/**
+ * Kavita API client.
+ *
+ * Exchanges the configured auth key for a session token and resolves the
+ * user it belongs to when built, then reads that user's annotations and
+ * volume metadata. Other users' shared annotations are never returned.
  *
  * @since 0.0.1
  * @category Services
  */
-export class KavitaClient extends ServiceMap.Service<
+export class KavitaClient extends Context.Service<
 	KavitaClient,
 	{
-		readonly fetchAllAnnotations: Effect.Effect<
-			typeof AnnotationsResponse.Type,
-			KavitaNetworkError
-		>;
-		fetchAnnotationsFiltered(
-			filter: typeof BrowseAnnotationFilterDto.Type,
-		): Effect.Effect<typeof AnnotationsResponse.Type, KavitaNetworkError>;
-		createAnnotation(
-			annotation: typeof CreateAnnotationDto.Encoded,
-		): Effect.Effect<typeof AnnotationDto.Type, KavitaNetworkError>;
-		readonly getLibraries: Effect.Effect<
-			ReadonlyArray<typeof LibraryDto.Type>,
-			KavitaNetworkError
-		>;
-		createLibrary(
-			library: typeof CreateLibraryDto.Type,
-		): Effect.Effect<void, KavitaNetworkError>;
-		readonly scanAllLibraries: Effect.Effect<void, KavitaNetworkError>;
-		scanLibrary(
-			libraryId: number,
-			force?: boolean,
-		): Effect.Effect<void, KavitaNetworkError>;
-		readonly getAllSeries: Effect.Effect<
-			ReadonlyArray<typeof SeriesDto.Type>,
-			KavitaNetworkError
-		>;
-		getVolumes(
+		readonly user: CurrentUser;
+		readonly annotations: Effect.Effect<ReadonlyArray<Annotation>, KavitaError>;
+		readonly volumes: (
 			seriesId: number,
-		): Effect.Effect<ReadonlyArray<typeof VolumeDto.Type>, KavitaNetworkError>;
-		getSeriesMetadata(
-			seriesId: number,
-		): Effect.Effect<typeof SeriesMetadataDto.Type, KavitaNetworkError>;
+		) => Effect.Effect<ReadonlyArray<Volume>, KavitaError>;
+		readonly cover: (
+			chapterId: number,
+		) => Effect.Effect<Option.Option<CoverImage>, KavitaError>;
 	}
->()("KavitaClient") {
+>()("kavita-to-obsidian/KavitaClient") {
 	/**
-	 * Create the KavitaClient service implementation.
+	 * Requires a `PluginConfig` and an `HttpClient`.
 	 *
 	 * @since 0.0.1
-	 * @category Constructors
+	 * @category Layers
 	 */
-	static readonly make = Effect.gen(function* () {
-		const httpClient = yield* HttpClient.HttpClient;
-		const config = yield* PluginConfig;
-
-		const baseClient = httpClient.pipe(
-			HttpClient.mapRequest(
-				HttpClientRequest.prependUrl(config.kavitaUrl.href),
-			),
-		);
-
-		const apiKey = Redacted.value(config.kavitaApiKey);
-		const authRequest = HttpClientRequest.post(
-			`/api/Plugin/authenticate?apiKey=${encodeURIComponent(apiKey)}&pluginName=kavita-to-obsidian`,
-		);
-		const authResponse = yield* baseClient
-			.pipe(HttpClient.filterStatusOk)
-			.execute(authRequest)
-			.pipe(
-				Effect.mapError((e) => {
-					if (
-						"reason" in e &&
-						e.reason._tag === "StatusCodeError" &&
-						"response" in e.reason
-					) {
-						const status = (e.reason as { response: { status: number } })
-							.response.status;
-						if (status === 401 || status === 403) {
-							return new KavitaAuthError({ reason: "Invalid API key" });
-						}
-					}
-					return new KavitaNetworkError({
-						url: "/api/Plugin/authenticate",
-						cause: e,
-					});
-				}),
-				Effect.scoped,
+	static readonly layerNoDeps = Layer.effect(
+		KavitaClient,
+		Effect.gen(function* () {
+			const config = yield* PluginConfig;
+			const base = (yield* HttpClient.HttpClient).pipe(
+				HttpClient.mapRequest(
+					HttpClientRequest.prependUrl(config.kavitaUrl.href),
+				),
+				HttpClient.filterStatusOk,
+			);
+			const http = base.pipe(
+				HttpClient.mapRequest(HttpClientRequest.acceptJson),
 			);
 
-		const jwtToken = yield* HttpClientResponse.schemaBodyJson(
-			Schema.Struct({ token: Schema.String }),
-		)(authResponse).pipe(
-			Effect.map((r) => r.token),
-			Effect.mapError(
-				() =>
-					new KavitaParseError({
-						expected: "{ token: string }",
+			const session = yield* request(
+				"/api/Plugin/authenticate",
+				http,
+				HttpClientRequest.post("/api/Plugin/authenticate").pipe(
+					HttpClientRequest.setUrlParams({
+						apiKey: Redacted.value(config.kavitaApiKey),
+						pluginName: PLUGIN_NAME,
 					}),
-			),
-		);
+				),
+				PluginSession,
+			);
 
-		const client = httpClient.pipe(
-			HttpClient.filterStatusOk,
-			HttpClient.mapRequest(
-				HttpClientRequest.prependUrl(config.kavitaUrl.href),
-			),
-			HttpClient.mapRequest(
-				HttpClientRequest.setHeader("Authorization", `Bearer ${jwtToken}`),
-			),
-		);
+			const authed = http.pipe(
+				HttpClient.mapRequest(HttpClientRequest.bearerToken(session.token)),
+			);
 
-		/**
-		 * Fetch all annotations without filtering.
-		 *
-		 * @since 0.0.1
-		 */
-		const fetchAllAnnotations = Effect.gen(function* () {
-			const request = HttpClientRequest.post(
+			const user = yield* request(
+				"/api/Account",
+				authed,
+				HttpClientRequest.get("/api/Account"),
+				CurrentUser,
+			);
+
+			const annotations = request(
 				"/api/Annotation/all-filtered",
-			).pipe(HttpClientRequest.bodyJsonUnsafe({}));
-			const response = yield* client.execute(request);
-			return yield* HttpClientResponse.schemaBodyJson(AnnotationsResponse)(
-				response,
-			);
-		}).pipe(
-			Effect.mapError(
-				(e) =>
-					new KavitaNetworkError({
-						url: "/api/Annotation/all-filtered",
-						cause: e,
+				authed,
+				HttpClientRequest.post("/api/Annotation/all-filtered").pipe(
+					HttpClientRequest.bodyJsonUnsafe({
+						statements: [
+							{
+								field: OWNER_FILTER_FIELD,
+								comparison: EQUAL_COMPARISON,
+								value: String(user.id),
+							},
+						],
+						combination: AND_COMBINATION,
 					}),
-			),
-			Effect.scoped,
-		);
-
-		/**
-		 * Fetch annotations with filtering options.
-		 *
-		 * @since 0.0.1
-		 */
-		const fetchAnnotationsFiltered = (
-			filter: typeof BrowseAnnotationFilterDto.Type,
-		) =>
-			Effect.gen(function* () {
-				const request = HttpClientRequest.post(
-					"/api/Annotation/all-filtered",
-				).pipe(HttpClientRequest.bodyJsonUnsafe(filter));
-				const response = yield* client.execute(request);
-				return yield* HttpClientResponse.schemaBodyJson(AnnotationsResponse)(
-					response,
-				);
-			}).pipe(
-				Effect.mapError(
-					(e) =>
-						new KavitaNetworkError({
-							url: "/api/Annotation/all-filtered",
-							cause: e,
-						}),
 				),
-				Effect.scoped,
+				Annotations,
+			).pipe(
+				Effect.map((all) => all.filter((a) => a.ownerUserId === user.id)),
+				Effect.withSpan("KavitaClient.annotations"),
 			);
 
-		/**
-		 * Get all libraries.
-		 *
-		 * @since 0.0.1
-		 */
-		const getLibraries = Effect.gen(function* () {
-			const request = HttpClientRequest.get("/api/Library/libraries");
-			const response = yield* client.execute(request);
-			return yield* HttpClientResponse.schemaBodyJson(Schema.Array(LibraryDto))(
-				response,
-			);
-		}).pipe(
-			Effect.mapError(
-				(e) =>
-					new KavitaNetworkError({ url: "/api/Library/libraries", cause: e }),
-			),
-			Effect.scoped,
-		);
-
-		/**
-		 * Create a new library.
-		 *
-		 * @since 0.0.1
-		 */
-		const createLibrary = (library: typeof CreateLibraryDto.Type) =>
-			Effect.gen(function* () {
-				const request = HttpClientRequest.post("/api/Library/create").pipe(
-					HttpClientRequest.bodyJsonUnsafe(library),
+			const volumes = Effect.fn("KavitaClient.volumes")(function* (
+				seriesId: number,
+			) {
+				return yield* request(
+					"/api/Series/volumes",
+					authed,
+					HttpClientRequest.get("/api/Series/volumes").pipe(
+						HttpClientRequest.setUrlParams({ seriesId: String(seriesId) }),
+					),
+					Volumes,
 				);
-				yield* client.execute(request);
-			}).pipe(
-				Effect.mapError(
-					(e) =>
-						new KavitaNetworkError({ url: "/api/Library/create", cause: e }),
+			});
+
+			const images = base.pipe(
+				HttpClient.mapRequest(
+					flow(
+						HttpClientRequest.bearerToken(session.token),
+						HttpClientRequest.accept("image/*"),
+					),
 				),
-				Effect.scoped,
 			);
 
-		/**
-		 * Trigger a scan of all libraries.
-		 *
-		 * @since 0.0.1
-		 */
-		const scanAllLibraries = Effect.gen(function* () {
-			const request = HttpClientRequest.post("/api/Library/scan-all");
-			yield* client.execute(request);
-		}).pipe(
-			Effect.mapError(
-				(e) =>
-					new KavitaNetworkError({ url: "/api/Library/scan-all", cause: e }),
-			),
-			Effect.scoped,
-		);
+			const cover = Effect.fn("KavitaClient.cover")(function* (
+				chapterId: number,
+			) {
+				return yield* images
+					.execute(
+						HttpClientRequest.get("/api/Image/chapter-cover").pipe(
+							HttpClientRequest.setUrlParams({
+								chapterId: String(chapterId),
+								apiKey: Redacted.value(config.kavitaApiKey),
+							}),
+						),
+					)
+					.pipe(
+						Effect.flatMap((response) =>
+							Effect.map(response.arrayBuffer, (data) =>
+								Option.some({
+									data,
+									extension: imageExtension(response.headers["content-type"]),
+								}),
+							),
+						),
+						Effect.catchIf(
+							(error) => error.response?.status === 404,
+							() => Effect.succeedNone,
+						),
+						Effect.mapError(toKavitaError("/api/Image/chapter-cover")),
+					);
+			});
 
-		/**
-		 * Trigger a scan of a specific library.
-		 *
-		 * @since 0.0.1
-		 */
-		const scanLibrary = (libraryId: number, force = true) =>
-			Effect.gen(function* () {
-				const request = HttpClientRequest.post(
-					`/api/Library/scan?libraryId=${libraryId}&force=${force}`,
-				);
-				yield* client.execute(request);
-			}).pipe(
-				Effect.mapError(
-					(e) => new KavitaNetworkError({ url: "/api/Library/scan", cause: e }),
-				),
-				Effect.scoped,
-			);
-
-		/**
-		 * Get all series (paginated).
-		 *
-		 * Handles both array and paged response formats from the API.
-		 *
-		 * @since 0.0.1
-		 */
-		const getAllSeries = Effect.gen(function* () {
-			const request = HttpClientRequest.post("/api/Series/all-v2").pipe(
-				HttpClientRequest.bodyJsonUnsafe({}),
-			);
-			const response = yield* client.execute(request);
-			const data = yield* HttpClientResponse.schemaBodyJson(
-				Schema.Union([Schema.Array(SeriesDto), SeriesPagedResponse]),
-			)(response);
-			if ("result" in data) {
-				return data.result;
-			}
-			return data;
-		}).pipe(
-			Effect.mapError(
-				(e) => new KavitaNetworkError({ url: "/api/Series/all-v2", cause: e }),
-			),
-			Effect.scoped,
-		);
-
-		/**
-		 * Get volumes (with chapters) for a series.
-		 *
-		 * @since 0.0.1
-		 */
-		const getVolumes = (seriesId: number) =>
-			Effect.gen(function* () {
-				const request = HttpClientRequest.get(
-					`/api/Series/volumes?seriesId=${seriesId}`,
-				);
-				const response = yield* client.execute(request);
-				return yield* HttpClientResponse.schemaBodyJson(
-					Schema.Array(VolumeDto),
-				)(response);
-			}).pipe(
-				Effect.mapError(
-					(e) =>
-						new KavitaNetworkError({ url: "/api/Series/volumes", cause: e }),
-				),
-				Effect.scoped,
-			);
-
-		/**
-		 * Create a new annotation.
-		 *
-		 * @since 0.0.1
-		 */
-		const createAnnotation = (annotation: typeof CreateAnnotationDto.Encoded) =>
-			Effect.gen(function* () {
-				const request = HttpClientRequest.post("/api/Annotation/create").pipe(
-					HttpClientRequest.bodyJsonUnsafe(annotation),
-				);
-				const response = yield* client.execute(request);
-				return yield* HttpClientResponse.schemaBodyJson(AnnotationDto)(
-					response,
-				);
-			}).pipe(
-				Effect.mapError(
-					(e) =>
-						new KavitaNetworkError({
-							url: "/api/Annotation/create",
-							cause: e,
-						}),
-				),
-				Effect.scoped,
-			);
-
-		/**
-		 * Get metadata for a series (authors, genres, tags, etc.).
-		 *
-		 * @since 0.0.2
-		 */
-		const getSeriesMetadata = (seriesId: number) =>
-			Effect.gen(function* () {
-				const request = HttpClientRequest.get(
-					`/api/Series/metadata?seriesId=${seriesId}`,
-				);
-				const response = yield* client.execute(request);
-				return yield* HttpClientResponse.schemaBodyJson(SeriesMetadataDto)(
-					response,
-				);
-			}).pipe(
-				Effect.mapError(
-					(e) =>
-						new KavitaNetworkError({
-							url: `/api/Series/metadata?seriesId=${seriesId}`,
-							cause: e,
-						}),
-				),
-				Effect.scoped,
-			);
-
-		return KavitaClient.of({
-			fetchAllAnnotations,
-			fetchAnnotationsFiltered,
-			createAnnotation,
-			getLibraries,
-			createLibrary,
-			scanAllLibraries,
-			scanLibrary,
-			getAllSeries,
-			getVolumes,
-			getSeriesMetadata,
-		});
-	});
-
-	/**
-	 * Layer that creates the KavitaClient (without providing dependencies).
-	 *
-	 * @since 0.0.1
-	 * @category Layers
-	 */
-	static readonly layer = Layer.effect(KavitaClient, KavitaClient.make);
-
-	/**
-	 * Layer without dependencies provided (alias for composition).
-	 *
-	 * @since 0.0.1
-	 * @category Layers
-	 */
-	static readonly layerNoDeps = KavitaClient.layer;
+			return KavitaClient.of({ user, annotations, volumes, cover });
+		}),
+	);
 }

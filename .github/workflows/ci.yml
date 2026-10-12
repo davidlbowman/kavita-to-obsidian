@@ -1,37 +1,110 @@
 name: CI
 
 on:
-  push:
-    branches: [main, staging, dev]
   pull_request:
+    branches: [main, staging]
+  push:
+    branches: [main, staging]
   workflow_dispatch:
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
-  test:
-    name: Lint, typecheck & test
+  promotion:
+    name: Main only accepts staging
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
     runs-on: ubuntu-latest
-
     steps:
-      - uses: actions/checkout@v5
+      - name: Require staging as the source branch
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          if [ "$HEAD_REF" != "staging" ]; then
+            echo "::error::PRs into main must come from staging (got $HEAD_REF). Target staging instead."
+            exit 1
+          fi
+
+  check:
+    name: Lint, typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version-file: package.json
 
-      - name: Install dependencies
-        run: bun install
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
 
-      - name: Lint
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Version consistency
+        run: bun run scripts/check-version.ts
+
+      - name: oxlint + oxfmt
         run: bun run lint
 
       - name: Obsidian lint
         run: bun run lint:obsidian
 
-      - name: Type check
+      - name: Typecheck
         run: bun run typecheck
 
-      - name: Test
-        run: bun run test
+      - name: Unit tests with coverage
+        run: bun run test:coverage
+
+      - name: Build
+        run: bun run build
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: plugin
+          path: |
+            main.js
+            manifest.json
+            styles.css
+
+  integration:
+    name: Live Kavita ${{ matrix.kavita }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kavita: ["0.8.8", "0.9.1"]
+    env:
+      KAVITA_VERSION: ${{ matrix.kavita }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: package.json
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Start Kavita
+        run: bun run integration:up
+
+      - name: Live integration tests
+        run: bun run integration:test
+
+      - name: Kavita logs
+        if: failure()
+        run: docker compose -f test-integration/docker-compose.yml logs --no-color | tail -200
+
+      - name: Stop Kavita
+        if: always()
+        run: bun run integration:down

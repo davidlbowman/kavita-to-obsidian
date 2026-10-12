@@ -1,1 +1,122 @@
-/* Kavita to Obsidian - Styles */
+/* Highlight callouts, one per Kavita highlight color. */
+
+.callout[data-callout="kavita-cyan"],
+.callout[data-callout="kavita-green"],
+.callout[data-callout="kavita-yellow"],
+.callout[data-callout="kavita-orange"],
+.callout[data-callout="kavita-magenta"] {
+	--callout-icon: lucide-highlighter;
+}
+
+.callout[data-callout="kavita-cyan"] {
+	--callout-color: var(--color-cyan);
+}
+
+.callout[data-callout="kavita-green"] {
+	--callout-color: var(--color-green);
+}
+
+.callout[data-callout="kavita-yellow"] {
+	--callout-color: var(--color-yellow);
+}
+
+.callout[data-callout="kavita-orange"] {
+	--callout-color: var(--color-orange);
+}
+
+.callout[data-callout="kavita-magenta"] {
+	--callout-color: var(--color-pink);
+}
+
+/* Status bar item. */
+
+.kavita-sync-status {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--size-2-2);
+}
+
+.kavita-sync-status-icon {
+	display: inline-flex;
+}
+
+.kavita-sync-status-icon svg {
+	width: var(--icon-xs);
+	height: var(--icon-xs);
+}
+
+.kavita-sync-status-icon.is-spinning svg {
+	animation: kavita-sync-spin 1.2s linear infinite;
+}
+
+@keyframes kavita-sync-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.kavita-sync-status-icon.is-spinning svg {
+		animation: none;
+	}
+}
+
+/* Settings status row and connection results. */
+
+.kavita-sync-status-row .setting-item-name {
+	font-weight: var(--font-semibold);
+}
+
+.kavita-sync-error-text,
+.kavita-sync-connection.is-failed {
+	color: var(--text-error);
+}
+
+.kavita-sync-connection {
+	margin-top: var(--size-4-1);
+}
+
+.kavita-sync-connection.is-connected {
+	color: var(--text-success);
+}
+
+/* Setup window. */
+
+.kavita-sync-setup .kavita-sync-setup-intro {
+	color: var(--text-muted);
+	margin-top: 0;
+}
+
+/* Template editor. */
+
+.kavita-sync-template-field .setting-item-control,
+.kavita-sync-template-field textarea {
+	width: 100%;
+}
+
+.kavita-sync-template-field textarea {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+	min-height: calc(var(--size-4-18) * 2);
+}
+
+.kavita-sync-template-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: var(--size-2-2);
+	margin-bottom: var(--size-4-3);
+}
+
+.kavita-sync-template-chip {
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-smaller);
+	padding: var(--size-2-1) var(--size-2-3);
+	border-radius: var(--radius-s);
+}
+
+.kavita-sync-template-preview {
+	padding: var(--size-4-3);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: var(--radius-m);
+	background-color: var(--background-primary);
+}

@@ -1,596 +1,454 @@
 /**
- * Tests for KavitaClient service.
+ * Tests for the Kavita API client against a routed fake HTTP server.
  *
  * @module
  */
-
-import { describe, it } from "@effect/vitest";
-import { Effect, Layer, Redacted } from "effect";
-import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-import { expect } from "vitest";
-import { KavitaNetworkError } from "../errors.js";
-import { KavitaClient } from "./KavitaClient.js";
+import { assert, describe, it } from "@effect/vitest";
+import { Arbitrary, Effect, Layer, Option, Schema } from "effect";
+import {
+	HttpClient,
+	HttpClientError,
+	type HttpClientRequest,
+	HttpClientResponse,
+} from "effect/http";
+import {
+	Annotation,
+	Annotations,
+	CurrentUser,
+	DEFAULT_SETTINGS,
+	PluginSession,
+	Volumes,
+} from "../schemas.js";
+import {
+	imageExtension,
+	KavitaClient,
+	PLUGIN_NAME,
+	toKavitaError,
+} from "./KavitaClient.js";
 import { PluginConfig } from "./PluginConfig.js";
 
-const mockAnnotations = [
-	{
-		id: 1,
-		chapterId: 10,
-		volumeId: 1,
-		seriesId: 100,
-		libraryId: 1,
-		ownerUserId: 1,
-		ownerUsername: null,
-		xPath: "/html/body/p[1]",
-		endingXPath: null,
-		selectedText: "This is a highlight",
-		comment: "My note",
-		commentHtml: null,
-		commentPlainText: null,
-		chapterTitle: null,
-		context: null,
-		highlightCount: 19,
-		containsSpoiler: false,
-		pageNumber: 42,
-		selectedSlotIndex: 1,
-		likes: [],
-		seriesName: null,
-		libraryName: null,
-		ageRating: 0,
-		createdUtc: "2025-01-01T00:00:00Z",
-		lastModifiedUtc: "2025-01-01T00:00:00Z",
-	},
-	{
-		id: 2,
-		chapterId: 10,
-		volumeId: 1,
-		seriesId: 100,
-		libraryId: 1,
-		ownerUserId: 1,
-		ownerUsername: null,
-		xPath: "/html/body/p[2]",
-		endingXPath: null,
-		selectedText: "Another highlight",
-		comment: null,
-		commentHtml: null,
-		commentPlainText: null,
-		chapterTitle: null,
-		context: null,
-		highlightCount: 17,
-		containsSpoiler: true,
-		pageNumber: 43,
-		selectedSlotIndex: 2,
-		likes: [],
-		seriesName: null,
-		libraryName: null,
-		ageRating: 0,
-		createdUtc: "2025-01-01T00:00:00Z",
-		lastModifiedUtc: "2025-01-01T00:00:00Z",
-	},
-];
+/**
+ * The Kavita user object, as both `/api/Plugin/authenticate` and
+ * `/api/Account` return it.
+ */
+const KavitaUser = Schema.Struct({
+	...PluginSession.fields,
+	...CurrentUser.fields,
+});
 
-const MockPluginConfig = Layer.succeed(
-	PluginConfig,
-	PluginConfig.of({
-		kavitaUrl: new URL("http://test-kavita.local"),
-		kavitaApiKey: Redacted.make("test-api-key"),
-		outputPath: "test.md",
-		matchThreshold: 0.7,
-		includeComments: true,
-		includeSpoilers: false,
-		includeTags: true,
-		tagPrefix: "",
-		includeWikilinks: true,
-		exportMode: "single-file",
-		rootFolderName: "Kavita Annotations",
-		deleteOrphanedFiles: true,
-		annotationTemplate: "",
-	}),
-);
+/**
+ * A request the fake server received.
+ */
+interface Received {
+	readonly url: URL;
+	readonly request: HttpClientRequest.HttpClientRequest;
+	readonly body: unknown;
+}
 
-const mockAuthResponse = { token: "mock-jwt-token" };
+const json = (value: unknown, status = 200): Response =>
+	new Response(JSON.stringify(value), {
+		status,
+		headers: { "content-type": "application/json" },
+	});
 
-const createMockHttpClient = (responseBody: unknown, status = 200) =>
-	Layer.succeed(
+const decodeBody = (request: HttpClientRequest.HttpClientRequest): unknown =>
+	request.body._tag === "Uint8Array"
+		? JSON.parse(new TextDecoder().decode(request.body.body))
+		: undefined;
+
+/**
+ * Fake Kavita server; `route` returns `undefined` to simulate a transport failure.
+ */
+const fakeServer = (route: (url: URL) => Response | undefined) => {
+	const received: Array<Received> = [];
+	const layer = Layer.succeed(
 		HttpClient.HttpClient,
-		HttpClient.make((request, _url, _signal, _fiber) => {
-			const url = request.url;
-			const body = url.includes("/api/Plugin/authenticate")
-				? mockAuthResponse
-				: responseBody;
-
-			return Effect.succeed(
-				HttpClientResponse.fromWeb(
-					request,
-					new Response(JSON.stringify(body), {
-						status,
-						headers: { "Content-Type": "application/json" },
-					}),
-				),
-			);
-		}),
-	);
-
-const createRoutedMockHttpClient = (
-	routes: Record<string, { body: unknown; status?: number }>,
-) =>
-	Layer.succeed(
-		HttpClient.HttpClient,
-		HttpClient.make((request, _url, _signal, _fiber) => {
-			const url = request.url;
-
-			if (url.includes("/api/Plugin/authenticate")) {
-				return Effect.succeed(
-					HttpClientResponse.fromWeb(
-						request,
-						new Response(JSON.stringify(mockAuthResponse), {
-							status: 200,
-							headers: { "Content-Type": "application/json" },
-						}),
-					),
-				);
-			}
-
-			for (const [pattern, response] of Object.entries(routes)) {
-				if (url.includes(pattern)) {
-					return Effect.succeed(
-						HttpClientResponse.fromWeb(
-							request,
-							new Response(JSON.stringify(response.body), {
-								status: response.status ?? 200,
-								headers: { "Content-Type": "application/json" },
+		HttpClient.make((request, url) =>
+			Effect.suspend(() => {
+				received.push({ url, request, body: decodeBody(request) });
+				const response = route(url);
+				return response === undefined
+					? Effect.fail(
+							new HttpClientError.HttpClientError({
+								reason: new HttpClientError.TransportError({ request }),
 							}),
-						),
-					);
-				}
-			}
+						)
+					: Effect.succeed(HttpClientResponse.fromWeb(request, response));
+			}),
+		),
+	);
+	return { layer, received };
+};
 
-			return Effect.succeed(
-				HttpClientResponse.fromWeb(
-					request,
-					new Response("Not Found", { status: 404 }),
-				),
-			);
-		}),
+const API_KEY = "test-auth-key";
+
+const clientLayer = (http: Layer.Layer<HttpClient.HttpClient>) =>
+	KavitaClient.layerNoDeps.pipe(
+		Layer.provide(
+			PluginConfig.fromSettings({
+				...DEFAULT_SETTINGS,
+				kavitaUrl: "http://kavita.test",
+				kavitaApiKey: API_KEY,
+			}),
+		),
+		Layer.provide(http),
 	);
 
-const mockLibraries = [
-	{
-		id: 1,
-		name: "Comics",
-		type: 0,
-		folders: ["/books/comics"],
-	},
-	{
-		id: 2,
-		name: "Manga",
-		type: 2,
-		folders: ["/books/manga"],
-	},
-];
+const sampleOne = <S extends Schema.Top>(schema: S) =>
+	Arbitrary.sampleEffect(Arbitrary.schema(schema), { count: 1 }).pipe(
+		Effect.flatMap((values) =>
+			values[0] === undefined
+				? Effect.die("empty sample")
+				: Effect.succeed(values[0]),
+		),
+	);
 
-const mockSeries = [
-	{
-		id: 1,
-		name: "Test Series",
-		libraryId: 1,
-		pages: 100,
-	},
-];
-
-const mockSeriesPaged = {
-	result: mockSeries,
-	pagination: { currentPage: 1, totalPages: 1, totalItems: 1 },
+/**
+ * Round-trip values through JSON the way the wire does, so expectations
+ * match what the client decodes (e.g. `-0` becomes `0`).
+ */
+const wire = <S extends Schema.Codec<unknown, unknown>>(
+	schema: S,
+	value: S["Type"],
+) => {
+	const encoded = JSON.stringify(Schema.encodeUnknownSync(schema)(value));
+	return {
+		body: JSON.parse(encoded),
+		decoded: Schema.decodeUnknownSync(schema)(JSON.parse(encoded)),
+	};
 };
 
-const mockVolumes = [
-	{
-		id: 1,
-		number: 1,
-		name: "Volume 1",
-		chapters: [
-			{
-				id: 10,
-				number: "1",
-				title: "Chapter 1",
-				pages: 20,
-				volumeId: 1,
-				sortOrder: 1,
-				titleName: "The Beginning",
-				writers: [{ id: 1, name: "Author Name", description: null }],
-				genres: [{ id: 1, title: "Fantasy" }],
-			},
-		],
-	},
-];
+const annotationsOf = Effect.gen(function* () {
+	return yield* (yield* KavitaClient).annotations;
+});
 
-const mockSeriesMetadata = {
-	id: 1,
-	seriesId: 1,
-	summary: "A test series",
-	releaseYear: 2024,
-	language: "en",
-	genres: [{ id: 1, title: "Fantasy" }],
-	writers: [{ id: 1, name: "Author Name", description: null }],
-};
+const clientOf = Effect.gen(function* () {
+	return yield* KavitaClient;
+});
+
+/**
+ * A server that authenticates `user`, then answers covers with `cover`.
+ */
+const coverServer = (
+	user: typeof KavitaUser.Type,
+	cover: () => Response | undefined,
+) =>
+	fakeServer((url) =>
+		url.pathname === "/api/Plugin/authenticate" ||
+		url.pathname === "/api/Account"
+			? json(Schema.encodeSync(KavitaUser)(user))
+			: url.pathname === "/api/Image/chapter-cover"
+				? cover()
+				: json({}, 404),
+	);
+
+const failingFetch = (response: () => Response | undefined) =>
+	Effect.gen(function* () {
+		const user = yield* sampleOne(KavitaUser);
+		const server = fakeServer((url) =>
+			url.pathname === "/api/Plugin/authenticate" ||
+			url.pathname === "/api/Account"
+				? json(Schema.encodeSync(KavitaUser)(user))
+				: response(),
+		);
+		return yield* Effect.flip(
+			annotationsOf.pipe(Effect.provide(clientLayer(server.layer))),
+		);
+	});
 
 describe("KavitaClient", () => {
-	describe("fetchAllAnnotations", () => {
-		it.effect("fetches annotations successfully", () =>
+	it.effect(
+		"exchanges the auth key, then fetches only the user's annotations",
+		() =>
 			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const annotations = yield* client.fetchAllAnnotations;
-
-				expect(annotations).toHaveLength(2);
-				expect(annotations[0]?.id).toBe(1);
-				expect(annotations[0]?.selectedText).toBe("This is a highlight");
-				expect(annotations[1]?.id).toBe(2);
-				expect(annotations[1]?.containsSpoiler).toBe(true);
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(createMockHttpClient(mockAnnotations)),
-			),
-		);
-
-		it.effect("returns empty array when no annotations", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const annotations = yield* client.fetchAllAnnotations;
-
-				expect(annotations).toHaveLength(0);
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(createMockHttpClient([])),
-			),
-		);
-
-		it.effect("maps HTTP errors to KavitaNetworkError", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const result = yield* client.fetchAllAnnotations.pipe(Effect.result);
-
-				expect(result._tag).toBe("Failure");
-				if (result._tag === "Failure") {
-					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect(result.failure.url).toBe("/api/Annotation/all-filtered");
-				}
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					Layer.succeed(
-						HttpClient.HttpClient,
-						HttpClient.make((request, _url, _signal, _fiber) => {
-							const url = request.url;
-							if (url.includes("/api/Plugin/authenticate")) {
-								return Effect.succeed(
-									HttpClientResponse.fromWeb(
-										request,
-										new Response(JSON.stringify(mockAuthResponse), {
-											status: 200,
-											headers: { "Content-Type": "application/json" },
-										}),
-									),
-								);
-							}
-							return Effect.succeed(
-								HttpClientResponse.fromWeb(
-									request,
-									new Response("Unauthorized", { status: 401 }),
-								),
-							);
-						}),
-					),
-				),
-			),
-		);
-	});
-
-	describe("fetchAnnotationsFiltered", () => {
-		it.effect("fetches annotations with filter", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const annotations = yield* client.fetchAnnotationsFiltered({
-					seriesIds: [100],
-					includeSpoilers: true,
+				const user = yield* sampleOne(KavitaUser);
+				const sampled = yield* Arbitrary.sampleEffect(
+					Arbitrary.schema(Annotation),
+					{ count: 8 },
+				);
+				const mixed = sampled.map((a, i) => ({
+					...a,
+					ownerUserId: i % 2 === 0 ? user.id : user.id + 1,
+				}));
+				const annotations = wire(Annotations, mixed);
+				const server = fakeServer((url) => {
+					switch (url.pathname) {
+						case "/api/Plugin/authenticate":
+						case "/api/Account":
+							return json(Schema.encodeSync(KavitaUser)(user));
+						case "/api/Annotation/all-filtered":
+							return json(annotations.body);
+						default:
+							return json({}, 404);
+					}
 				});
 
-				expect(annotations).toHaveLength(2);
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(createMockHttpClient(mockAnnotations)),
-			),
-		);
-	});
+				const result = yield* annotationsOf.pipe(
+					Effect.provide(clientLayer(server.layer)),
+				);
 
-	describe("getLibraries", () => {
-		it.effect("fetches libraries successfully", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const libraries = yield* client.getLibraries;
-
-				expect(libraries).toHaveLength(2);
-				expect(libraries[0]?.name).toBe("Comics");
-				expect(libraries[1]?.name).toBe("Manga");
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Library/libraries": { body: mockLibraries },
-					}),
-				),
-			),
-		);
-	});
-
-	describe("createLibrary", () => {
-		it.effect("creates a library successfully", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				yield* client.createLibrary({
-					name: "New Library",
-					type: 0,
-					folders: ["/books/new"],
-					fileGroupTypes: [],
-					excludePatterns: [],
-					enableMetadata: true,
+				assert.deepStrictEqual(
+					result,
+					annotations.decoded.filter((a) => a.ownerUserId === user.id),
+				);
+				const [auth, account, fetch] = server.received;
+				assert.strictEqual(auth?.request.method, "POST");
+				assert.strictEqual(auth?.url.pathname, "/api/Plugin/authenticate");
+				assert.strictEqual(auth?.url.searchParams.get("apiKey"), API_KEY);
+				assert.strictEqual(
+					auth?.url.searchParams.get("pluginName"),
+					PLUGIN_NAME,
+				);
+				assert.isUndefined(auth?.request.headers.authorization);
+				assert.strictEqual(account?.request.method, "GET");
+				assert.strictEqual(account?.url.pathname, "/api/Account");
+				assert.strictEqual(
+					account?.request.headers.authorization,
+					`Bearer ${user.token}`,
+				);
+				assert.strictEqual(fetch?.request.method, "POST");
+				assert.strictEqual(
+					fetch?.request.headers.authorization,
+					`Bearer ${user.token}`,
+				);
+				assert.strictEqual(fetch?.request.headers.accept, "application/json");
+				assert.deepStrictEqual(fetch?.body, {
+					statements: [{ field: 1, comparison: 0, value: String(user.id) }],
+					combination: 1,
 				});
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Library/create": { body: {} },
-					}),
-				),
-			),
-		);
-	});
+			}),
+	);
 
-	describe("scanAllLibraries", () => {
-		it.effect("triggers scan of all libraries", () =>
+	it.effect("fetches volumes for a series with the seriesId param", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const seriesId = yield* sampleOne(Schema.Int);
+			const volumes = wire(Volumes, yield* sampleOne(Volumes));
+			const server = fakeServer((url) =>
+				url.pathname === "/api/Plugin/authenticate" ||
+				url.pathname === "/api/Account"
+					? json(Schema.encodeSync(KavitaUser)(user))
+					: url.pathname === "/api/Series/volumes"
+						? json(volumes.body)
+						: json({}, 404),
+			);
+
+			const result = yield* Effect.gen(function* () {
+				return yield* (yield* KavitaClient).volumes(seriesId);
+			}).pipe(Effect.provide(clientLayer(server.layer)));
+
+			assert.deepStrictEqual(result, volumes.decoded);
+			const call = server.received[2];
+			assert.strictEqual(call?.request.method, "GET");
+			assert.strictEqual(
+				call?.url.searchParams.get("seriesId"),
+				String(seriesId),
+			);
+			assert.strictEqual(
+				call?.request.headers.authorization,
+				`Bearer ${user.token}`,
+			);
+		}),
+	);
+
+	it.effect.each([401, 403])(
+		"maps a %i from authenticate to KavitaAuthError",
+		(status) =>
 			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				yield* client.scanAllLibraries;
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Library/scan-all": { body: {} },
-					}),
-				),
-			),
-		);
-	});
-
-	describe("scanLibrary", () => {
-		it.effect("triggers scan of a specific library", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				yield* client.scanLibrary(1);
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Library/scan": { body: {} },
-					}),
-				),
-			),
-		);
-
-		it.effect("supports force parameter", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				yield* client.scanLibrary(1, false);
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Library/scan": { body: {} },
-					}),
-				),
-			),
-		);
-	});
-
-	describe("getAllSeries", () => {
-		it.effect("fetches series from array response", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const series = yield* client.getAllSeries;
-
-				expect(series).toHaveLength(1);
-				expect(series[0]?.name).toBe("Test Series");
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Series/all-v2": { body: mockSeries },
-					}),
-				),
-			),
-		);
-
-		it.effect("fetches series from paged response", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const series = yield* client.getAllSeries;
-
-				expect(series).toHaveLength(1);
-				expect(series[0]?.name).toBe("Test Series");
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Series/all-v2": { body: mockSeriesPaged },
-					}),
-				),
-			),
-		);
-	});
-
-	describe("getVolumes", () => {
-		it.effect("fetches volumes for a series", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const volumes = yield* client.getVolumes(1);
-
-				expect(volumes).toHaveLength(1);
-				expect(volumes[0]?.name).toBe("Volume 1");
-				expect(volumes[0]?.chapters).toHaveLength(1);
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Series/volumes": { body: mockVolumes },
-					}),
-				),
-			),
-		);
-	});
-
-	describe("createAnnotation", () => {
-		it.effect("creates an annotation successfully", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const annotation = yield* client.createAnnotation({
-					chapterId: 10,
-					volumeId: 1,
-					seriesId: 1,
-					libraryId: 1,
-					ownerUserId: 1,
-					selectedText: "Test highlight",
-					xPath: "/html/body/p[1]",
-					pageNumber: 1,
-					highlightCount: 14,
-					selectedSlotIndex: 0,
-					containsSpoiler: false,
-				});
-
-				expect(annotation.id).toBe(1);
-				expect(annotation.selectedText).toBe("This is a highlight");
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Annotation/create": { body: mockAnnotations[0] },
-					}),
-				),
-			),
-		);
-	});
-
-	describe("getSeriesMetadata", () => {
-		it.effect("fetches series metadata", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const metadata = yield* client.getSeriesMetadata(1);
-
-				expect(metadata.seriesId).toBe(1);
-				expect(metadata.summary).toBe("A test series");
-				expect(metadata.genres).toHaveLength(1);
-				expect(metadata.writers).toHaveLength(1);
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Series/metadata": { body: mockSeriesMetadata },
-					}),
-				),
-			),
-		);
-
-		it.effect("maps HTTP errors to KavitaNetworkError", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const result = yield* client.getSeriesMetadata(999).pipe(Effect.result);
-
-				expect(result._tag).toBe("Failure");
-				if (result._tag === "Failure") {
-					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect(result.failure.url).toContain("/api/Series/metadata");
+				const server = fakeServer(() => json({}, status));
+				const error = yield* Effect.flip(
+					annotationsOf.pipe(Effect.provide(clientLayer(server.layer))),
+				);
+				assert.strictEqual(error._tag, "KavitaAuthError");
+				if (error._tag === "KavitaAuthError") {
+					assert.strictEqual(error.endpoint, "/api/Plugin/authenticate");
+					assert.strictEqual(error.statusCode, status);
 				}
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Series/metadata": { body: "Server Error", status: 500 },
-					}),
-				),
-			),
-		);
-	});
+			}),
+	);
 
-	describe("getVolumes error handling", () => {
-		it.effect("maps HTTP errors to KavitaNetworkError", () =>
+	it.effect("maps a 401 on a later call to KavitaAuthError", () =>
+		Effect.gen(function* () {
+			const error = yield* failingFetch(() => json({}, 401));
+			assert.strictEqual(error._tag, "KavitaAuthError");
+			if (error._tag === "KavitaAuthError") {
+				assert.strictEqual(error.endpoint, "/api/Annotation/all-filtered");
+				assert.strictEqual(error.statusCode, 401);
+			}
+		}),
+	);
+
+	it.effect("maps a 500 to KavitaNetworkError with the status", () =>
+		Effect.gen(function* () {
+			const error = yield* failingFetch(() => json({}, 500));
+			assert.strictEqual(error._tag, "KavitaNetworkError");
+			if (error._tag === "KavitaNetworkError") {
+				assert.strictEqual(error.statusCode, 500);
+				assert.strictEqual(error.endpoint, "/api/Annotation/all-filtered");
+			}
+		}),
+	);
+
+	it.effect(
+		"maps a transport failure to KavitaNetworkError without a status",
+		() =>
 			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const result = yield* client.getVolumes(999).pipe(Effect.result);
-
-				expect(result._tag).toBe("Failure");
-				if (result._tag === "Failure") {
-					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect(result.failure.url).toBe("/api/Series/volumes");
+				const error = yield* failingFetch(() => undefined);
+				assert.strictEqual(error._tag, "KavitaNetworkError");
+				if (error._tag === "KavitaNetworkError") {
+					assert.isUndefined(error.statusCode);
+					assert.isDefined(error.cause);
 				}
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Series/volumes": { body: "Not Found", status: 404 },
-					}),
-				),
-			),
-		);
-	});
+			}),
+	);
 
-	describe("createAnnotation error handling", () => {
-		it.effect("maps HTTP errors to KavitaNetworkError", () =>
-			Effect.gen(function* () {
-				const client = yield* KavitaClient;
-				const result = yield* client
-					.createAnnotation({
-						chapterId: 10,
-						volumeId: 1,
-						seriesId: 1,
-						libraryId: 1,
-						ownerUserId: 1,
-						selectedText: "Test",
-						xPath: "/html/body/p[1]",
-						pageNumber: 1,
-						highlightCount: 4,
-						selectedSlotIndex: 0,
-						containsSpoiler: false,
-					})
-					.pipe(Effect.result);
-
-				expect(result._tag).toBe("Failure");
-				if (result._tag === "Failure") {
-					expect(result.failure).toBeInstanceOf(KavitaNetworkError);
-					expect(result.failure.url).toBe("/api/Annotation/create");
-				}
-			}).pipe(
-				Effect.provide(KavitaClient.layerNoDeps),
-				Effect.provide(MockPluginConfig),
-				Effect.provide(
-					createRoutedMockHttpClient({
-						"/api/Annotation/create": { body: "Forbidden", status: 403 },
+	it.effect("maps an invalid JSON body to KavitaParseError", () =>
+		Effect.gen(function* () {
+			const error = yield* failingFetch(
+				() =>
+					new Response("not json", {
+						status: 200,
+						headers: { "content-type": "application/json" },
 					}),
+			);
+			assert.strictEqual(error._tag, "KavitaParseError");
+		}),
+	);
+
+	it.effect("maps a schema-mismatched body to KavitaParseError", () =>
+		Effect.gen(function* () {
+			const error = yield* failingFetch(() => json([{ id: "nope" }]));
+			assert.strictEqual(error._tag, "KavitaParseError");
+			if (error._tag === "KavitaParseError") {
+				assert.strictEqual(error.endpoint, "/api/Annotation/all-filtered");
+			}
+		}),
+	);
+
+	it.effect("toKavitaError maps a SchemaError to KavitaParseError", () =>
+		Effect.gen(function* () {
+			const schemaError = yield* Effect.flip(
+				Schema.decodeUnknownEffect(KavitaUser)({}),
+			);
+			const error = toKavitaError("/x")(schemaError);
+			assert.strictEqual(error._tag, "KavitaParseError");
+			assert.strictEqual(error.endpoint, "/x");
+		}),
+	);
+
+	it.effect("exposes the account the auth key belongs to", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const server = coverServer(user, () => json({}, 404));
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			assert.deepStrictEqual(
+				client.user,
+				Schema.decodeUnknownSync(CurrentUser)(
+					JSON.parse(JSON.stringify(Schema.encodeSync(KavitaUser)(user))),
 				),
-			),
-		);
+			);
+		}),
+	);
+
+	it.effect("reads an account without username or version", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const server = fakeServer(() => json({ id: user.id, token: user.token }));
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			assert.strictEqual(client.user.id, user.id);
+			assert.isUndefined(client.user.username);
+			assert.isUndefined(client.user.kavitaVersion);
+		}),
+	);
+
+	it.effect.each([
+		["image/jpeg", "jpg"],
+		["image/png", "png"],
+		["image/webp; charset=binary", "webp"],
+		["image/gif", "gif"],
+	])("downloads a %s cover", ([contentType, extension]) =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const chapterId = yield* sampleOne(Schema.Int);
+			const bytes = new TextEncoder().encode("cover-bytes");
+			const server = coverServer(
+				user,
+				() =>
+					new Response(bytes, {
+						status: 200,
+						headers: { "content-type": contentType ?? "" },
+					}),
+			);
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			const cover = yield* client.cover(chapterId);
+
+			assert.isTrue(Option.isSome(cover));
+			if (Option.isSome(cover)) {
+				assert.strictEqual(cover.value.extension, extension);
+				assert.strictEqual(
+					new TextDecoder().decode(cover.value.data),
+					"cover-bytes",
+				);
+			}
+			const call = server.received.at(-1);
+			assert.strictEqual(call?.url.pathname, "/api/Image/chapter-cover");
+			assert.strictEqual(
+				call?.url.searchParams.get("chapterId"),
+				String(chapterId),
+			);
+			assert.strictEqual(call?.url.searchParams.get("apiKey"), API_KEY);
+			assert.strictEqual(
+				call?.request.headers.authorization,
+				`Bearer ${user.token}`,
+			);
+			assert.strictEqual(call?.request.headers.accept, "image/*");
+		}),
+	);
+
+	it.effect("returns None when a book has no cover", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const server = coverServer(user, () => json({}, 404));
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			assert.isTrue(Option.isNone(yield* client.cover(1)));
+		}),
+	);
+
+	it.effect("fails a cover download on a server error", () =>
+		Effect.gen(function* () {
+			const user = yield* sampleOne(KavitaUser);
+			const server = coverServer(user, () => json({}, 500));
+			const client = yield* clientOf.pipe(
+				Effect.provide(clientLayer(server.layer)),
+			);
+			const error = yield* Effect.flip(client.cover(1));
+			assert.strictEqual(error._tag, "KavitaNetworkError");
+			if (error._tag === "KavitaNetworkError") {
+				assert.strictEqual(error.endpoint, "/api/Image/chapter-cover");
+				assert.strictEqual(error.statusCode, 500);
+			}
+		}),
+	);
+});
+
+describe("imageExtension", () => {
+	it.each([
+		["image/jpeg", "jpg"],
+		["image/png", "png"],
+		["image/webp", "webp"],
+		["image/gif", "gif"],
+		["image/svg+xml", "png"],
+		["application/octet-stream", "png"],
+		[undefined, "png"],
+	])("%s → %s", (contentType, extension) => {
+		assert.strictEqual(imageExtension(contentType), extension);
 	});
 });

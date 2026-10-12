@@ -6,6 +6,8 @@
  *
  * @module
  */
+import { Option, Predicate, Schema } from "effect";
+import type { Annotation } from "../schemas.js";
 
 /**
  * Lookup map of named HTML entities to their decoded characters.
@@ -63,14 +65,15 @@ export const decodeHtmlEntities = (text: string): string =>
 export const stripHtmlTags = (text: string): string =>
 	text.replace(/<[^>]*>/g, "");
 
-const isQuillDelta = (
-	value: unknown,
-): value is { ops: ReadonlyArray<{ insert?: unknown }> } => {
-	if (typeof value !== "object" || value === null || !("ops" in value)) {
-		return false;
-	}
-	return Array.isArray(value.ops);
-};
+const QuillDelta = Schema.fromJsonString(
+	Schema.Struct({
+		ops: Schema.Array(
+			Schema.Struct({ insert: Schema.optionalKey(Schema.Unknown) }),
+		),
+	}),
+);
+
+const decodeQuillDelta = Schema.decodeUnknownOption(QuillDelta);
 
 /**
  * Extract plain text from a Quill delta JSON string.
@@ -85,37 +88,27 @@ const isQuillDelta = (
  * @since 1.2.0
  * @category Sanitize
  */
-export const extractTextFromQuillDelta = (text: string): string => {
-	try {
-		const parsed: unknown = JSON.parse(text);
-
-		if (!isQuillDelta(parsed)) {
-			return text;
-		}
-
-		const ops = parsed.ops;
-		const result = ops
-			.filter((op): op is { insert: string } => typeof op.insert === "string")
-			.map((op) => op.insert)
-			.join("");
-
-		return result.replace(/\n+$/, "");
-	} catch {
-		return text;
-	}
-};
+export const extractTextFromQuillDelta = (text: string): string =>
+	Option.match(decodeQuillDelta(text), {
+		onNone: () => text,
+		onSome: ({ ops }) =>
+			ops
+				.map((op) => op.insert)
+				.filter(Predicate.isString)
+				.join("")
+				.replace(/\n+$/, ""),
+	});
 
 /**
- * Minimal interface for annotation comment fields used by resolveComment.
+ * The annotation fields `resolveComment` reads.
  *
  * @since 1.2.0
  * @category Sanitize
  */
-export interface CommentFields {
-	readonly comment: string | null;
-	readonly commentHtml: string | null;
-	readonly commentPlainText: string | null;
-}
+export type CommentFields = Pick<
+	Annotation,
+	"comment" | "commentHtml" | "commentPlainText"
+>;
 
 /**
  * Resolve the best available comment text from an annotation's comment fields.
@@ -129,7 +122,7 @@ export interface CommentFields {
  */
 export const resolveComment = (annotation: CommentFields): string | null => {
 	if (annotation.commentPlainText !== null) {
-		const trimmed = annotation.commentPlainText.trim();
+		const trimmed = decodeHtmlEntities(annotation.commentPlainText).trim();
 		if (trimmed !== "" && trimmed !== "{}") {
 			return trimmed;
 		}

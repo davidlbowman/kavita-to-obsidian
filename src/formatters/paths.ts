@@ -123,3 +123,33 @@ export const buildUniqueBookPath = (
 		`${rootFolder}/${sanitizedSeries}/${sanitizedBook} (ch-${chapterId}).md`,
 	);
 };
+
+/**
+ * Folder, inside the root folder, that holds downloaded book covers.
+ *
+ * @since 2.0.0
+ * @category Path Utilities
+ */
+export const COVERS_FOLDER = "Covers";
+
+/**
+ * Vault path for a book's cover image.
+ *
+ * @since 2.0.0
+ * @category Path Utilities
+ */
+export const buildCoverPath = (
+	rootFolder: string,
+	chapterId: number,
+	extension: string,
+): string =>
+	normalizePath(`${rootFolder}/${COVERS_FOLDER}/${chapterId}.${extension}`);
+
+/**
+ * Vault path for the generated library view.
+ *
+ * @since 2.0.0
+ * @category Path Utilities
+ */
+export const buildLibraryPath = (rootFolder: string): string =>
+	normalizePath(`${rootFolder}/Library.base`);
