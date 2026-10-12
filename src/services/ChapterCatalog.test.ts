@@ -54,6 +54,23 @@ const stubKavita = (
 
 describe("toChapterInfo", () => {
 	it.prop(
+		"skips dot-prefixed metadata markers in genres",
+		[Volumes],
+		([volumes]) => {
+			const marked = volumes.map((volume) => ({
+				...volume,
+				chapters: volume.chapters.map((chapter) => ({
+					...chapter,
+					genres: [{ title: ".verified" }, { title: "War" }],
+				})),
+			}));
+			for (const info of toChapterInfo(marked)) {
+				assert.deepStrictEqual(info.genres, ["War"]);
+			}
+		},
+	);
+
+	it.prop(
 		"describes every chapter with the title fallback chain",
 		[Volumes],
 		([volumes]) => {
@@ -79,7 +96,10 @@ describe("toChapterInfo", () => {
 				);
 				assert.deepStrictEqual(
 					info?.genres,
-					(chapter.genres ?? []).map((g) => g.title).filter(present),
+					(chapter.genres ?? [])
+						.map((g) => g.title)
+						.filter(present)
+						.filter((genre) => !genre.startsWith(".")),
 				);
 				assert.isFalse(info?.authors.some((a) => a.trim() === ""));
 			});

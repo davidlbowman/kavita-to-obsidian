@@ -17,6 +17,9 @@
  * - OBSIDIAN_TEST_VAULT: vault folder (default: ~/Documents/Kavita Test Vault,
  *   or the Windows Documents folder under WSL)
  * - KAVITA_VERSION / KAVITA_PORT: forwarded to docker compose
+ * - KAVITA_SERVER + KAVITA_AUTH_KEY: use a real Kavita server instead of the
+ *   local one (nothing is seeded; the vault defaults to "Kavita Homelab")
+ * - OBSIDIAN_VAULT_NAME: vault name
  *
  * @module
  */
@@ -38,7 +41,11 @@ const PLUGIN_ID = "kavita-sync";
 const HOT_RELOAD_ID = "hot-reload";
 const HOT_RELOAD_URL =
 	"https://github.com/pjeby/hot-reload/releases/latest/download";
-const VAULT_NAME = "Kavita Test Vault";
+const remoteServer = process.env.KAVITA_SERVER;
+const remoteKey = process.env.KAVITA_AUTH_KEY ?? "";
+const VAULT_NAME =
+	process.env.OBSIDIAN_VAULT_NAME ??
+	(remoteServer === undefined ? "Kavita Test Vault" : "Kavita Homelab");
 const NOTES_FOLDER = "Kavita Annotations";
 const SHOWCASE_NOTE = `${NOTES_FOLDER}/The Lantern Cycle/Embers.md`;
 const fresh = process.argv.includes("--fresh");
@@ -145,15 +152,22 @@ const hotReloadDir = join(obsidianDir, "plugins", HOT_RELOAD_ID);
 console.log("Building plugin…");
 run("bun", ["run", "build"]);
 
-console.log("Starting Kavita…");
-run("bun", ["run", "integration:up"]);
+const seedLocal = async () => {
+	console.log("Starting Kavita…");
+	run("bun", ["run", "integration:up"]);
+	console.log("Seeding Kavita…");
+	return Effect.runPromise(
+		Effect.gen(function* () {
+			const kavita = yield* LiveKavita;
+			return { url: kavita.url, authKey: kavita.authKey };
+		}).pipe(Effect.provide(LiveKavita.layer)),
+	);
+};
 
-console.log("Seeding Kavita…");
-const live = await Effect.runPromise(
-	Effect.gen(function* () {
-		return yield* LiveKavita;
-	}).pipe(Effect.provide(LiveKavita.layer)),
-);
+const live =
+	remoteServer === undefined
+		? await seedLocal()
+		: { url: remoteServer, authKey: remoteKey };
 
 const vaultPathForObsidian = isWsl ? windowsPath(vaultDir) : vaultDir;
 const vaultUri = (file?: string) =>
@@ -172,7 +186,9 @@ if (obsidianRunning()) {
 
 console.log(`Writing vault at ${vaultDir}…`);
 mkdirSync(pluginDir, { recursive: true });
-rmSync(join(vaultDir, NOTES_FOLDER), { recursive: true, force: true });
+if (remoteServer === undefined) {
+	rmSync(join(vaultDir, NOTES_FOLDER), { recursive: true, force: true });
+}
 
 const dataPath = join(pluginDir, "data.json");
 if (fresh) {
@@ -214,7 +230,7 @@ writeFileSync(
 	join(vaultDir, "Welcome.md"),
 	`# ${VAULT_NAME}
 
-This vault is synced from a local test Kavita at ${live.url} (admin / Admin123!).
+This vault is synced from ${remoteServer === undefined ? `a local test Kavita at ${live.url} (admin / Admin123!)` : `Kavita at ${live.url}`}.
 
 Things to look at:
 
@@ -246,6 +262,7 @@ console.log("Opening Obsidian…");
 openUri(vaultUri());
 
 const showcase = join(vaultDir, SHOWCASE_NOTE);
+const library = join(vaultDir, NOTES_FOLDER, "Library.base");
 if (fresh) {
 	console.log(
 		"Settings were cleared, so the setup window is open in Obsidian.",
@@ -253,21 +270,33 @@ if (fresh) {
 } else if (
 	await waitFor(
 		() =>
-			existsSync(showcase) &&
-			readFileSync(showcase, "utf8").includes("\n## My notes"),
-		90_000,
+			remoteServer === undefined
+				? existsSync(showcase) &&
+					readFileSync(showcase, "utf8").includes("\n## My notes")
+				: existsSync(library),
+		180_000,
 	)
 ) {
-	openUri(vaultUri(SHOWCASE_NOTE.replace(/\.md$/, "")));
+	openUri(
+		vaultUri(
+			remoteServer === undefined
+				? SHOWCASE_NOTE.replace(/\.md$/, "")
+				: `${NOTES_FOLDER}/Library.base`,
+		),
+	);
 } else {
 	console.log(
-		'The plugin didn\'t finish syncing within 90 seconds. If Obsidian asks, select "Trust author and enable plugins".',
+		'The plugin didn\'t finish syncing in time. If Obsidian asks, select "Trust author and enable plugins".',
 	);
 }
 
 console.log(`
 Ready.
   Vault:     ${vaultPathForObsidian}
-  Kavita:    ${live.url} (admin / Admin123!)
+${
+	remoteServer === undefined
+		? `  Kavita:    ${live.url} (admin / Admin123!)
   Auth key:  ${live.authKey}
-Stop Kavita with: bun run integration:down`);
+Stop Kavita with: bun run integration:down`
+		: `  Kavita:    ${live.url}`
+}`);

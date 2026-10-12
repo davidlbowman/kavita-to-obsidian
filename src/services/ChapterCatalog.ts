@@ -31,6 +31,9 @@ export type ChapterInfoMap = ReadonlyMap<number, ChapterInfo>;
 /**
  * Flatten a series' volumes into per-chapter book metadata.
  *
+ * Genres starting with "." are markers metadata providers add (such as
+ * ".verified"), not real genres, so they are skipped.
+ *
  * @since 2.0.0
  * @category Chapter Catalog
  */
@@ -47,7 +50,9 @@ export const toChapterInfo = (
 				`Volume ${volume.number}`,
 			sortOrder: volume.number,
 			authors: names(chapter.writers?.map((w) => w.name)),
-			genres: names(chapter.genres?.map((g) => g.title)),
+			genres: names(chapter.genres?.map((g) => g.title)).filter(
+				(genre) => !genre.startsWith("."),
+			),
 		})),
 	);
 
