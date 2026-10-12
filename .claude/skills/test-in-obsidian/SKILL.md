@@ -20,13 +20,16 @@ The command is idempotent and safe to re-run after every code change. It:
 3. Writes the **Kavita Test Vault**. Under WSL this is `C:\Users\<user>\Documents\Kavita Test Vault`; elsewhere it is `~/Documents/Kavita Test Vault` (override with `OBSIDIAN_TEST_VAULT`). The vault gets the built plugin, a `data.json` pre-filled with the Kavita URL and a fresh auth key, and the pjeby/hot-reload plugin, so a running Obsidian reloads the plugin whenever the files change.
 4. Registers the vault in Obsidian's `obsidian.json` (only while Obsidian is closed), then opens it with `obsidian://open?vault=Kavita%20Test%20Vault`.
 
+To test first-run setup: `bun run dev:vault --fresh` clears the plugin's settings so the setup window opens; the script prints the Kavita URL and an auth key to paste into it.
+
 Other versions: `KAVITA_VERSION=0.8.8 bun run dev:vault` (run `bun run integration:down` first to switch versions, because the config volume is version-specific).
 
 ## Then tell the user
 
 - Obsidian is open on **Kavita Test Vault**. The first time only, they click **Trust author and enable plugins**.
-- Sync with the book icon in the left ribbon, or the command **Kavita Sync: Sync annotations**.
-- Expected result in hierarchical mode: `Kavita Annotations/The Lantern Cycle/Embers.md`, `…/Cinders.md`, and `Kavita Annotations/What If- Questions- Answered/What If- Questions- Answered.md`. The reader's highlight ("Iron remembers the shape…") must not appear, and the spoiler only appears with **Include spoilers** on.
+- Sync with the book icon in the left ribbon, or the command **Kavita Sync: Sync highlights**.
+- Expected result in hierarchical mode: `Kavita Annotations/The Lantern Cycle/Embers.md`, `…/Cinders.md`, and `Kavita Annotations/What If- Questions- Answered/What If- Questions- Answered.md`, each with a cover, a byline, chapter headings, and colored highlight callouts whose page links open Kavita at that highlight. `Kavita Annotations/Library.base` shows the books as cover cards. The reader's highlight ("Iron remembers the shape…") must not appear, and the spoiler only appears (collapsed) with **Include spoilers** on.
+- Things worth trying: write text outside the `%% kavita-sync %%` markers and re-sync (it stays); rename or move a book note and re-sync (no duplicate); the settings status row's **Test connection**; the **Highlight template** page's live preview; the status bar; the **Open this book in Kavita** command.
 - Kavita web UI: http://localhost:5055 (`admin` / `Admin123!`), for adding or deleting highlights and re-syncing (for example, to check orphan cleanup).
 - After further code changes, re-run `bun run dev:vault`; hot-reload swaps the plugin in place.
 - When finished: `bun run integration:down`.

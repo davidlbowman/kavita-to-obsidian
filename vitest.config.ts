@@ -13,6 +13,9 @@ export default defineConfig({
 				"src/__mocks__/**",
 				"src/main.ts",
 				"src/ui/SettingsTab.ts",
+				"src/ui/SetupModal.ts",
+				"src/ui/TemplatePage.ts",
+				"src/ui/SyncController.ts",
 			],
 			thresholds: {
 				lines: 95,

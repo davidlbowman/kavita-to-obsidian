@@ -24,5 +24,11 @@ export default defineConfig([
 			parserOptions: { projectService: true },
 			globals: globals.browser,
 		},
+		rules: {
+			"obsidianmd/ui/sentence-case": [
+				"warn",
+				{ brands: ["Kavita", "Bases"], enforceCamelCaseLower: true },
+			],
+		},
 	},
 ]);

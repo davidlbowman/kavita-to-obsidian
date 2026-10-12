@@ -4,8 +4,7 @@
  * @module
  */
 import { Effect } from "effect";
-import type { ChapterInfoMap } from "../formatters/markdown.js";
-import type { ChapterInfo, Volume } from "../schemas.js";
+import type { Annotation, Book, ChapterInfo, Volume } from "../schemas.js";
 import type { KavitaClient } from "./KavitaClient.js";
 
 const nonEmpty = (value: string | null | undefined): string | undefined =>
@@ -20,6 +19,14 @@ const names = (
 		const name = nonEmpty(value);
 		return name === undefined ? [] : [name];
 	});
+
+/**
+ * Chapter ID to book-level metadata.
+ *
+ * @since 0.0.2
+ * @category Chapter Catalog
+ */
+export type ChapterInfoMap = ReadonlyMap<number, ChapterInfo>;
 
 /**
  * Flatten a series' volumes into per-chapter book metadata.
@@ -74,3 +81,41 @@ export const fetchChapterInfo = Effect.fn("ChapterCatalog.fetchChapterInfo")(
 		return catalog;
 	},
 );
+
+/**
+ * Group highlights into one {@link Book} per chapter, using catalog metadata
+ * where Kavita provided it.
+ *
+ * @since 2.0.0
+ * @category Chapter Catalog
+ */
+export const toBooks = (
+	annotations: ReadonlyArray<Annotation>,
+	catalog: ChapterInfoMap,
+): Array<Book> => {
+	const byChapter = new Map<number, Array<Annotation>>();
+	for (const annotation of annotations) {
+		const group = byChapter.get(annotation.chapterId);
+		if (group === undefined) byChapter.set(annotation.chapterId, [annotation]);
+		else group.push(annotation);
+	}
+	return [...byChapter.values()].flatMap((group): Array<Book> => {
+		const first = group[0];
+		if (first === undefined) return [];
+		const info = catalog.get(first.chapterId);
+		return [
+			{
+				bookTitle:
+					info?.bookTitle ?? first.chapterTitle ?? `Chapter ${first.chapterId}`,
+				seriesName: first.seriesName ?? `Series ${first.seriesId}`,
+				seriesIndex: info?.sortOrder ?? 1,
+				seriesId: first.seriesId,
+				chapterId: first.chapterId,
+				libraryId: first.libraryId,
+				authors: info?.authors ?? [],
+				genres: info?.genres ?? [],
+				annotations: group,
+			},
+		];
+	});
+};

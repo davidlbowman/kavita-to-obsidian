@@ -6,7 +6,10 @@
  * (plus pjeby/hot-reload, so later runs reload the plugin in a running
  * Obsidian), registers the vault with Obsidian, and opens it.
  *
- * Usage: bun run dev:vault
+ * Usage: bun run dev:vault [--fresh]
+ *
+ * `--fresh` clears the plugin's settings so the first-run setup window
+ * appears; the auth key to paste into it is printed at the end.
  *
  * Environment:
  * - OBSIDIAN_TEST_VAULT: vault folder (default: ~/Documents/Kavita Test Vault,
@@ -17,7 +20,13 @@
  */
 import { execFileSync, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import {
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Effect, Schema } from "effect";
@@ -28,6 +37,7 @@ const HOT_RELOAD_ID = "hot-reload";
 const HOT_RELOAD_URL =
 	"https://github.com/pjeby/hot-reload/releases/latest/download";
 const VAULT_NAME = "Kavita Test Vault";
+const fresh = process.argv.includes("--fresh");
 const isWsl = process.env.WSL_DISTRO_NAME !== undefined;
 
 const run = (command: string, args: ReadonlyArray<string>) => {
@@ -120,11 +130,19 @@ for (const file of ["main.js", "manifest.json", "styles.css"]) {
 writeFileSync(join(pluginDir, ".hotreload"), "");
 
 const dataPath = join(pluginDir, "data.json");
-writeJson(dataPath, {
-	...readJson(dataPath, JsonRecord, {}),
-	kavitaUrl: live.url,
-	kavitaApiKey: live.authKey,
-});
+if (fresh) {
+	rmSync(dataPath, { force: true });
+} else {
+	writeJson(dataPath, {
+		downloadCovers: true,
+		createLibraryView: true,
+		...readJson(dataPath, JsonRecord, {}),
+		kavitaUrl: live.url,
+		kavitaApiKey: live.authKey,
+		authKeySecret: "",
+		setupDismissed: true,
+	});
+}
 
 if (!existsSync(join(hotReloadDir, "main.js"))) {
 	mkdirSync(hotReloadDir, { recursive: true });
@@ -178,8 +196,9 @@ if (!registered && obsidianRunning()) {
 
 console.log(`
 Ready.
-  Vault:   ${vaultPathForObsidian}
-  Kavita:  ${live.url} (admin / Admin123!)
-  Plugin:  rebuilt and copied; hot-reload picks up changes in a running Obsidian.
-First open only: click "Trust author and enable plugins" when Obsidian asks.
+  Vault:     ${vaultPathForObsidian}
+  Kavita:    ${live.url} (admin / Admin123!)
+  Auth key:  ${live.authKey}
+  Plugin:    rebuilt and copied; hot-reload picks up changes in a running Obsidian.
+${fresh ? "Setup:     settings cleared, so the setup window opens. Use the URL and auth key above.\n" : ""}First open only: click "Trust author and enable plugins" when Obsidian asks.
 Stop Kavita with: bun run integration:down`);

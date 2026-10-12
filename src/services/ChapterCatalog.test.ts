@@ -11,8 +11,8 @@ import {
 	KavitaNetworkError,
 	KavitaParseError,
 } from "../errors.js";
-import { Volume, Volumes } from "../schemas.js";
-import { fetchChapterInfo, toChapterInfo } from "./ChapterCatalog.js";
+import { Annotation, ChapterInfo, Volume, Volumes } from "../schemas.js";
+import { fetchChapterInfo, toBooks, toChapterInfo } from "./ChapterCatalog.js";
 import { KavitaClient } from "./KavitaClient.js";
 
 const present = (value: string | null | undefined): value is string =>
@@ -44,7 +44,13 @@ const stubKavita = (
 	volumes: (
 		seriesId: number,
 	) => Effect.Effect<ReadonlyArray<Volume>, KavitaError>,
-) => KavitaClient.of({ annotations: Effect.succeed([]), volumes });
+) =>
+	KavitaClient.of({
+		user: { id: 1 },
+		annotations: Effect.succeed([]),
+		volumes,
+		cover: () => Effect.succeedNone,
+	});
 
 describe("toChapterInfo", () => {
 	it.prop(
@@ -180,4 +186,85 @@ describe("fetchChapterInfo", () => {
 			assert.strictEqual(error._tag, "KavitaAuthError");
 		}),
 	);
+});
+
+describe("toBooks", () => {
+	it.effect("makes one book per chapter, using catalog metadata", () =>
+		Effect.gen(function* () {
+			const [first, second, third] = yield* distinctPositiveInts(3);
+			const sampled = yield* Arbitrary.sampleEffect(
+				Arbitrary.schema(Annotation),
+				{ count: 3 },
+			);
+			const info = nth(
+				yield* Arbitrary.sampleEffect(Arbitrary.schema(ChapterInfo), {
+					count: 1,
+				}),
+				0,
+			);
+			const chapterA = first ?? 1;
+			const chapterB = second ?? 2;
+			const annotations = [
+				{ ...nth(sampled, 0), chapterId: chapterA, id: third ?? 3 },
+				{ ...nth(sampled, 1), chapterId: chapterB },
+				{ ...nth(sampled, 2), chapterId: chapterA },
+			];
+			const books = toBooks(
+				annotations,
+				new Map([[chapterA, { ...info, chapterId: chapterA }]]),
+			);
+
+			assert.strictEqual(books.length, 2);
+			const withInfo = books.find((b) => b.chapterId === chapterA);
+			const without = books.find((b) => b.chapterId === chapterB);
+			assert.deepStrictEqual(withInfo?.annotations, [
+				nth(annotations, 0),
+				nth(annotations, 2),
+			]);
+			assert.strictEqual(withInfo?.bookTitle, info.bookTitle);
+			assert.strictEqual(withInfo?.seriesIndex, info.sortOrder);
+			assert.deepStrictEqual(withInfo?.authors, info.authors);
+			assert.deepStrictEqual(withInfo?.genres, info.genres);
+			assert.strictEqual(withInfo?.libraryId, annotations[0]?.libraryId);
+			assert.strictEqual(withInfo?.seriesId, annotations[0]?.seriesId);
+			assert.strictEqual(without?.seriesIndex, 1);
+			assert.deepStrictEqual(without?.authors, []);
+			assert.deepStrictEqual(without?.genres, []);
+		}),
+	);
+
+	it.effect("falls back to the chapter title, then the chapter id", () =>
+		Effect.gen(function* () {
+			const [titled, untitled] = yield* distinctPositiveInts(2);
+			const sampled = yield* Arbitrary.sampleEffect(
+				Arbitrary.schema(Annotation),
+				{ count: 2 },
+			);
+			const books = toBooks(
+				[
+					{
+						...nth(sampled, 0),
+						chapterId: titled ?? 1,
+						chapterTitle: "Chapter title",
+						seriesName: null,
+					},
+					{
+						...nth(sampled, 1),
+						chapterId: untitled ?? 2,
+						chapterTitle: null,
+					},
+				],
+				new Map(),
+			);
+			const first = books.find((b) => b.chapterId === titled);
+			const second = books.find((b) => b.chapterId === untitled);
+			assert.strictEqual(first?.bookTitle, "Chapter title");
+			assert.strictEqual(first?.seriesName, `Series ${first?.seriesId}`);
+			assert.strictEqual(second?.bookTitle, `Chapter ${untitled}`);
+		}),
+	);
+
+	it("returns nothing for no highlights", () => {
+		assert.deepStrictEqual(toBooks([], new Map()), []);
+	});
 });

@@ -86,21 +86,30 @@ describe("renderTemplate", () => {
 	it("renders the default template fully", () => {
 		expect(
 			renderTemplate(DEFAULT_ANNOTATION_TEMPLATE, {
-				blockquote: "> quote",
+				callout: "kavita-cyan",
+				fold: "",
+				location: "Page 3",
+				link: "https://kavita.example.com/x",
+				quote: "> quote",
 				comment: "note",
-				pageNumber: 3,
+				commentQuote: "note",
 			}),
-		).toBe("> quote\n\n*Note:* note\n\n<small>Page 3</small>");
+		).toBe(
+			"> [!kavita-cyan] [Page 3](https://kavita.example.com/x)\n> quote\n>\n> **Note:** note",
+		);
 	});
 
-	it("omits empty sections of the default template", () => {
+	it("omits the note from the default template when there is none", () => {
 		expect(
 			renderTemplate(DEFAULT_ANNOTATION_TEMPLATE, {
-				blockquote: "> quote",
+				callout: "quote",
+				fold: "-",
+				location: "Spoiler · Page 3",
+				link: "u",
+				quote: "> quote",
 				comment: "",
-				pageNumber: 0,
 			}),
-		).toBe("> quote");
+		).toBe("> [!quote]- [Spoiler · Page 3](u)\n> quote");
 	});
 
 	it.prop(
