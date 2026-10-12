@@ -149,6 +149,8 @@ const obsidianDir = join(vaultDir, ".obsidian");
 const pluginDir = join(obsidianDir, "plugins", PLUGIN_ID);
 const hotReloadDir = join(obsidianDir, "plugins", HOT_RELOAD_ID);
 
+const startedAt = new Date().toISOString();
+
 console.log("Building plugin…");
 run("bun", ["run", "build"]);
 
@@ -261,22 +263,16 @@ if (
 console.log("Opening Obsidian…");
 openUri(vaultUri());
 
-const showcase = join(vaultDir, SHOWCASE_NOTE);
-const library = join(vaultDir, NOTES_FOLDER, "Library.base");
+const syncedSinceStart = () => {
+	const data = readJson(dataPath, JsonRecord, {});
+	const at = data.lastSyncedAt;
+	return typeof at === "string" && at > startedAt;
+};
 if (fresh) {
 	console.log(
 		"Settings were cleared, so the setup window is open in Obsidian.",
 	);
-} else if (
-	await waitFor(
-		() =>
-			remoteServer === undefined
-				? existsSync(showcase) &&
-					readFileSync(showcase, "utf8").includes("\n## My notes")
-				: existsSync(library),
-		180_000,
-	)
-) {
+} else if (await waitFor(syncedSinceStart, 180_000)) {
 	openUri(
 		vaultUri(
 			remoteServer === undefined
